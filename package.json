@@ -1,0 +1,26 @@
+{
+  "name": "@cordisx/chatroom",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Host-neutral Room collaboration plugin",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "plugin"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.mjs",
+    "check": "npm run typecheck && npm run build && npm test"
+  },
+  "engines": {
+    "node": ">=22.19"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

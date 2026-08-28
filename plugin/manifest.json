@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "org.cordisx.chatroom",
+  "name": "Chatroom",
+  "version": "0.1.0",
+  "description": "Host-neutral Room collaboration and timeline presentation.",
+  "entry": "../dist/index.js",
+  "types": "../dist/index.d.ts",
+  "capabilities": [
+    "room.presentation",
+    "message.ingress",
+    "message.egress"
+  ]
+}
