@@ -24,14 +24,14 @@ const binding = (id, definition, generation = 1) => ({
 const members = [
   {
     memberId: 'lead', label: 'Lead', definition: identities.lead, role: 'leader', attentionPolicy: 'ambient',
-    avatar: { kind: 'generated', algorithm: 'oneworks-avatar-seed', algorithmVersion: 1,
-      seed: 'cordisx.agent-avatar.seed/v1:agent-definition:12:chatroom-fox' },
+    avatar: { kind: 'asset', ref: 'oneworks-avatar:asset.red-fox.v1',
+      revision: 'oneworks-avatar:editor-red-fox-2b30c25a3fcd29bf349fed927df85f1ba4b0a6096a9dfc1d2d1088e05654d8aa' },
   },
   {
     memberId: 'review', label: 'Review', definition: identities.review, role: 'member',
     attentionPolicy: 'mention-only', reportsToMemberId: 'lead',
-    avatar: { kind: 'generated', algorithm: 'oneworks-avatar-seed', algorithmVersion: 1,
-      seed: 'cordisx.agent-avatar.seed/v1:agent-definition:24:chatroom-reviewer-animal' },
+    avatar: { kind: 'asset', ref: 'oneworks-avatar:asset.arctic-fox.v1',
+      revision: 'oneworks-avatar:editor-arctic-fox-2c262adc567c423a94d497bfea9c9906f2da71cdde0e0cef6d71c263ceaf3011' },
   },
 ];
 
@@ -75,9 +75,9 @@ test('keeps per-run cursors independent while Room assigns one public timeline s
   assert.deepEqual(review.runs.map(run => run.agentLoopCursor), [0, 0]);
   assert.deepEqual(review.items.map(item => item.sequence), [3, 4]);
   assert.deepEqual(review.items.map(item => item.kind === 'message' && item.author.participantId), ['lead', 'review']);
-  assert.deepEqual(review.items.map(item => item.kind === 'message' && item.author.avatar?.seed), [
-    'cordisx.agent-avatar.seed/v1:agent-definition:12:chatroom-fox',
-    'cordisx.agent-avatar.seed/v1:agent-definition:24:chatroom-reviewer-animal',
+  assert.deepEqual(review.items.map(item => item.kind === 'message' && item.author.avatar?.ref), [
+    'oneworks-avatar:asset.red-fox.v1',
+    'oneworks-avatar:asset.arctic-fox.v1',
   ]);
   assert.deepEqual(review.items[0].author.avatar, review.participants[0].avatar);
   assert.deepEqual(review.items[1].author.avatar, review.participants[1].avatar);
