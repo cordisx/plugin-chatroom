@@ -21,6 +21,7 @@
     "node": ">=22.19"
   },
   "devDependencies": {
+    "@cordisx/protocol": "github:cordisx/cordisx-protocol#609800003f802b94945e2fa17c0d77846e1a8eda",
     "typescript": "^5.9.2"
   }
 }
