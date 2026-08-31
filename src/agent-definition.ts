@@ -7,7 +7,6 @@ import type {
 } from '@cordisx/protocol/agent-loop/v2';
 import {
   cloneAgentAvatarRef,
-  createGeneratedAgentAvatarRef,
   resolveAgentDefinitionAvatar,
   type AgentAvatarInheritanceMode,
   type AgentAvatarRef,
@@ -375,7 +374,11 @@ export const CHATROOM_DEFAULT_AGENT = Object.freeze({
   identity: Object.freeze({ agentId: 'chatroom.generalist', revision: 'chatroom-internal-v1' }),
   name: 'Chatroom Agent',
   description: 'An internal Agent for focused Room conversations.',
-  avatar: createGeneratedAgentAvatarRef({ namespace: 'agent-definition', agentId: 'chatroom-fox' }),
+  avatar: cloneAgentAvatarRef({
+    kind: 'asset',
+    ref: 'oneworks-avatar:asset.red-fox.v1',
+    revision: 'oneworks-avatar:editor-red-fox-2b30c25a3fcd29bf349fed927df85f1ba4b0a6096a9dfc1d2d1088e05654d8aa',
+  }),
   extends: Object.freeze([]),
   inherit: Object.freeze({
     promptSections: 'append', rules: 'merge', skills: 'merge',
@@ -400,8 +403,10 @@ export const CHATROOM_DEFAULT_REVIEWER = Object.freeze({
   identity: Object.freeze({ agentId: 'chatroom.reviewer', revision: 'chatroom-internal-v1' }),
   name: 'Chatroom Reviewer',
   description: 'A second team member for focused review inside a Room.',
-  avatar: createGeneratedAgentAvatarRef({
-    namespace: 'agent-definition', agentId: 'chatroom-reviewer-animal',
+  avatar: cloneAgentAvatarRef({
+    kind: 'asset',
+    ref: 'oneworks-avatar:asset.arctic-fox.v1',
+    revision: 'oneworks-avatar:editor-arctic-fox-2c262adc567c423a94d497bfea9c9906f2da71cdde0e0cef6d71c263ceaf3011',
   }),
   extends: Object.freeze([CHATROOM_DEFAULT_AGENT.identity]),
   inherit: Object.freeze({

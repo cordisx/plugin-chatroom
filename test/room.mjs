@@ -62,10 +62,10 @@ test('expands seed leaders through descendants and related members into a frozen
   };
   const snapshot = expandRoomMemberships(configuration);
   assert.deepEqual(snapshot.map(member => member.memberId), ['lead', 'child', 'related']);
-  assert.deepEqual(snapshot.map(member => member.avatar.seed), [
-    'cordisx.agent-avatar.seed/v1:agent-definition:12:chatroom-fox',
-    'cordisx.agent-avatar.seed/v1:agent-definition:24:chatroom-reviewer-animal',
-    'cordisx.agent-avatar.seed/v1:agent-definition:24:chatroom-reviewer-animal',
+  assert.deepEqual(snapshot.map(member => member.avatar.ref), [
+    'oneworks-avatar:asset.red-fox.v1',
+    'oneworks-avatar:asset.arctic-fox.v1',
+    'oneworks-avatar:asset.arctic-fox.v1',
   ]);
   configuration.members[1].label = 'Changed later';
   assert.equal(snapshot[1].label, 'Child');

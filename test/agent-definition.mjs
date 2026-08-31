@@ -100,12 +100,12 @@ test('ships introduction, personality, and memory with isolated runtime/filter d
   assert.deepEqual(selected.runtimeDefaults, { adapterId: 'codex', effort: 'medium' });
   assert.deepEqual(parsed.definitions.map(item => item.avatar), [
     {
-      kind: 'generated', algorithm: 'oneworks-avatar-seed', algorithmVersion: 1,
-      seed: 'cordisx.agent-avatar.seed/v1:agent-definition:12:chatroom-fox',
+      kind: 'asset', ref: 'oneworks-avatar:asset.red-fox.v1',
+      revision: 'oneworks-avatar:editor-red-fox-2b30c25a3fcd29bf349fed927df85f1ba4b0a6096a9dfc1d2d1088e05654d8aa',
     },
     {
-      kind: 'generated', algorithm: 'oneworks-avatar-seed', algorithmVersion: 1,
-      seed: 'cordisx.agent-avatar.seed/v1:agent-definition:24:chatroom-reviewer-animal',
+      kind: 'asset', ref: 'oneworks-avatar:asset.arctic-fox.v1',
+      revision: 'oneworks-avatar:editor-arctic-fox-2c262adc567c423a94d497bfea9c9906f2da71cdde0e0cef6d71c263ceaf3011',
     },
   ]);
   assert.deepEqual(parsed.members.map(member => agentAvatarForDefinition(member.definition, parsed.definitions)),
