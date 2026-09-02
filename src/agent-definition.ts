@@ -1,10 +1,9 @@
 import type {
   AgentDefinition,
   AgentDefinitionIdentity,
-  AgentFilter,
   AgentInheritanceMode,
   AgentObjectInheritanceMode,
-} from '@cordisx/protocol/agent-loop/v2';
+} from '@cordisx/protocol/agents/v1';
 import {
   cloneAgentAvatarRef,
   resolveAgentDefinitionAvatar,
@@ -27,11 +26,12 @@ export type {
 export type {
   AgentDefinition,
   AgentDefinitionIdentity,
-  AgentFilter,
   AgentInheritanceMode,
   AgentObjectInheritanceMode,
-} from '@cordisx/protocol/agent-loop/v2';
+} from '@cordisx/protocol/agents/v1';
 export type { AgentAvatarInheritanceMode, AgentAvatarRef } from '@cordisx/protocol/agent-avatar/v1';
+
+type AgentFilter = { readonly include?: readonly string[]; readonly exclude?: readonly string[] };
 
 export const AGENT_DEFINITION_SCHEMA =
   'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-definition.v1.schema.json' as const;
@@ -387,7 +387,7 @@ export const CHATROOM_DEFAULT_AGENT = Object.freeze({
   promptSections: Object.freeze([
     Object.freeze({ sectionId: 'introduction', kind: 'introduction', text: 'You are the Agent assigned to this Chatroom Room.' }),
     Object.freeze({ sectionId: 'personality', kind: 'personality', text: 'Be concise, direct, and honest about unavailable capabilities.' }),
-    Object.freeze({ sectionId: 'memory', kind: 'memory', text: 'Use only the context of the TaskBinding attached to this Room.' }),
+    Object.freeze({ sectionId: 'memory', kind: 'memory', text: 'Use only the Session context attached to this Chatroom Room.' }),
   ]),
   rules: Object.freeze(['chatroom.room-isolation', 'chatroom.no-fabricated-replies']),
   skills: Object.freeze([]),

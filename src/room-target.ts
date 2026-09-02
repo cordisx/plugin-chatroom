@@ -29,12 +29,12 @@ const matchingRuns = (room: Room, member: RoomMembership, alias: string) =>
 
 const reusableRun = (room: Room, member: RoomMembership): RoomRun | undefined => {
   const memberRuns = room.runs.filter(run => run.memberId === member.memberId);
-  return memberRuns.find(run => run.status === 'waiting' && run.taskBinding?.state === 'active')
-    ?? memberRuns.find(run => run.status === 'active' && run.taskBinding?.state === 'active')
-    ?? memberRuns.find(run => run.status === 'running' && run.taskBinding?.state === 'active')
-    ?? memberRuns.find(run => run.status === 'completed' && run.taskBinding?.state === 'active')
+  return memberRuns.find(run => run.status === 'waiting' && run.sessionId !== undefined)
+    ?? memberRuns.find(run => run.status === 'active' && run.sessionId !== undefined)
+    ?? memberRuns.find(run => run.status === 'running' && run.sessionId !== undefined)
+    ?? memberRuns.find(run => run.status === 'completed' && run.sessionId !== undefined)
     ?? memberRuns.find(run => run.status === 'creating')
-    ?? memberRuns.find(run => run.runId === member.preferredRunId && run.taskBinding?.state === 'active');
+    ?? memberRuns.find(run => run.runId === member.preferredRunId && run.sessionId !== undefined);
 };
 
 const mailboxRecipient = (

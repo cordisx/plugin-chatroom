@@ -1,14 +1,55 @@
 {
-  "schemaVersion": 1,
+  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v5.schema.json",
+  "schemaVersion": 5,
   "id": "org.cordisx.chatroom",
   "name": "Chatroom",
-  "version": "0.1.0",
-  "description": "Host-neutral Room collaboration and timeline presentation.",
-  "entry": "../dist/index.js",
-  "types": "../dist/index.d.ts",
   "capabilities": [
-    "room.presentation",
-    "message.ingress",
-    "message.egress"
-  ]
+    { "name": "agents.create", "required": true, "scope": {} },
+    {
+      "name": "agents.resume",
+      "required": false,
+      "scope": { "sessionIds": { "kind": "host-route-param", "routeId": "room-session-detail", "param": "sessionId" } }
+    },
+    {
+      "name": "agents.get",
+      "required": false,
+      "scope": { "sessionIds": { "kind": "host-route-param", "routeId": "room-session-detail", "param": "sessionId" } }
+    },
+    {
+      "name": "agents.message.submit",
+      "required": false,
+      "scope": { "sessionIds": { "kind": "host-route-param", "routeId": "room-session-detail", "param": "sessionId" } }
+    },
+    {
+      "name": "agents.message.cancel",
+      "required": false,
+      "scope": { "sessionIds": { "kind": "host-route-param", "routeId": "room-session-detail", "param": "sessionId" } }
+    },
+    {
+      "name": "agents.live.subscribe",
+      "required": false,
+      "scope": { "sessionIds": { "kind": "host-route-param", "routeId": "room-session-detail", "param": "sessionId" } }
+    },
+    {
+      "name": "sessions.get",
+      "required": false,
+      "scope": { "sessionIds": { "kind": "host-route-param", "routeId": "room-session-detail", "param": "sessionId" } }
+    },
+    {
+      "name": "sessions.read",
+      "required": false,
+      "scope": { "sessionIds": { "kind": "host-route-param", "routeId": "room-session-detail", "param": "sessionId" } }
+    },
+    {
+      "name": "sessions.subscribe",
+      "required": false,
+      "scope": { "sessionIds": { "kind": "host-route-param", "routeId": "room-session-detail", "param": "sessionId" } }
+    },
+    {
+      "name": "approvals.answer",
+      "required": false,
+      "scope": { "sessionIds": { "kind": "host-route-param", "routeId": "room-session-detail", "param": "sessionId" } }
+    }
+  ],
+  "services": []
 }

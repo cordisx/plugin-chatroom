@@ -20,8 +20,10 @@
   "engines": {
     "node": ">=22.19"
   },
+  "dependencies": {
+    "@cordisx/protocol": "github:cordisx/cordisx-protocol#29a06c586078fee7c1da70f84c1a138f11b512a9"
+  },
   "devDependencies": {
-    "@cordisx/protocol": "github:cordisx/cordisx-protocol#609800003f802b94945e2fa17c0d77846e1a8eda",
     "typescript": "^5.9.2"
   }
 }
