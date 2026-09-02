@@ -4,7 +4,7 @@ import test from 'node:test';
 import { CHATROOM_DEFAULT_AGENT_CONFIGURATION } from '../dist/agent-definition.js';
 import { ChatroomAgentSessionController } from '../dist/agent-session-controller.js';
 import { addRoomRun, bindRoomRunSession, createRoom } from '../dist/room.js';
-import { InMemoryChatroomRoomStore } from '../dist/room-store.js';
+import { DurableChatroomRoomStore, InMemoryChatroomRoomStore } from '../dist/room-store.js';
 
 const owner = Object.freeze({ pluginId: 'org.cordisx.chatroom', generation: 7 });
 
@@ -216,7 +216,7 @@ function runtimeHarness({ room = roomWithRun(), createAdmissions = [], resumeAdm
   const agents = {
     create: async options => {
       creates.push(options);
-      const session = new FakeSession(`session-created-${creates.length}`);
+      const session = new FakeSession(options.sessionId ?? `session-created-${creates.length}`);
       sessions.set(session.id, session);
       const pair = fakeHandle(session, [...createAdmissions]);
       handles.push(pair);
@@ -261,6 +261,52 @@ test('observer hydration replays then streams live without writing or claiming a
   ]);
 });
 
+test('owner-document observer hydration preserves the exact document and performs zero transactions', async () => {
+  const room = roomWithRun({ sessionId: 'session-existing' });
+  const harness = runtimeHarness({ room });
+  const value = {
+    contract: 'cordisx.chatroom-room-registry/v1',
+    rooms: [room],
+  };
+  const before = JSON.stringify(value);
+  let transactions = 0;
+  const documents = {
+    async load() {
+      return {
+        status: 'loaded',
+        snapshot: {
+          contract: 'cordisx.owner-documents/v1',
+          documentId: 'room-registry',
+          revision: 4,
+          schemaVersion: 1,
+          value,
+        },
+      };
+    },
+    async transaction() {
+      transactions += 1;
+      throw new Error('observer hydration must not transact');
+    },
+    subscribe() { return () => {}; },
+  };
+  const store = await DurableChatroomRoomStore.openOwnerDocuments(documents);
+  const controller = new ChatroomAgentSessionController(
+    { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+
+  await controller.hydrate();
+
+  assert.equal(transactions, 0);
+  assert.equal(JSON.stringify(value), before);
+  assert.equal(harness.creates.length, 0);
+  assert.equal(harness.resumes.length, 0);
+  assert.equal(controller.ownerHandleCount, 0);
+  await controller.dispose();
+  store.dispose();
+});
+
 test('first explicit mutation creates once, persists only SessionId, then retains owner handle', async () => {
   const harness = runtimeHarness();
   const store = new InMemoryChatroomRoomStore([harness.room]);
@@ -278,7 +324,8 @@ test('first explicit mutation creates once, persists only SessionId, then retain
   assert.equal(second.disposition, 'retained');
   assert.equal(harness.creates.length, 1);
   assert.equal(harness.resumes.length, 0);
-  assert.equal(store.get('room').runs[0].sessionId, 'session-created-1');
+  assert.equal(store.get('room').runs[0].sessionId, 'chatroom-session.4.room.10.review-run');
+  assert.equal(harness.creates[0].sessionId, 'chatroom-session.4.room.10.review-run');
   assert.equal(harness.handles[0].calls.messages[0].method, 'followup');
   assert.equal(harness.handles[0].calls.messages[1].method, 'steer');
   assert.deepEqual(harness.handles[0].calls.messages[0].message.source.correlation, {

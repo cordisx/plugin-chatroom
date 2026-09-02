@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { chatroomPlugin } from '../dist/index.js';
 import { CHATROOM_SESSION_DETAIL_ROUTE } from '../dist/routes.js';
 
-const manifest = JSON.parse(
-  await readFile(new URL('../plugin/manifest.json', import.meta.url), 'utf8'),
+const manifestText = await readFile(new URL('../plugin/manifest.json', import.meta.url), 'utf8');
+const manifest = JSON.parse(manifestText);
+const packageManifest = JSON.parse(
+  await readFile(new URL('../cordisx-package.json', import.meta.url), 'utf8'),
 );
+const npmPackage = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 
 test('declares v5 dynamic Session scopes bound to the same-plugin detail route', () => {
   assert.equal(manifest.id, 'org.cordisx.chatroom');
@@ -15,7 +19,7 @@ test('declares v5 dynamic Session scopes bound to the same-plugin detail route',
   assert.equal(manifest.schemaVersion, 5);
   assert.deepEqual(manifest.services, []);
   const routeBound = manifest.capabilities.filter(capability => capability.name !== 'agents.create');
-  assert.equal(routeBound.length, 9);
+  assert.equal(routeBound.length, 10);
   for (const capability of routeBound) {
     assert.equal(capability.required, false);
     assert.deepEqual(capability.scope.sessionIds, {
@@ -32,4 +36,14 @@ test('declares v5 dynamic Session scopes bound to the same-plugin detail route',
   });
   assert.equal(chatroomPlugin.routes[0], CHATROOM_SESSION_DETAIL_ROUTE);
   assert.equal(JSON.stringify(manifest).toLowerCase().includes('codex'), false);
+});
+
+test('packages the activatable entry with an exact neutral Protocol dependency and manifest digest', () => {
+  assert.equal(packageManifest.id, 'org.cordisx.chatroom');
+  assert.equal(packageManifest.entry, './dist/chatroom.js');
+  assert.equal(packageManifest.runtimeManifest.path, './plugin/manifest.json');
+  assert.equal(packageManifest.runtimeManifest.digest,
+    `sha256:${createHash('sha256').update(manifestText).digest('hex')}`);
+  assert.equal(npmPackage.dependencies['@cordisx/protocol'],
+    'github:cordisx/cordisx-protocol#d1b3486df18034bb5aecde090b3bd1b29b2c55d8');
 });

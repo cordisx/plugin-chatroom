@@ -10,8 +10,21 @@ export const chatroomPlugin = {
 
 export * from './agent-definition.js';
 export * from './agent-session-controller.js';
+export * from './chatroom.js';
+export * from './conversation-source.js';
 export * from './engagement-config.js';
 export * from './room.js';
 export * from './room-store.js';
 export * from './room-target.js';
 export * from './routes.js';
+export * from './session-presentation.js';
+export * from './manager-chat.js';
+export * from './product-base.js';
+export * from './room-management.js';
+export * from './room-manager-collection.js';
+export * from './room-navigation.js';
+export * from './talent-market-locales.js';
+export * from './talent-market-page.js';
+export * from './team-architecture-navigation.js';
+export * from './team-architecture-page.js';
+export * from './team-entity-view-model.js';

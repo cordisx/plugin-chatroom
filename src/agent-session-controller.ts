@@ -98,6 +98,14 @@ const runKey = (roomId: string, runId: string) =>
 const acquisitionMutationId = (operation: 'create' | 'resume', roomId: string, runId: string) =>
   createChatroomOpaqueId(`agent-${operation}`, roomId, runId);
 
+/**
+ * Stable caller-supplied SessionId used by Chatroom create authority. The Host
+ * still validates uniqueness and ownership; no title, wildcard, or route guess
+ * participates in the identity.
+ */
+export const chatroomSessionIdForRun = (roomId: string, runId: string): string =>
+  createChatroomOpaqueId('chatroom-session', roomId, runId);
+
 const errorCode = (result: Exclude<AgentAcquireResult, { readonly status: 'accepted' }>): string =>
   result.code;
 
@@ -107,7 +115,7 @@ const replacementAdmission = (result: AgentAdmission): boolean => result.status 
     || result.code === 'connection-replaced');
 
 /**
- * Chatroom domain orchestration over the public DSH-aligned runtime. The only
+ * Chatroom domain orchestration over the public Agent/Session runtime. The only
  * durable Agent identity written to a Room is SessionId. Handles,
  * subscriptions, approval answerers, and replay pages remain process-local.
  */
@@ -363,7 +371,11 @@ export class ChatroomAgentSessionController {
       definitions: agentDefinitionCatalogFor(member.definition, this.configuration.definitions),
     };
     const result = run.sessionId === undefined
-      ? await this.runtime.agents.create({ setup, mutationId: acquisitionMutationId('create', roomId, runId) })
+      ? await this.runtime.agents.create({
+        sessionId: chatroomSessionIdForRun(roomId, runId),
+        setup,
+        mutationId: acquisitionMutationId('create', roomId, runId),
+      })
       : await this.runtime.agents.resume({
         sessionId: run.sessionId,
         setup,

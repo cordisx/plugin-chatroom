@@ -26,6 +26,11 @@
       "scope": { "sessionIds": { "kind": "host-route-param", "routeId": "room-session-detail", "param": "sessionId" } }
     },
     {
+      "name": "agents.cancel",
+      "required": false,
+      "scope": { "sessionIds": { "kind": "host-route-param", "routeId": "room-session-detail", "param": "sessionId" } }
+    },
+    {
       "name": "agents.live.subscribe",
       "required": false,
       "scope": { "sessionIds": { "kind": "host-route-param", "routeId": "room-session-detail", "param": "sessionId" } }

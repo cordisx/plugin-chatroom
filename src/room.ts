@@ -93,6 +93,9 @@ export interface RoomParticipant {
 export interface Room {
   readonly id: string;
   readonly title: string;
+  /** Chatroom-owned Manager/sidebar state; unrelated to Agent or Session truth. */
+  readonly pinned: boolean;
+  readonly archived: boolean;
   readonly description?: string;
   readonly memberships: readonly [RoomMembership, ...RoomMembership[]];
   readonly seedLeaderIds: readonly string[];
@@ -109,6 +112,8 @@ type RoomMembershipInput = Omit<RoomMembership, 'avatar' | 'participantId'> & {
 export interface CreateRoomInput {
   readonly id: string;
   readonly title: string;
+  readonly pinned?: boolean;
+  readonly archived?: boolean;
   readonly description?: string;
   readonly memberships?: readonly RoomMembershipInput[];
   readonly seedLeaderIds?: readonly string[];
@@ -225,6 +230,8 @@ export function createRoom(input: CreateRoomInput): Room {
   return Object.freeze({
     id: input.id,
     title: input.title,
+    pinned: input.pinned === true,
+    archived: input.archived === true,
     ...(input.description === undefined ? {} : { description: input.description }),
     memberships: Object.freeze(memberships) as readonly [RoomMembership, ...RoomMembership[]],
     seedLeaderIds,
@@ -329,4 +336,53 @@ export function approvalAuthorityMemberIds(room: Room, memberId: string): readon
     current = memberById.get(current)?.reportsToMemberId;
   }
   return Object.freeze(result);
+}
+
+/** Observable Room domain registry. SessionEvent history never enters this store. */
+export class ChatroomRoomRegistry {
+  private readonly rooms = new Map<string, Room>();
+  private readonly listeners = new Set<() => void>();
+
+  constructor(rooms: readonly Room[] = []) {
+    this.replaceAll(rooms);
+  }
+
+  snapshot(): readonly Room[] {
+    return Object.freeze([...this.rooms.values()]);
+  }
+
+  get(roomId: string): Room | undefined {
+    return this.rooms.get(roomId);
+  }
+
+  replace(room: Room): void {
+    const next = createRoom(room);
+    this.rooms.set(next.id, next);
+    this.emit();
+  }
+
+  remove(roomId: string): boolean {
+    const removed = this.rooms.delete(roomId);
+    if (removed) this.emit();
+    return removed;
+  }
+
+  replaceAll(rooms: readonly Room[]): void {
+    const next = rooms.map(createRoom);
+    if (new Set(next.map(room => room.id)).size !== next.length) {
+      throw new Error('Room registry contains duplicate Room ids.');
+    }
+    this.rooms.clear();
+    for (const room of next) this.rooms.set(room.id, room);
+    this.emit();
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private emit(): void {
+    for (const listener of this.listeners) listener();
+  }
 }
