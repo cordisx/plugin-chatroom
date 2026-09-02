@@ -1,12 +1,12 @@
 import type { Context } from '@deepseek-ai/cordis';
 import {
   CORDISX_PAGE_SCHEMA_V3,
-  CORDISX_PLUGIN_MANIFEST_SCHEMA_V1,
+  CORDISX_PLUGIN_MANIFEST_SCHEMA_V5,
   CORDISX_ROUTE_SCHEMA_V2,
   type CordisXCommandContext,
-  type CordisXPluginManifestV1,
+  type CordisXPluginManifestV5,
 } from 'cordisx/contracts';
-import type { AgentConversationShellCommandContext } from '@cordisx/protocol/agent-conversation-shell/v3';
+import type { AgentConversationShellCommandContext } from '@cordisx/protocol/agent-conversation-shell/v4';
 
 import {
   CHATROOM_COMMAND_APPROVAL_APPROVE,
@@ -20,7 +20,11 @@ import {
   parseChatroomAgentConfiguration,
   type ChatroomAgentConfiguration,
 } from './agent-definition.js';
-import { ChatroomAgentLoopController } from './agent-loop-controller.js';
+import { ChatroomAgentSessionController } from './agent-session-controller.js';
+import {
+  ChatroomAgentSessionConversationSource,
+  v3BindingFor,
+} from './agent-session-conversation-source.js';
 import { ChatroomConversationController } from './conversation-source.js';
 import {
   CHATROOM_MANAGER_CONTENT_DECLARATIONS,
@@ -38,10 +42,6 @@ import {
   teamArchitectureManagerContentRecordTitles,
 } from './team-architecture-navigation.js';
 import { createTeamArchitectureDataSource } from './team-entity-view-model.js';
-import {
-  PLAYGROUND_ROOM_SIMULATION_BRIDGE_SERVICE,
-  registerChatroomPlaygroundRoomSimulationOwner,
-} from './playground-room-simulation-bridge.js';
 
 export type ChatroomMessages = {
   'navigation.title': undefined;
@@ -90,22 +90,26 @@ const message = (key: keyof ChatroomMessages, fallback: string) => ({
 } as const);
 
 export const manifest = {
-  $schema: CORDISX_PLUGIN_MANIFEST_SCHEMA_V1,
-  schemaVersion: 1,
+  $schema: CORDISX_PLUGIN_MANIFEST_SCHEMA_V5,
+  schemaVersion: 5,
   id: 'chatroom',
   name: 'Chatroom',
   capabilities: [
-    { name: 'tasks.create', required: true, reason: message('permission.tasks.create', 'Create a task for a new Room.'), scope: {} },
-    { name: 'tasks.content.read', required: true, reason: message('permission.tasks.content.read', 'Read replies and task status for a Room.'), scope: {} },
-    { name: 'turns.submit', required: true, reason: message('permission.turns.submit', 'Send Room messages to its Agent.'), scope: {} },
-    { name: 'turns.introduce', required: true, reason: message('permission.turns.introduce', 'Ask a newly joined Agent to introduce itself.'), scope: {} },
-    { name: 'approvals.decide', required: true, reason: message('permission.approvals.decide', 'Decide an Agent approval request from the Room.'), scope: {} },
+    { name: 'agents.create', required: true, scope: {} },
+    { name: 'agents.resume', required: true, scope: {} },
+    { name: 'agents.get', required: true, scope: {} },
+    { name: 'agents.message.submit', required: true, scope: {} },
+    { name: 'agents.message.cancel', required: true, scope: {} },
+    { name: 'sessions.get', required: true, scope: {} },
+    { name: 'sessions.subscribe', required: true, scope: {} },
+    { name: 'approvals.answer', required: true, scope: {} },
   ],
-} as const satisfies CordisXPluginManifestV1;
+  services: [],
+} as const satisfies CordisXPluginManifestV5;
 
 export const inject = [
   'i18n', 'commands', 'pages', 'routes', 'slots', 'managerContent',
-  'agentConversationShell', 'agentLoop', 'documents',
+  'agentConversationShell', 'agents', 'sessions', 'approvals', 'documents',
 ];
 
 const page = {
@@ -154,13 +158,15 @@ function agentConfiguration(config: unknown): ChatroomAgentConfiguration {
 export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   const agent = agentConfiguration(config);
   const roomStore = await DurableChatroomRoomStore.openOwnerDocuments(ctx.documents);
-  // Hydration probes only this controller's local AgentLoop registry. Durable
-  // recovery is deferred until an explicit Room mutation claims authority.
-  const agentLoop = new ChatroomAgentLoopController(ctx.agentLoop, agent, roomStore);
+  const agentSession = new ChatroomAgentSessionController(
+    { agents: ctx.agents, sessions: ctx.sessions, approvals: ctx.approvals },
+    agent,
+    roomStore,
+  );
   try {
-    await agentLoop.hydrate();
+    await agentSession.hydrate();
   } catch (error) {
-    agentLoop.dispose();
+    await agentSession.dispose();
     roomStore.dispose();
     throw error;
   }
@@ -260,26 +266,26 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     roomStore.rooms,
     agent,
     async room => { await roomStore.upsert(room); },
-    (roomId, runId) => agentLoop.isRunLocallyUnavailable(roomId, runId),
+    (roomId, runId) => agentSession.isRunLocallyUnavailable(roomId, runId),
   );
-  ctx.inject([PLAYGROUND_ROOM_SIMULATION_BRIDGE_SERVICE], bridgeContext => {
-    const dispose = registerChatroomPlaygroundRoomSimulationOwner(
-      bridgeContext.playgroundRoomSimulationBridge,
-      controller,
-      agentLoop,
-    );
-    bridgeContext.effect(() => dispose, 'chatroom.playground-room-simulation-bridge');
-  });
   const product = ChatroomProductBase.attach(roomStore);
   const handleConversationCommand = async (context: CordisXCommandContext) => {
     const hostContext = conversationContext(context);
     if (hostContext === undefined) return;
     const intent = controller.handle(hostContext);
+    if (intent === undefined && hostContext.scope === 'approval') {
+      const decision = hostContext.command.id === CHATROOM_COMMAND_APPROVAL_APPROVE ? 'allowed-once'
+        : hostContext.command.id === CHATROOM_COMMAND_APPROVAL_DENY ? 'rejected'
+          : hostContext.command.id === CHATROOM_COMMAND_APPROVAL_CANCEL ? 'cancelled'
+            : undefined;
+      const roomId = controller.selectedRoomId(hostContext);
+      if (decision !== undefined && roomId !== undefined) {
+        agentSession.answerApprovalItem(roomId, hostContext.itemId, decision);
+      }
+      return;
+    }
     if (intent === undefined || intent.kind === 'target-error') return;
     if (intent.kind === 'approval-decision') {
-      await agentLoop.decideApproval(
-        intent.roomId, intent.runId, intent.turn, intent.approvalId, intent.decision,
-      );
       return;
     }
     if (intent.kind === 'playground-approval-decision') {
@@ -290,12 +296,11 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     }
     let deliveryFailure: unknown;
     try {
-      await Promise.all(intent.deliveries.map(delivery => agentLoop.sendToRoom(
+      await Promise.all(intent.deliveries.map(delivery => agentSession.sendToRoom(
         intent.roomId,
         delivery.runId,
         intent.userItemId,
-        [{ kind: 'text', text: intent.dispatchText }],
-        intent.generation,
+        intent.dispatchText,
       )));
     } catch (error) {
       deliveryFailure = error;
@@ -310,7 +315,10 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   ctx.commands.register({ id: CHATROOM_COMMAND_APPROVAL_DENY, title: text('approval.deny', 'Deny') }, handleConversationCommand);
   ctx.commands.register({ id: CHATROOM_COMMAND_APPROVAL_CANCEL, title: text('approval.cancel', 'Cancel') }, handleConversationCommand);
 
-  const conversation = ctx.agentConversationShell.registerSource(binding => controller.createSource(binding));
+  const conversation = ctx.agentConversationShell.registerSourceV4(binding => {
+    const domain = controller.createSource(v3BindingFor(binding));
+    return new ChatroomAgentSessionConversationSource(binding, domain, agentSession);
+  });
   ctx.pages.register(page, conversation.mount);
   ctx.routes.register(newRoomRoute);
   ctx.routes.register(roomRoute);
@@ -353,7 +361,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     for (const dispose of managerDisposers.reverse()) void dispose();
     teamSource.dispose();
     manager?.dispose();
-    agentLoop.dispose();
+    void agentSession.dispose();
     controller.dispose();
     product.dispose();
     throw error;
@@ -362,7 +370,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     void disposeManagerProjection?.();
     for (const dispose of managerDisposers.reverse()) void dispose();
     manager?.dispose();
-    agentLoop.dispose();
+    void agentSession.dispose();
     controller.dispose();
     product.dispose();
   }, 'chatroom.runtime-and-manager');

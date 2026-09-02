@@ -12,41 +12,20 @@
   },
   "dependencies": [],
   "runtimeManifest": {
-    "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v1.schema.json",
-    "schemaVersion": 1,
+    "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v5.schema.json",
+    "schemaVersion": 5,
     "id": "chatroom",
     "name": "Chatroom",
     "capabilities": [
-      {
-        "name": "tasks.create",
-        "required": true,
-        "reason": { "namespace": "chatroom", "key": "permission.tasks.create", "fallback": "Create a task for a new Room." },
-        "scope": {}
-      },
-      {
-        "name": "tasks.content.read",
-        "required": true,
-        "reason": { "namespace": "chatroom", "key": "permission.tasks.content.read", "fallback": "Read replies and task status for a Room." },
-        "scope": {}
-      },
-      {
-        "name": "turns.submit",
-        "required": true,
-        "reason": { "namespace": "chatroom", "key": "permission.turns.submit", "fallback": "Send Room messages to its Agent." },
-        "scope": {}
-      },
-      {
-        "name": "turns.introduce",
-        "required": true,
-        "reason": { "namespace": "chatroom", "key": "permission.turns.introduce", "fallback": "Ask a newly joined Agent to introduce itself." },
-        "scope": {}
-      },
-      {
-        "name": "approvals.decide",
-        "required": true,
-        "reason": { "namespace": "chatroom", "key": "permission.approvals.decide", "fallback": "Decide an Agent approval request from the Room." },
-        "scope": {}
-      }
-    ]
+      { "name": "agents.create", "required": true, "scope": {} },
+      { "name": "agents.resume", "required": true, "scope": {} },
+      { "name": "agents.get", "required": true, "scope": {} },
+      { "name": "agents.message.submit", "required": true, "scope": {} },
+      { "name": "agents.message.cancel", "required": true, "scope": {} },
+      { "name": "sessions.get", "required": true, "scope": {} },
+      { "name": "sessions.subscribe", "required": true, "scope": {} },
+      { "name": "approvals.answer", "required": true, "scope": {} }
+    ],
+    "services": []
   }
 }

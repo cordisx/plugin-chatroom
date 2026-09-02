@@ -237,6 +237,7 @@ function runtimeHarness({ room = roomWithRun(), createAdmissions = [], resumeAdm
   }
   const creates = [];
   const resumes = [];
+  const legacyAcquires = [];
   const handles = [];
   const agents = {
     create: async options => {
@@ -255,11 +256,24 @@ function runtimeHarness({ room = roomWithRun(), createAdmissions = [], resumeAdm
       handles.push(pair);
       return acquire('resume', pair.handle, resumes.length === 1 ? 'resumed' : 'replayed');
     },
+    acquireLegacyTaskBinding: async request => {
+      legacyAcquires.push(request);
+      const session = new FakeSession('session-legacy-exact');
+      sessions.set(session.id, session);
+      const pair = fakeHandle(session);
+      handles.push(pair);
+      return {
+        $schema: request.$schema, contract: request.contract, schemaVersion: 1,
+        mutationId: request.mutationId, status: 'accepted', sessionId: session.id,
+        identitySource: 'agent-loop-authority',
+        acquire: acquire('resume', pair.handle, 'resumed'),
+      };
+    },
     get: async id => handles.find(pair => pair.handle.agent.id === id)?.handle.agent,
   };
   const approvals = new FakeApprovals();
   return {
-    sessions, creates, resumes, handles, agents, approvals,
+    sessions, creates, resumes, legacyAcquires, handles, agents, approvals,
     sessionRegistry: { get: async id => sessions.get(id) },
   };
 }
@@ -346,6 +360,38 @@ test('first explicit mutation creates once, persists only SessionId, and retains
   assert.deepEqual(harness.handles[0].calls.messages[1].message.source.correlation, {
     namespace: 'chatroom.room-message', id: 'user-1',
   });
+  await controller.dispose();
+  store.dispose();
+});
+
+test('first explicit mutation migrates an exact legacy TaskBinding through Host authority', async () => {
+  let room = roomWithRun();
+  const binding = {
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-task-binding.v4.schema.json',
+    contract: 'cordisx.agent-loop-task-binding/v4', schemaVersion: 4,
+    binding: { bindingId: 'legacy-binding', generation: 3 },
+    definition: room.memberships.find(member => member.memberId === 'reviewer').definition,
+    task: 'opaque-legacy-task', state: 'active',
+  };
+  room = bindRoomRun(room, 'review-run', binding);
+  const harness = runtimeHarness({ room });
+  const store = DurableChatroomRoomStore.memory([room]);
+  const controller = new ChatroomAgentSessionController(
+    { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+
+  const result = await controller.sendToRoom('room', 'review-run', 'user-1', 'Migrate');
+
+  assert.equal(result.status, 'accepted');
+  assert.equal(result.sessionId, 'session-legacy-exact');
+  assert.equal(harness.creates.length, 0);
+  assert.equal(harness.resumes.length, 0);
+  assert.equal(harness.legacyAcquires.length, 1);
+  assert.deepEqual(harness.legacyAcquires[0].binding, binding, 'TaskBinding remains opaque');
+  assert.equal(store.rooms.get('room').runs[0].sessionId, 'session-legacy-exact');
+  assert.equal(store.rooms.get('room').runs[0].taskBinding, undefined);
   await controller.dispose();
   store.dispose();
 });
@@ -495,6 +541,47 @@ test('two Room runs acquire isolated Sessions and owner handles without persisti
   store.dispose();
 });
 
+test('live Session assistant mentions preserve Reviewer to Integrator and Documentation to QA delegation', async t => {
+  for (const [sourceMemberId, targetLabel] of [
+    ['reviewer', 'Integrator'],
+    ['documentation', 'QA'],
+  ]) {
+    await t.test(`${sourceMemberId} -> ${targetLabel}`, async () => {
+      let room = createRoom({ id: 'room', title: 'Room' });
+      room = addRoomRun(room, {
+        runId: 'source-run', memberId: sourceMemberId, title: sourceMemberId, status: 'creating',
+      });
+      const harness = runtimeHarness({ room });
+      const store = DurableChatroomRoomStore.memory([room]);
+      const controller = new ChatroomAgentSessionController(
+        { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+        CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+        store,
+      );
+      await controller.sendToRoom('room', 'source-run', 'user-1', 'Coordinate');
+      await harness.handles[0].handle.agent.session.emitLive([messageEvent(
+        'session-created-1', 0,
+        {
+          id: `assistant-${sourceMemberId}`, role: 'assistant',
+          content: [{ type: 'text', text: `@${targetLabel} Verify the handoff` }],
+          source: { kind: 'model', provider: 'provider', model: 'model' },
+        },
+      )]);
+
+      const targetRun = store.rooms.get('room').runs.find(run =>
+        store.rooms.get('room').memberships.find(member => member.memberId === run.memberId)?.label === targetLabel);
+      assert.ok(targetRun);
+      const targetHandle = harness.handles.find(pair => pair.handle.agent.session.id === targetRun.sessionId);
+      assert.deepEqual(targetHandle.calls.messages.map(call => call.message.source.correlation.namespace), [
+        'chatroom.member-self-introduction', 'chatroom.agent-delegation',
+      ]);
+      assert.equal(targetHandle.calls.messages[1].message.content[0].text, 'Verify the handoff');
+      await controller.dispose();
+      store.dispose();
+    });
+  }
+});
+
 test('self introduction remains Chatroom orchestration and pending cancellation discards only its MessageId', async () => {
   const room = roomWithRun();
   const harness = runtimeHarness({ room });
@@ -572,6 +659,35 @@ test('approval answerer follows reports-to hierarchy while ctx.approvals owns Se
     { type: 'approval/asked', sessionId: agent.session.id, id: 'approval-1' },
     { type: 'approval/decided', sessionId: agent.session.id, id: 'approval-1', outcome: 'allowed-once' },
   ]);
+  assert.equal(store.rooms.get('room').approvalDecisions.length, 0);
+  await controller.dispose();
+  store.dispose();
+});
+
+test('Shell approval action settles only the matching independent ctx.approvals question', async () => {
+  const room = roomWithRun();
+  const harness = runtimeHarness({ room });
+  const store = DurableChatroomRoomStore.memory([room]);
+  const controller = new ChatroomAgentSessionController(
+    { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+  await controller.sendToRoom('room', 'review-run', 'user-1', 'Needs approval');
+  const agent = harness.handles[0].handle.agent;
+  const decision = harness.approvals.request({ agent, toolName: 'shell', reason: 'Run command' });
+  await new Promise(resolve => setImmediate(resolve));
+  await agent.session.emitLive([{
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/session-event.v1.schema.json',
+    contract: 'cordisx.session-event/v1', schemaVersion: 1,
+    sessionId: agent.session.id, seq: 0, time: 1_000,
+    type: 'approval/asked', data: { id: 'approval-1', toolName: 'shell', reason: 'Run command' },
+  }]);
+  const item = controller.projectionForRoom('room').items.find(candidate => candidate.kind === 'approval');
+
+  assert.equal(item.state, 'pending');
+  assert.equal(controller.answerApprovalItem('room', item.itemId, 'allowed-once'), true);
+  assert.equal((await decision).outcome, 'allowed-once');
   assert.equal(store.rooms.get('room').approvalDecisions.length, 0);
   await controller.dispose();
   store.dispose();

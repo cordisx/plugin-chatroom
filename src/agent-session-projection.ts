@@ -114,6 +114,17 @@ export class ChatroomAgentSessionProjector {
 
   get agentGeneration(): number | undefined { return this.agentFacts.generation; }
 
+  snapshotItems(): readonly AgentConversationItem[] {
+    return Object.freeze([...this.itemsByEventSeq.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([, item]) => item));
+  }
+
+  approvalItem(itemId: string): AgentConversationApprovalItem | undefined {
+    const item = this.snapshotItems().find(candidate => candidate.itemId === itemId);
+    return item?.kind === 'approval' ? item : undefined;
+  }
+
   project(page: SessionSubscriptionPage): ChatroomSessionProjectionPage {
     if (page.sessionId !== this.sessionId) throw new Error('Session projector received a foreign Session page.');
     const changes: ChatroomSessionProjectionChange[] = [];
@@ -142,9 +153,7 @@ export class ChatroomAgentSessionProjector {
       activeRun: this.activeRun(),
       changes: Object.freeze(changes),
       requiresSnapshotReplacement,
-      items: Object.freeze([...this.itemsByEventSeq.entries()]
-        .sort(([left], [right]) => left - right)
-        .map(([, item]) => item)),
+      items: this.snapshotItems(),
     });
   }
 
@@ -171,8 +180,10 @@ export class ChatroomAgentSessionProjector {
         : 'active';
       return undefined;
     }
-    if (event.type === 'user/message') return this.projectUserMessage(event);
-    if (event.type === 'assistant/message') return this.projectAssistantMessage(event);
+    // Shell v4 reserves zero as a non-message source position. Never rewrite
+    // the authoritative Session seq merely to make an item renderable.
+    if (event.type === 'user/message') return event.seq < 1 ? undefined : this.projectUserMessage(event);
+    if (event.type === 'assistant/message') return event.seq < 1 ? undefined : this.projectAssistantMessage(event);
     if (event.type === 'approval/asked') return this.projectApprovalAsked(event);
     if (event.type === 'approval/decided') return this.projectApprovalDecided(event);
     return undefined;

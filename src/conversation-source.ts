@@ -602,6 +602,15 @@ export class ChatroomConversationController {
     return intent;
   }
 
+  selectedRoomId(context: Readonly<{
+    binding: { readonly bindingId: string; readonly ownerGeneration: string };
+    generation: string;
+  }>): string | undefined {
+    return this.sources.get(
+      `${context.binding.bindingId}:${context.binding.ownerGeneration}:${context.generation}`,
+    )?.roomId;
+  }
+
   takePendingIntents(): readonly ChatroomCommandIntent[] {
     return this.pending.splice(0);
   }

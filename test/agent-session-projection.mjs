@@ -135,14 +135,14 @@ test('marks a Session surface replacement for one atomic Shell snapshot replacem
   const room = roomFixture();
   let sequence = room.timelineSequence;
   const projector = new ChatroomAgentSessionProjector(room, room.runs[0], sessionId, () => ++sequence);
-  projector.project(page('replay', [event(0, 'user/message', {
+  projector.project(page('replay', [event(1, 'user/message', {
     id: 'user-one', role: 'user', content: [{ type: 'text', text: 'Original' }], source: { kind: 'user' },
-  })], 0));
-  const replaced = projector.project(page('live', [event(1, 'user/message', {
+  })], 1));
+  const replaced = projector.project(page('live', [event(2, 'user/message', {
     id: 'user-two', role: 'user', content: [{ type: 'text', text: 'Replacement' }], source: { kind: 'user' },
-  }, { surfaceOp: { op: 'replace', start: 0, end: 0 }, sourceEventSeqs: [0] })], 0));
+  }, { surfaceOp: { op: 'replace', start: 1, end: 1 }, sourceEventSeqs: [1] })], 1));
   assert.equal(replaced.requiresSnapshotReplacement, true);
   assert.equal(replaced.items.length, 1);
   assert.equal(replaced.items[0].messageId, 'user-two');
-  assert.deepEqual(replaced.items[0].source, { kind: 'session-event', sessionId, eventSeq: 1 });
+  assert.deepEqual(replaced.items[0].source, { kind: 'session-event', sessionId, eventSeq: 2 });
 });
