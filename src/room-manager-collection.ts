@@ -205,7 +205,7 @@ function renameAction(room: Room): ManagerCollectionAction {
       'manager.feedback.renamed', 'Chat renamed',
       'manager.feedback.rename-failed', 'Could not rename chat',
     ),
-  });
+  } as const satisfies ManagerCollectionAction);
 }
 
 function deleteAction(room: Room): ManagerCollectionAction {

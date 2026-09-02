@@ -22,10 +22,10 @@
     "node": ">=22.19"
   },
   "dependencies": {
-    "@cordisx/protocol": "github:cordisx/cordisx-protocol#d1b3486df18034bb5aecde090b3bd1b29b2c55d8"
+    "@cordisx/protocol": "github:cordisx/cordisx-protocol#3e3f248abb94fe57e613b020ffa8a6ceaba6c3cd"
   },
   "devDependencies": {
-    "cordisx": "file:/private/tmp/cordisx-host-manager-collection-v1/packages/cli",
+    "cordisx": "github:cordisx/cordisx#2cab46c67bd0cd19097410e809c54e8be88893df",
     "typescript": "^5.9.2"
   }
 }

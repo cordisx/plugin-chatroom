@@ -45,5 +45,5 @@ test('packages the activatable entry with an exact neutral Protocol dependency a
   assert.equal(packageManifest.runtimeManifest.digest,
     `sha256:${createHash('sha256').update(manifestText).digest('hex')}`);
   assert.equal(npmPackage.dependencies['@cordisx/protocol'],
-    'github:cordisx/cordisx-protocol#d1b3486df18034bb5aecde090b3bd1b29b2c55d8');
+    'github:cordisx/cordisx-protocol#3e3f248abb94fe57e613b020ffa8a6ceaba6c3cd');
 });
