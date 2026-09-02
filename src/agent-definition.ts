@@ -1,9 +1,10 @@
 import type {
   AgentDefinition,
   AgentDefinitionIdentity,
+  AgentFilter,
   AgentInheritanceMode,
   AgentObjectInheritanceMode,
-} from '@cordisx/protocol/agents/v1';
+} from '@cordisx/protocol/agent-loop/v4';
 import {
   cloneAgentAvatarRef,
   resolveAgentDefinitionAvatar,
@@ -26,12 +27,11 @@ export type {
 export type {
   AgentDefinition,
   AgentDefinitionIdentity,
+  AgentFilter,
   AgentInheritanceMode,
   AgentObjectInheritanceMode,
-} from '@cordisx/protocol/agents/v1';
+} from '@cordisx/protocol/agent-loop/v4';
 export type { AgentAvatarInheritanceMode, AgentAvatarRef } from '@cordisx/protocol/agent-avatar/v1';
-
-type AgentFilter = { readonly include?: readonly string[]; readonly exclude?: readonly string[] };
 
 export const AGENT_DEFINITION_SCHEMA =
   'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-definition.v1.schema.json' as const;
@@ -233,7 +233,7 @@ function validateCatalog(selections: readonly AgentDefinitionIdentity[], definit
   if (reachable.size !== catalog.size) throw new Error('AgentDefinition catalog contains an unreachable definition.');
 }
 
-/** Returns the exact target-plus-ancestor closure required by Agent creation or resume. */
+/** Returns the exact target-plus-ancestor closure required by one create-or-bind command. */
 export function agentDefinitionCatalogFor(
   selection: AgentDefinitionIdentity,
   definitions: readonly [AgentDefinition, ...AgentDefinition[]],
@@ -387,7 +387,7 @@ export const CHATROOM_DEFAULT_AGENT = Object.freeze({
   promptSections: Object.freeze([
     Object.freeze({ sectionId: 'introduction', kind: 'introduction', text: 'You are the Agent assigned to this Chatroom Room.' }),
     Object.freeze({ sectionId: 'personality', kind: 'personality', text: 'Be concise, direct, and honest about unavailable capabilities.' }),
-    Object.freeze({ sectionId: 'memory', kind: 'memory', text: 'Use only the Session context attached to this Chatroom Room.' }),
+    Object.freeze({ sectionId: 'memory', kind: 'memory', text: 'Use only the context of the TaskBinding attached to this Room.' }),
   ]),
   rules: Object.freeze(['chatroom.room-isolation', 'chatroom.no-fabricated-replies']),
   skills: Object.freeze([]),
@@ -438,11 +438,13 @@ export const CHATROOM_DEFAULT_INTEGRATOR = Object.freeze({
   }),
   promptSections: Object.freeze([
     Object.freeze({
-      sectionId: 'integrator-role', kind: 'role',
+      sectionId: 'integrator-role',
+      kind: 'role',
       text: 'Integrate compatible work from independent Room member runs without taking over their ownership.',
     }),
     Object.freeze({
-      sectionId: 'integrator-operations', kind: 'operations',
+      sectionId: 'integrator-operations',
+      kind: 'operations',
       text: 'Coordinate explicit handoffs, surface cross-branch conflicts, and report integration blockers with exact evidence.',
     }),
   ]),
@@ -467,11 +469,13 @@ export const CHATROOM_DEFAULT_DOCUMENTATION = Object.freeze({
   }),
   promptSections: Object.freeze([
     Object.freeze({
-      sectionId: 'documentation-role', kind: 'role',
+      sectionId: 'documentation-role',
+      kind: 'role',
       text: 'Document decisions and outcomes assigned to this member run with clear provenance.',
     }),
     Object.freeze({
-      sectionId: 'documentation-knowledge', kind: 'knowledge',
+      sectionId: 'documentation-knowledge',
+      kind: 'knowledge',
       text: 'Use only accepted Room context and linked artifacts; distinguish implemented, verified, and planned behavior.',
     }),
   ]),
@@ -496,16 +500,22 @@ export const CHATROOM_DEFAULT_QA = Object.freeze({
   }),
   promptSections: Object.freeze([
     Object.freeze({
-      sectionId: 'qa-role', kind: 'role',
+      sectionId: 'qa-role',
+      kind: 'role',
       text: 'Verify the behavior assigned to this member run and keep conclusions scoped to available evidence.',
     }),
     Object.freeze({
-      sectionId: 'qa-operations', kind: 'operations',
+      sectionId: 'qa-operations',
+      kind: 'operations',
       text: 'Report reproducible failures, expected-versus-observed results, and any unverified conditions.',
     }),
   ]),
 } as const satisfies AgentDefinition);
 
+/**
+ * New Rooms expand this configuration into a frozen membership snapshot.
+ * Existing durable Rooms are intentionally not migrated when these defaults change.
+ */
 export const CHATROOM_DEFAULT_AGENT_CONFIGURATION = Object.freeze({
   seedLeaderIds: Object.freeze(['leader']),
   acknowledge: Object.freeze({

@@ -41,21 +41,6 @@ export interface ChatroomRoomRegistrySnapshot {
   readonly rooms: readonly Room[];
 }
 
-/**
- * Chatroom's sole Room-domain store. It may persist SessionId correlations,
- * but never SessionEvent history, Agent handles, subscriptions, or approvals.
- */
-export interface ChatroomRoomStore {
-  readonly rooms: ChatroomRoomRegistry;
-  snapshot(): readonly Room[];
-  get(roomId: string): Room | undefined;
-  replace(roomId: string, update: (room: Room) => Room): Promise<Room>;
-  upsert(room: Room): Promise<ChatroomRoomDocument>;
-  remove(roomId: string): Promise<boolean>;
-  subscribe(listener: () => void): () => void;
-  dispose(): void;
-}
-
 export type ChatroomRoomRegistryLoadResult =
   | { readonly status: 'loaded'; readonly snapshot: ChatroomRoomRegistrySnapshot }
   | {
@@ -263,27 +248,6 @@ export class DurableChatroomRoomStore {
     return store;
   }
 
-  snapshot(): readonly Room[] {
-    return this.rooms.snapshot();
-  }
-
-  get(roomId: string): Room | undefined {
-    return this.rooms.get(roomId);
-  }
-
-  async replace(roomId: string, update: (room: Room) => Room): Promise<Room> {
-    const current = this.rooms.get(roomId);
-    if (current === undefined) throw new Error('Room is unavailable.');
-    const updated = update(current);
-    if (updated === current) return current;
-    if (updated.id !== roomId) throw new Error('Room identity changed.');
-    return (await this.upsert(updated)).room;
-  }
-
-  subscribe(listener: () => void): () => void {
-    return this.rooms.subscribe(listener);
-  }
-
   document(roomId: string): ChatroomRoomDocument | undefined {
     const room = this.rooms.get(roomId);
     return room === undefined ? undefined : Object.freeze({ roomId, revision: this.revision, room });
@@ -380,55 +344,4 @@ export class DurableChatroomRoomStore {
       );
     }
   }
-}
-
-/** Deterministic Host-less store for focused tests only. */
-export class InMemoryChatroomRoomStore implements ChatroomRoomStore {
-  readonly rooms: ChatroomRoomRegistry;
-  private writesValue = 0;
-
-  constructor(rooms: readonly Room[] = []) {
-    this.rooms = new ChatroomRoomRegistry(rooms);
-  }
-
-  get writes(): number { return this.writesValue; }
-
-  snapshot(): readonly Room[] {
-    return this.rooms.snapshot();
-  }
-
-  get(roomId: string): Room | undefined {
-    return this.rooms.get(roomId);
-  }
-
-  async replace(roomId: string, update: (room: Room) => Room): Promise<Room> {
-    const current = this.rooms.get(roomId);
-    if (current === undefined) throw new Error('Room is unavailable.');
-    const updated = update(current);
-    if (updated === current) return current;
-    const next = createRoom(updated);
-    if (next.id !== roomId) throw new Error('Room identity changed.');
-    this.rooms.replace(next);
-    this.writesValue += 1;
-    return next;
-  }
-
-  async upsert(room: Room): Promise<ChatroomRoomDocument> {
-    const next = createRoom(room);
-    this.rooms.replace(next);
-    this.writesValue += 1;
-    return Object.freeze({ roomId: next.id, revision: this.writesValue, room: next });
-  }
-
-  async remove(roomId: string): Promise<boolean> {
-    const removed = this.rooms.remove(roomId);
-    if (removed) this.writesValue += 1;
-    return removed;
-  }
-
-  subscribe(listener: () => void): () => void {
-    return this.rooms.subscribe(listener);
-  }
-
-  dispose(): void {}
 }

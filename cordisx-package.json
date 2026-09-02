@@ -1,28 +1,52 @@
 {
-  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-package.v4.schema.json",
-  "schemaVersion": 4,
-  "id": "org.cordisx.chatroom",
+  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-package.v1.schema.json",
+  "schemaVersion": 1,
+  "id": "chatroom",
   "version": "0.1.0",
-  "entry": "./dist/chatroom.js",
+  "entry": "./src/chatroom.ts",
   "readme": "./README.md",
   "canonicalSource": "https://github.com/cordisx/plugin-chatroom",
-  "distribution": {
-    "mode": "explicit-local-v1",
-    "signature": "unsupported"
-  },
   "compatibility": {
     "runtimeAbi": 1,
-    "protocolSchemas": [
-      "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v5.schema.json",
-      "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-definition.v1.schema.json",
-      "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/session-event.v1.schema.json",
-      "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-conversation-shell-snapshot.v3.schema.json"
-    ]
+    "protocol": 1
   },
   "dependencies": [],
   "runtimeManifest": {
-    "path": "./plugin/manifest.json",
-    "schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v5.schema.json",
-    "digest": "sha256:9168d9013b82e59f4ec870fe92a30f9d93d018b55e8eb1ded3be68a2a681c636"
+    "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v1.schema.json",
+    "schemaVersion": 1,
+    "id": "chatroom",
+    "name": "Chatroom",
+    "capabilities": [
+      {
+        "name": "tasks.create",
+        "required": true,
+        "reason": { "namespace": "chatroom", "key": "permission.tasks.create", "fallback": "Create a task for a new Room." },
+        "scope": {}
+      },
+      {
+        "name": "tasks.content.read",
+        "required": true,
+        "reason": { "namespace": "chatroom", "key": "permission.tasks.content.read", "fallback": "Read replies and task status for a Room." },
+        "scope": {}
+      },
+      {
+        "name": "turns.submit",
+        "required": true,
+        "reason": { "namespace": "chatroom", "key": "permission.turns.submit", "fallback": "Send Room messages to its Agent." },
+        "scope": {}
+      },
+      {
+        "name": "turns.introduce",
+        "required": true,
+        "reason": { "namespace": "chatroom", "key": "permission.turns.introduce", "fallback": "Ask a newly joined Agent to introduce itself." },
+        "scope": {}
+      },
+      {
+        "name": "approvals.decide",
+        "required": true,
+        "reason": { "namespace": "chatroom", "key": "permission.approvals.decide", "fallback": "Decide an Agent approval request from the Room." },
+        "scope": {}
+      }
+    ]
   }
 }

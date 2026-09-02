@@ -1,62 +1,33 @@
-import type { AgentRegistry } from '@cordisx/protocol/agents/v1';
-import type { ApprovalService, ApprovalOutcome } from '@cordisx/protocol/approval/v1';
-import type {
-  AgentConversationShellBinding,
-  AgentConversationShellCommandContext,
-} from '@cordisx/protocol/agent-conversation-shell/v3';
-import type { SessionRegistry } from '@cordisx/protocol/sessions/v1';
+import type { Context } from '@deepseek-ai/cordis';
 import {
   CORDISX_PAGE_SCHEMA_V3,
+  CORDISX_PLUGIN_MANIFEST_SCHEMA_V1,
   CORDISX_ROUTE_SCHEMA_V2,
   type CordisXCommandContext,
-  type CordisXAgentConversationShell,
-  type CordisXCommands,
-  type CordisXI18n,
-  type CordisXManagerContentNavigation,
-  type CordisXOwnerDocumentsV1,
-  type CordisXPages,
-  type CordisXRoutes,
-  type CordisXSlots,
+  type CordisXPluginManifestV1,
 } from 'cordisx/contracts';
+import type { AgentConversationShellCommandContext } from '@cordisx/protocol/agent-conversation-shell/v3';
 
-import {
-  CHATROOM_DEFAULT_AGENT_CONFIGURATION,
-  parseChatroomAgentConfiguration,
-  type ChatroomAgentConfiguration,
-} from './agent-definition.js';
-import {
-  ChatroomAgentSessionController,
-  chatroomSessionIdForRun,
-} from './agent-session-controller.js';
-import {
-  ChatroomApprovalCoordinator,
-  ChatroomConversationController,
-} from './conversation-source.js';
-import {
-  CHATROOM_MANAGER_CONTENT_DECLARATIONS,
-  registerChatroomManager,
-} from './manager-chat.js';
-import { ChatroomProductBase } from './product-base.js';
-import {
-  addRoomRun,
-  createChatroomOpaqueId,
-  createRoom,
-  type Room,
-} from './room.js';
-import { DurableChatroomRoomStore } from './room-store.js';
-import { resolveRoomMessageDispatch } from './room-target.js';
-import {
-  CHATROOM_SESSION_DETAIL_ROUTE,
-  CHATROOM_ROOM_PAGE_ID,
-} from './routes.js';
 import {
   CHATROOM_COMMAND_APPROVAL_APPROVE,
   CHATROOM_COMMAND_APPROVAL_CANCEL,
   CHATROOM_COMMAND_APPROVAL_DENY,
   CHATROOM_COMMAND_SUBMIT,
-  ChatroomSessionPresentation,
-  chatroomText,
-} from './session-presentation.js';
+  text,
+} from './conversation-model.js';
+import {
+  CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+  parseChatroomAgentConfiguration,
+  type ChatroomAgentConfiguration,
+} from './agent-definition.js';
+import { ChatroomAgentLoopController } from './agent-loop-controller.js';
+import { ChatroomConversationController } from './conversation-source.js';
+import {
+  CHATROOM_MANAGER_CONTENT_DECLARATIONS,
+  registerChatroomManager,
+} from './manager-chat.js';
+import { ChatroomProductBase } from './product-base.js';
+import { DurableChatroomRoomStore } from './room-store.js';
 import {
   registerTalentMarket,
   TALENT_MARKET_MANAGER_CONTENT_DECLARATIONS,
@@ -67,366 +38,332 @@ import {
   teamArchitectureManagerContentRecordTitles,
 } from './team-architecture-navigation.js';
 import { createTeamArchitectureDataSource } from './team-entity-view-model.js';
-
-export const CHATROOM_PLUGIN_ID = 'org.cordisx.chatroom' as const;
-
-/** Cordis waits for these Host-owned services before activating Chatroom. */
-export const inject = [
-  'i18n', 'commands', 'pages', 'routes', 'slots', 'managerContent',
-  'agentConversationShell', 'documents', 'agents', 'sessions', 'approvals',
-] as const;
-
-type ChatroomRuntimeContext = {
-  readonly agents: AgentRegistry;
-  readonly sessions: SessionRegistry;
-  readonly approvals: ApprovalService;
-  readonly documents: CordisXOwnerDocumentsV1;
-  readonly i18n: CordisXI18n;
-  readonly commands: CordisXCommands;
-  readonly pages: CordisXPages;
-  readonly routes: CordisXRoutes;
-  readonly slots: CordisXSlots;
-  readonly managerContent: CordisXManagerContentNavigation;
-  readonly agentConversationShell: CordisXAgentConversationShell;
-  effect(
-    callback: () => void | (() => void | Promise<void>),
-    label?: string,
-  ): unknown;
-};
+import {
+  PLAYGROUND_ROOM_SIMULATION_BRIDGE_SERVICE,
+  registerChatroomPlaygroundRoomSimulationOwner,
+} from './playground-room-simulation-bridge.js';
 
 export type ChatroomMessages = {
-  'navigation.new': undefined;
+  'navigation.title': undefined;
+  'navigation.description': undefined;
   'navigation.rooms': undefined;
-  'navigation.room.title': { readonly title: string };
-  'navigation.room.summary': { readonly summary: string };
+  'navigation.archived': undefined;
   'navigation.room.empty': undefined;
+  'navigation.room.summary': { readonly summary: string };
+  'action.pin': undefined;
+  'action.unpin': undefined;
+  'action.archive': undefined;
+  'action.restore': undefined;
+  'action.copy-link': undefined;
+  'action.copy-id': undefined;
+  'action.delete': undefined;
+  'confirmation.delete.title': undefined;
+  'confirmation.delete.description': undefined;
+  'confirmation.delete.confirm': undefined;
+  'feedback.pinned': undefined;
+  'feedback.unpinned': undefined;
+  'feedback.pin-failed': undefined;
+  'feedback.archived': undefined;
+  'feedback.archive-failed': undefined;
+  'feedback.restored': undefined;
+  'feedback.restore-failed': undefined;
+  'feedback.link-copied': undefined;
+  'feedback.id-copied': undefined;
+  'feedback.copy-failed': undefined;
+  'feedback.deleted': undefined;
+  'feedback.delete-failed': undefined;
   'route.title': undefined;
   'route.description': undefined;
   'page.title': undefined;
   'page.description': undefined;
   'composer.placeholder': undefined;
-  'participant.you': undefined;
-  'participant.agent': undefined;
-  'approval.approve': undefined;
-  'approval.deny': undefined;
-  'approval.cancel': undefined;
-  'approval.unavailable': undefined;
-  'permission.agents.create': undefined;
-  'permission.sessions.observe': undefined;
-  'permission.agents.mutate': undefined;
-  'permission.approvals.answer': undefined;
+  'composer.unavailable': undefined;
+  'permission.tasks.create': undefined;
+  'permission.tasks.content.read': undefined;
+  'permission.turns.submit': undefined;
+  'permission.turns.introduce': undefined;
+  'permission.approvals.decide': undefined;
 };
 
-export const CHATROOM_ROOM_PAGE = Object.freeze({
-  $schema: CORDISX_PAGE_SCHEMA_V3,
-  schemaVersion: 3,
-  id: CHATROOM_ROOM_PAGE_ID,
-  title: chatroomText('page.title', 'Chatroom'),
-  description: chatroomText('page.description', 'Collaborate with a team of Session-backed Agents.'),
-  icon: 'host:chat',
-  chrome: 'body-only',
+const message = (key: keyof ChatroomMessages, fallback: string) => ({
+  namespace: 'chatroom', key, fallback,
 } as const);
 
-export const CHATROOM_NEW_ROOM_ROUTE = Object.freeze({
+export const manifest = {
+  $schema: CORDISX_PLUGIN_MANIFEST_SCHEMA_V1,
+  schemaVersion: 1,
+  id: 'chatroom',
+  name: 'Chatroom',
+  capabilities: [
+    { name: 'tasks.create', required: true, reason: message('permission.tasks.create', 'Create a task for a new Room.'), scope: {} },
+    { name: 'tasks.content.read', required: true, reason: message('permission.tasks.content.read', 'Read replies and task status for a Room.'), scope: {} },
+    { name: 'turns.submit', required: true, reason: message('permission.turns.submit', 'Send Room messages to its Agent.'), scope: {} },
+    { name: 'turns.introduce', required: true, reason: message('permission.turns.introduce', 'Ask a newly joined Agent to introduce itself.'), scope: {} },
+    { name: 'approvals.decide', required: true, reason: message('permission.approvals.decide', 'Decide an Agent approval request from the Room.'), scope: {} },
+  ],
+} as const satisfies CordisXPluginManifestV1;
+
+export const inject = [
+  'i18n', 'commands', 'pages', 'routes', 'slots', 'managerContent',
+  'agentConversationShell', 'agentLoop', 'documents',
+];
+
+const page = {
+  $schema: CORDISX_PAGE_SCHEMA_V3,
+  schemaVersion: 3,
+  id: 'room',
+  title: message('page.title', 'New room'),
+  description: message('page.description', 'Open a Room in the Agent Desktop conversation shell.'),
+  icon: 'host:layers',
+  chrome: 'body-only',
+} as const;
+
+const newRoomRoute = {
   $schema: CORDISX_ROUTE_SCHEMA_V2,
   schemaVersion: 2,
   id: 'new-room',
   path: '/main/chatroom',
   outlet: 'main',
-  page: CHATROOM_ROOM_PAGE_ID,
-  title: chatroomText('route.title', 'New room'),
-  description: chatroomText('route.description', 'Create or open a collaboration Room.'),
-} as const);
+  page: 'room',
+  title: message('route.title', 'New room'),
+  description: message('route.description', 'Create or open a collaboration Room.'),
+} as const;
 
-export const CHATROOM_ROOM_ROUTE = Object.freeze({
-  ...CHATROOM_NEW_ROOM_ROUTE,
+const roomRoute = {
+  ...newRoomRoute,
   id: 'room',
   path: '/main/chatroom/:roomId',
-} as const);
+} as const;
 
-const english: Readonly<Record<keyof ChatroomMessages, string>> = Object.freeze({
-  'navigation.new': 'New room',
-  'navigation.rooms': 'Rooms',
-  'navigation.room.title': '{title}',
-  'navigation.room.summary': '{summary}',
-  'navigation.room.empty': 'No Session activity yet',
-  'route.title': 'New room',
-  'route.description': 'Create or open a collaboration Room.',
-  'page.title': 'Chatroom',
-  'page.description': 'Collaborate with a team of Session-backed Agents.',
-  'composer.placeholder': 'Write a message',
-  'participant.you': 'You',
-  'participant.agent': 'Agent',
-  'approval.approve': 'Approve',
-  'approval.deny': 'Deny',
-  'approval.cancel': 'Cancel',
-  'approval.unavailable': 'Approval unavailable',
-  'permission.agents.create': 'Create a Session-backed Agent for an explicit Room action.',
-  'permission.sessions.observe': 'Read SessionEvent replay and live updates for the active Session route.',
-  'permission.agents.mutate': 'Send or cancel work for the exact active Session.',
-  'permission.approvals.answer': 'Answer native approval requests through the Room reports-to hierarchy.',
-});
+function conversationContext(context: CordisXCommandContext): AgentConversationShellCommandContext | undefined {
+  const hostContext = context.hostContext;
+  return hostContext !== undefined && 'scope' in hostContext
+    ? hostContext as unknown as AgentConversationShellCommandContext
+    : undefined;
+}
 
-const simplifiedChinese: Readonly<Record<keyof ChatroomMessages, string>> = Object.freeze({
-  'navigation.new': '新建房间',
-  'navigation.rooms': '房间',
-  'navigation.room.title': '{title}',
-  'navigation.room.summary': '{summary}',
-  'navigation.room.empty': '暂无会话活动',
-  'route.title': '新建房间',
-  'route.description': '创建或打开一个协作房间。',
-  'page.title': 'Chatroom',
-  'page.description': '与由会话支持的 Agent 团队协作。',
-  'composer.placeholder': '输入消息',
-  'participant.you': '你',
-  'participant.agent': 'Agent',
-  'approval.approve': '批准',
-  'approval.deny': '拒绝',
-  'approval.cancel': '取消',
-  'approval.unavailable': '审批不可用',
-  'permission.agents.create': '为明确的房间操作创建由会话支持的 Agent。',
-  'permission.sessions.observe': '读取当前会话路由的 SessionEvent 回放与实时更新。',
-  'permission.agents.mutate': '向当前精确会话发送或取消工作。',
-  'permission.approvals.answer': '依据房间汇报层级回答原生审批请求。',
-});
-
-function configurationFrom(config: unknown): ChatroomAgentConfiguration {
+function agentConfiguration(config: unknown): ChatroomAgentConfiguration {
   if (config === null || typeof config !== 'object' || Array.isArray(config)) {
     return CHATROOM_DEFAULT_AGENT_CONFIGURATION;
   }
   const team = (config as { readonly team?: unknown; readonly agent?: unknown }).team
     ?? (config as { readonly agent?: unknown }).agent;
-  return team === undefined
-    ? CHATROOM_DEFAULT_AGENT_CONFIGURATION
-    : parseChatroomAgentConfiguration(team);
+  return team === undefined ? CHATROOM_DEFAULT_AGENT_CONFIGURATION : parseChatroomAgentConfiguration(team);
 }
 
-function shellContext(context: CordisXCommandContext): AgentConversationShellCommandContext | undefined {
-  const value = context.hostContext;
-  return value !== undefined && typeof value === 'object' && 'scope' in value
-    ? value as unknown as AgentConversationShellCommandContext
-    : undefined;
-}
-
-function commandArguments(context: CordisXCommandContext): Readonly<Record<string, unknown>> {
-  const args = context.arguments;
-  return args !== null && typeof args === 'object' && !Array.isArray(args)
-    ? args as Readonly<Record<string, unknown>>
-    : {};
-}
-
-function roomWithHuman(room: Room): Room {
-  if (room.participants.some(participant => participant.id === 'chatroom-user')) return room;
-  return createRoom({
-    ...room,
-    participants: [
-      { id: 'chatroom-user', name: 'You', kind: 'human' },
-      ...room.participants,
-    ],
-  });
-}
-
-function nextRunId(room: Room, memberId: string): string {
-  const base = createChatroomOpaqueId('member-run', room.id, memberId);
-  if (!room.runs.some(run => run.runId === base)) return base;
-  let attempt = 2;
-  while (room.runs.some(run => run.runId === `${base}.${attempt}`)) attempt += 1;
-  return `${base}.${attempt}`;
-}
-
-function approvalOutcomeFor(commandId: string): ApprovalOutcome | undefined {
-  if (commandId === CHATROOM_COMMAND_APPROVAL_APPROVE) return 'allowed-once';
-  if (commandId === CHATROOM_COMMAND_APPROVAL_DENY) return 'rejected';
-  if (commandId === CHATROOM_COMMAND_APPROVAL_CANCEL) return 'cancelled';
-  return undefined;
-}
-
-/**
- * Real Cordis plugin composition over the public Agent/Session/Approval
- * services and Host-owned structured UI seams.
- */
-export async function apply(ctx: ChatroomRuntimeContext, config: unknown = {}): Promise<void> {
-  const configuration = configurationFrom(config);
-  const store = await DurableChatroomRoomStore.openOwnerDocuments(ctx.documents);
-  const product = ChatroomProductBase.attach(store);
-  const presentation = new ChatroomSessionPresentation();
-  const approvals = new ChatroomApprovalCoordinator();
-  const runtime = new ChatroomAgentSessionController(
-    { agents: ctx.agents, sessions: ctx.sessions, approvals: ctx.approvals },
-    configuration,
-    store,
-    observation => presentation.observe(observation),
-    approvals.policy,
-  );
-  const conversation = new ChatroomConversationController(store, presentation);
-  const bindingRooms = new Map<string, string | undefined>();
-  const retained: Array<() => void | Promise<void>> = [];
-  let disposed = false;
-  let messageSequence = 0;
-
-  const retain = (dispose: () => void | Promise<void>): void => { retained.push(dispose); };
+export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
+  const agent = agentConfiguration(config);
+  const roomStore = await DurableChatroomRoomStore.openOwnerDocuments(ctx.documents);
+  // Hydration probes only this controller's local AgentLoop registry. Durable
+  // recovery is deferred until an explicit Room mutation claims authority.
+  const agentLoop = new ChatroomAgentLoopController(ctx.agentLoop, agent, roomStore);
   try {
-    await runtime.hydrate();
+    await agentLoop.hydrate();
+  } catch (error) {
+    agentLoop.dispose();
+    roomStore.dispose();
+    throw error;
+  }
+  ctx.i18n.define<ChatroomMessages>({
+    namespace: 'chatroom',
+    locale: 'en',
+    default: true,
+    messages: {
+      'navigation.title': 'New room',
+      'navigation.description': 'Start a new collaboration room.',
+      'navigation.rooms': 'Rooms',
+      'navigation.archived': 'Archived',
+      'navigation.room.empty': 'No messages yet',
+      'navigation.room.summary': '{summary}',
+      'action.pin': 'Pin',
+      'action.unpin': 'Unpin',
+      'action.archive': 'Archive',
+      'action.restore': 'Restore',
+      'action.copy-link': 'Copy deep link',
+      'action.copy-id': 'Copy Room ID',
+      'action.delete': 'Delete',
+      'confirmation.delete.title': 'Delete this Room?',
+      'confirmation.delete.description': 'Messages and Room state will be permanently deleted.',
+      'confirmation.delete.confirm': 'Delete Room',
+      'feedback.pinned': 'Room pinned',
+      'feedback.unpinned': 'Room unpinned',
+      'feedback.pin-failed': 'Could not update pin',
+      'feedback.archived': 'Room archived',
+      'feedback.archive-failed': 'Could not archive Room',
+      'feedback.restored': 'Room restored',
+      'feedback.restore-failed': 'Could not restore Room',
+      'feedback.link-copied': 'Deep link copied',
+      'feedback.id-copied': 'Room ID copied',
+      'feedback.copy-failed': 'Could not copy',
+      'feedback.deleted': 'Room deleted',
+      'feedback.delete-failed': 'Could not delete Room',
+      'route.title': 'New room',
+      'route.description': 'Create or open a collaboration Room.',
+      'page.title': 'New room',
+      'page.description': 'Open a Room in the Agent Desktop conversation shell.',
+      'composer.placeholder': 'Write a message',
+      'composer.unavailable': 'Messaging is not available yet.',
+      'permission.tasks.create': 'Create a task for a new Room.',
+      'permission.tasks.content.read': 'Read replies and task status for a Room.',
+      'permission.turns.submit': 'Send Room messages to its Agent.',
+      'permission.turns.introduce': 'Ask a newly joined Agent to introduce itself.',
+      'permission.approvals.decide': 'Decide an Agent approval request from the Room.',
+    },
+  });
+  ctx.i18n.define<ChatroomMessages>({
+    namespace: 'chatroom',
+    locale: 'zh-CN',
+    messages: {
+      'navigation.title': '新建房间',
+      'navigation.description': '开始一个新的协作房间。',
+      'navigation.rooms': '房间',
+      'navigation.archived': '已归档',
+      'navigation.room.empty': '暂无消息',
+      'navigation.room.summary': '{summary}',
+      'action.pin': '置顶',
+      'action.unpin': '取消置顶',
+      'action.archive': '归档',
+      'action.restore': '恢复',
+      'action.copy-link': '复制深度链接',
+      'action.copy-id': '复制群聊 ID',
+      'action.delete': '删除',
+      'confirmation.delete.title': '删除这个房间？',
+      'confirmation.delete.description': '消息和房间状态将被永久删除。',
+      'confirmation.delete.confirm': '删除房间',
+      'feedback.pinned': '已置顶房间',
+      'feedback.unpinned': '已取消置顶',
+      'feedback.pin-failed': '无法更新置顶状态',
+      'feedback.archived': '已归档房间',
+      'feedback.archive-failed': '无法归档房间',
+      'feedback.restored': '已恢复房间',
+      'feedback.restore-failed': '无法恢复房间',
+      'feedback.link-copied': '已复制深度链接',
+      'feedback.id-copied': '已复制群聊 ID',
+      'feedback.copy-failed': '复制失败',
+      'feedback.deleted': '已删除房间',
+      'feedback.delete-failed': '无法删除房间',
+      'route.title': '新建房间',
+      'route.description': '创建或打开一个协作房间。',
+      'page.title': '新建房间',
+      'page.description': '在 Agent Desktop 会话壳中打开一个房间。',
+      'composer.placeholder': '输入消息',
+      'composer.unavailable': '消息功能暂不可用。',
+      'permission.tasks.create': '为新房间创建任务。',
+      'permission.tasks.content.read': '读取房间回复和任务状态。',
+      'permission.turns.submit': '向房间 Agent 发送消息。',
+      'permission.turns.introduce': '请求新加入的 Agent 自由介绍自己。',
+      'permission.approvals.decide': '处理房间中的 Agent 审批请求。',
+    },
+  });
 
-    retain(ctx.i18n.define<ChatroomMessages>({
-      namespace: 'chatroom', locale: 'en', default: true, messages: english,
-    }));
-    retain(ctx.i18n.define<ChatroomMessages>({
-      namespace: 'chatroom', locale: 'zh-CN', messages: simplifiedChinese,
-    }));
-
-    const shell = ctx.agentConversationShell.registerSource((binding: Readonly<AgentConversationShellBinding>) => {
-      bindingRooms.set(
-        `${binding.bindingId.length}:${binding.bindingId}${binding.ownerGeneration}`,
-        binding.routeSelection.selectedRoomParam,
+  const controller = new ChatroomConversationController(
+    roomStore.rooms,
+    agent,
+    async room => { await roomStore.upsert(room); },
+    (roomId, runId) => agentLoop.isRunLocallyUnavailable(roomId, runId),
+  );
+  ctx.inject([PLAYGROUND_ROOM_SIMULATION_BRIDGE_SERVICE], bridgeContext => {
+    const dispose = registerChatroomPlaygroundRoomSimulationOwner(
+      bridgeContext.playgroundRoomSimulationBridge,
+      controller,
+      agentLoop,
+    );
+    bridgeContext.effect(() => dispose, 'chatroom.playground-room-simulation-bridge');
+  });
+  const product = ChatroomProductBase.attach(roomStore);
+  const handleConversationCommand = async (context: CordisXCommandContext) => {
+    const hostContext = conversationContext(context);
+    if (hostContext === undefined) return;
+    const intent = controller.handle(hostContext);
+    if (intent === undefined || intent.kind === 'target-error') return;
+    if (intent.kind === 'approval-decision') {
+      await agentLoop.decideApproval(
+        intent.roomId, intent.runId, intent.turn, intent.approvalId, intent.decision,
       );
-      return conversation.createSource(binding);
-    });
-    retain(() => shell.dispose());
-    retain(ctx.pages.register(CHATROOM_ROOM_PAGE, shell.mount));
-    retain(ctx.routes.register(CHATROOM_NEW_ROOM_ROUTE));
-    retain(ctx.routes.register(CHATROOM_ROOM_ROUTE));
-    retain(ctx.routes.register(CHATROOM_SESSION_DETAIL_ROUTE));
-
-    retain(ctx.slots.register({
-      name: 'sidebar.navigation.items',
-      id: 'new-room',
-      group: 'before-workspaces',
-      order: -90,
-    }, {
-      label: chatroomText('navigation.new', 'New room'),
-      icon: 'host:chat',
-      route: { id: CHATROOM_NEW_ROOM_ROUTE.id },
-    }));
-    const roomNavigation = ctx.slots.registerCollection({
-      contract: 'cordisx.navigation-collection/v2',
-      name: 'sidebar.navigation.items',
-      id: 'rooms',
-      group: {
-        id: 'rooms',
-        label: chatroomText('navigation.rooms', 'Rooms'),
-        order: 20,
-      },
-    }, product.activeRooms);
-    retain(() => roomNavigation.dispose());
-
-    const handleConversationCommand = async (context: CordisXCommandContext): Promise<void> => {
-      const host = shellContext(context);
-      if (host === undefined) return;
-      const outcome = approvalOutcomeFor(context.id);
-      if (outcome !== undefined) {
-        const args = commandArguments(context);
-        if (typeof args.roomId !== 'string'
-          || typeof args.runId !== 'string'
-          || typeof args.sessionId !== 'string'
-          || typeof args.approvalId !== 'string'
-          || !approvals.decide(
-            args.roomId,
-            args.runId,
-            args.sessionId,
-            args.approvalId,
-            outcome,
-          )) {
-          throw new Error('Approval request is unavailable.');
-        }
-        return;
-      }
-      if (context.id !== CHATROOM_COMMAND_SUBMIT || host.scope !== 'composer-submit') return;
-      const key = `${host.binding.bindingId.length}:${host.binding.bindingId}${host.binding.ownerGeneration}`;
-      let roomId = bindingRooms.get(key);
-      if (roomId === undefined) {
-        messageSequence += 1;
-        roomId = createChatroomOpaqueId(
-          'room', host.binding.bindingId, host.generation, String(messageSequence),
-        );
-        const room = roomWithHuman(createRoom({
-          id: roomId,
-          title: 'Agent team',
-          configuration,
-        }));
-        await store.upsert(room);
-      }
-      const initial = store.get(roomId);
-      if (initial === undefined) throw new Error('Selected Room is unavailable.');
-      const resolution = resolveRoomMessageDispatch(initial, host.submitPayload);
-      if (resolution.status !== 'resolved') return;
-      messageSequence += 1;
-      const userMessageId = createChatroomOpaqueId(
-        'composer-message', roomId, host.binding.bindingId, String(messageSequence),
+      return;
+    }
+    if (intent.kind === 'playground-approval-decision') {
+      await controller.decidePlaygroundAgentApprovalFromRoom(
+        intent.roomId, intent.itemId, intent.operationId, intent.decision,
       );
-      for (const recipient of resolution.recipients) {
-        let runId = recipient.runId;
-        if (recipient.createRun) {
-          runId = nextRunId(store.get(roomId)!, recipient.memberId);
-          await store.replace(roomId, room => addRoomRun(room, {
-            runId: runId!,
-            memberId: recipient.memberId,
-            title: room.memberships.find(member => member.memberId === recipient.memberId)!.label,
-            status: 'creating',
-          }));
-        }
-        if (runId === undefined) throw new Error('Resolved recipient omitted its Room run.');
-        const run = store.get(roomId)!.runs.find(candidate => candidate.runId === runId)!;
-        const sessionId = run.sessionId ?? chatroomSessionIdForRun(roomId, runId);
-        await ctx.routes.navigate({
-          id: CHATROOM_SESSION_DETAIL_ROUTE.id,
-          params: { roomId, runId, sessionId },
-        });
-        if (recipient.createRun) {
-          await runtime.requestMemberSelfIntroduction(roomId, runId);
-        }
-        await runtime.sendToRun(roomId, runId, userMessageId, resolution.content);
-      }
-    };
+      return;
+    }
+    let deliveryFailure: unknown;
+    try {
+      await Promise.all(intent.deliveries.map(delivery => agentLoop.sendToRoom(
+        intent.roomId,
+        delivery.runId,
+        intent.userItemId,
+        [{ kind: 'text', text: intent.dispatchText }],
+        intent.generation,
+      )));
+    } catch (error) {
+      deliveryFailure = error;
+    }
+    // Navigating a first-message Room replaces the mounted plugin owner. The
+    // old owner must finish its AgentLoop call before yielding route authority.
+    if (intent.roomCreated) await ctx.routes.navigate({ id: 'room', params: { roomId: intent.roomId } });
+    if (deliveryFailure !== undefined) throw deliveryFailure;
+  };
+  ctx.commands.register({ id: CHATROOM_COMMAND_SUBMIT, title: text('composer.placeholder', 'Write a message') }, handleConversationCommand);
+  ctx.commands.register({ id: CHATROOM_COMMAND_APPROVAL_APPROVE, title: text('approval.approve', 'Approve') }, handleConversationCommand);
+  ctx.commands.register({ id: CHATROOM_COMMAND_APPROVAL_DENY, title: text('approval.deny', 'Deny') }, handleConversationCommand);
+  ctx.commands.register({ id: CHATROOM_COMMAND_APPROVAL_CANCEL, title: text('approval.cancel', 'Cancel') }, handleConversationCommand);
 
-    retain(ctx.commands.register({
-      id: CHATROOM_COMMAND_SUBMIT,
-      title: chatroomText('composer.placeholder', 'Write a message'),
-    }, handleConversationCommand));
-    retain(ctx.commands.register({
-      id: CHATROOM_COMMAND_APPROVAL_APPROVE,
-      title: chatroomText('approval.approve', 'Approve'),
-    }, handleConversationCommand));
-    retain(ctx.commands.register({
-      id: CHATROOM_COMMAND_APPROVAL_DENY,
-      title: chatroomText('approval.deny', 'Deny'),
-    }, handleConversationCommand));
-    retain(ctx.commands.register({
-      id: CHATROOM_COMMAND_APPROVAL_CANCEL,
-      title: chatroomText('approval.cancel', 'Cancel'),
-    }, handleConversationCommand));
+  const conversation = ctx.agentConversationShell.registerSource(binding => controller.createSource(binding));
+  ctx.pages.register(page, conversation.mount);
+  ctx.routes.register(newRoomRoute);
+  ctx.routes.register(roomRoute);
+  ctx.slots.register({
+    name: 'sidebar.navigation.items',
+    id: 'chatroom',
+    order: -90,
+  }, {
+    label: message('navigation.title', 'New room'),
+    icon: 'host:layers',
+    route: { id: 'new-room' },
+  });
+  ctx.slots.registerCollection({
+    contract: 'cordisx.navigation-collection/v2',
+    name: 'sidebar.navigation.items',
+    id: 'rooms',
+    group: { id: 'rooms', label: message('navigation.rooms', 'Rooms'), order: 20 },
+  }, product.activeRooms);
 
-    const manager = await registerChatroomManager(ctx, product);
-    retain(() => manager.dispose());
-    const teamSource = createTeamArchitectureDataSource(configuration, product.store.rooms);
-    retain(() => teamSource.dispose());
-    for (const dispose of registerTeamArchitectureManagerContributions(ctx, teamSource)) retain(dispose);
-    for (const dispose of registerTalentMarket(ctx)) retain(dispose);
+  const teamSource = createTeamArchitectureDataSource(agent, product.store.rooms);
+  const managerDisposers: Array<() => void | Promise<void>> = [];
+  let manager: Awaited<ReturnType<typeof registerChatroomManager>> | undefined;
+  let disposeManagerProjection: (() => void | Promise<void>) | undefined;
+  try {
+    manager = await registerChatroomManager(ctx, product);
+    managerDisposers.push(
+      ...registerTeamArchitectureManagerContributions(ctx, teamSource),
+      ...registerTalentMarket(ctx),
+    );
     const teamSnapshot = teamSource.getSnapshot();
-    retain(ctx.managerContent.replaceProjection({
+    disposeManagerProjection = ctx.managerContent.replaceProjection({
       declarations: Object.freeze([
         ...CHATROOM_MANAGER_CONTENT_DECLARATIONS,
         ...teamArchitectureManagerContentDeclarations(teamSnapshot),
         ...TALENT_MARKET_MANAGER_CONTENT_DECLARATIONS,
       ]),
       recordTitles: teamArchitectureManagerContentRecordTitles(teamSnapshot),
-    }));
+    });
   } catch (error) {
-    for (const dispose of retained.reverse()) await dispose();
-    conversation.dispose();
-    approvals.dispose();
-    await runtime.dispose();
+    for (const dispose of managerDisposers.reverse()) void dispose();
+    teamSource.dispose();
+    manager?.dispose();
+    agentLoop.dispose();
+    controller.dispose();
     product.dispose();
     throw error;
   }
-
-  ctx.effect(() => async () => {
-    if (disposed) return;
-    disposed = true;
-    for (const dispose of retained.reverse()) await dispose();
-    conversation.dispose();
-    approvals.dispose();
-    await runtime.dispose();
+  ctx.effect(() => () => {
+    void disposeManagerProjection?.();
+    for (const dispose of managerDisposers.reverse()) void dispose();
+    manager?.dispose();
+    agentLoop.dispose();
+    controller.dispose();
     product.dispose();
-  }, 'chatroom.agent-session-product-composition');
+  }, 'chatroom.runtime-and-manager');
 }

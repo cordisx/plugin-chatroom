@@ -1,13 +1,14 @@
+import type { NavigationCollectionActions } from '@cordisx/protocol/navigation-collection-actions/v1';
 import { cloneAgentAvatarRef } from '@cordisx/protocol/agent-avatar/v1';
 import type {
   CordisXLocalizedText,
   CordisXNavigationCollectionLeadingVisual,
   CordisXNavigationCollectionSnapshotV2,
   CordisXNavigationCollectionSourceV2,
-  NavigationCollectionActions,
 } from 'cordisx/contracts';
 import { CORDISX_ROOM_COMPOSITE_AVATAR_MAX_PARTICIPANTS } from 'cordisx/contracts';
 
+import { text } from './conversation-model.js';
 import {
   CHATROOM_COMMAND_ROOM_ARCHIVE,
   CHATROOM_COMMAND_ROOM_DELETE,
@@ -38,17 +39,21 @@ function localized(key: string, fallback: string): CordisXLocalizedText {
   return { namespace: 'chatroom', key, fallback };
 }
 
-/**
- * SessionEvent is the only durable conversation history. Room navigation never
- * stores or invents a parallel latest-message ledger.
- */
-export function latestRoomMessage(_room: Room): undefined {
-  return undefined;
+export function latestRoomMessage(room: Room) {
+  return room.items
+    .filter(item => item.kind === 'message')
+    .sort((left, right) => right.sequence - left.sequence)[0];
 }
 
 export function roomMessageSummary(room: Room): CordisXLocalizedText {
-  const summary = Array.from(room.description?.trim() || 'Session history is available when the Room is open.')
-    .slice(0, 180).join('');
+  const message = latestRoomMessage(room);
+  if (message === undefined) return localized('navigation.room.empty', 'No messages yet');
+  const plain = message.body
+    .map(part => part.text.fallback ?? part.text.key)
+    .join(' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  const summary = Array.from(plain || 'No messages yet').slice(0, 180).join('');
   return { namespace: 'chatroom', key: 'navigation.room.summary', params: { summary }, fallback: summary };
 }
 
@@ -130,18 +135,14 @@ export class ChatroomRoomNavigationCollection implements CordisXNavigationCollec
     const rooms = this.rooms.snapshot()
       .filter(room => room.archived === (this.mode === 'archived'))
       .sort((left, right) => Number(right.pinned) - Number(left.pinned)
+        || (latestRoomMessage(right)?.sequence ?? -1) - (latestRoomMessage(left)?.sequence ?? -1)
         || left.id.localeCompare(right.id))
       .slice(0, 500);
     return {
       revision: this.revision,
       items: rooms.map((room, order) => ({
         id: this.itemIdFor(room.id),
-        label: {
-          namespace: 'chatroom',
-          key: 'navigation.room.title',
-          params: { title: room.title },
-          fallback: room.title,
-        },
+        label: text('navigation.room.title', room.title),
         description: roomMessageSummary(room),
         leadingVisual: roomLeadingVisual(room),
         route: { id: 'room', params: { roomId: room.id } },

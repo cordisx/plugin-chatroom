@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from 'cordisx/react';
 import { defineReactPage } from 'cordisx/react';
-import { Button, EmptyState, Select } from 'cordisx/ui';
+import { EmptyState, Select } from 'cordisx/ui';
 import type { CordisXLocalizationSeat, CordisXReactPageProps } from 'cordisx/contracts';
 import {
   buildTeamArchitectureViewModel,
@@ -115,7 +115,6 @@ export type TeamArchitectureMessages = {
   'detail.session.participant': undefined;
   'detail.session.status': undefined;
   'detail.session.target': undefined;
-  'detail.session.open': undefined;
   'detail.unavailable': undefined;
 };
 
@@ -249,11 +248,10 @@ function EntityReferenceList({
   </ul>;
 }
 
-function EntityDetail({ entity, entities, tab, navigation, t }: {
+function EntityDetail({ entity, entities, tab, t }: {
   readonly entity: TeamEntityViewModel;
   readonly entities: readonly TeamEntityViewModel[];
   readonly tab: TeamEntityDetailTab;
-  readonly navigation: TeamArchitecturePageProps['navigation'];
   readonly t: Translate;
 }) {
   const byId = useMemo(() => new Map(entities.map(candidate => [candidate.memberId, candidate])), [entities]);
@@ -403,14 +401,7 @@ function EntityDetail({ entity, entities, tab, navigation, t }: {
               <Fact label={t('detail.session.participant')}><code>{session.participantId}</code></Fact>
               <Fact label={t('detail.session.status')}>{session.status}</Fact>
               <Fact label={t('detail.session.target')}>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void navigation.navigate(session.route)}
-                >
-                  {t('detail.session.open')}
-                </Button>
-                <code>{session.sessionId}</code>
+                <code>{session.detailsUrl.target}: {session.detailsUrl.url}</code>
               </Fact>
             </dl>
           </li>)}
@@ -577,7 +568,7 @@ function TeamArchitecturePage({ source, detailRouteIds, routeId, params, navigat
     content = <div className="cx-team-architecture">
       {entity === undefined || tab === undefined
         ? <EmptyState title={t('detail.missing.title')} description={t('detail.missing.description')} />
-        : <EntityDetail entity={entity} entities={entities} tab={tab} navigation={navigation} t={t} />}
+        : <EntityDetail entity={entity} entities={entities} tab={tab} t={t} />}
     </div>;
   }
   return <Fragment>
