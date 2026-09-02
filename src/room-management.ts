@@ -21,6 +21,7 @@ export class ChatroomRoomManagementError extends Error {
     this.name = 'ChatroomRoomManagementError';
   }
 }
+
 export type ChatroomRoomManagementCommand =
   | typeof CHATROOM_COMMAND_ROOM_PIN
   | typeof CHATROOM_COMMAND_ROOM_ARCHIVE

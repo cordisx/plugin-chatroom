@@ -2,30 +2,30 @@
   "name": "@cordisx/chatroom",
   "version": "0.1.0",
   "private": true,
-  "description": "Host-neutral Room collaboration plugin with Agent/Session runtime",
+  "description": "Chatroom Room collaboration plugin for CordisX",
   "license": "MIT",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/chatroom.js",
+  "types": "./dist/chatroom.d.ts",
   "files": [
     "dist",
-    "plugin",
     "cordisx-package.json"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-build-assets.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import ./test/support/register-css.mjs --test test/*.mjs",
-    "check": "npm run typecheck && npm run build && npm test"
+    "test": "node --test test/*.mjs",
+    "check": "npm run typecheck && npm run build && npm test",
+    "dev": "cordisx dev ./src/chatroom.ts",
+    "dev:dry-run": "cordisx dev ./src/chatroom.ts --dry-run"
   },
   "engines": {
     "node": ">=22.19"
   },
-  "dependencies": {
-    "@cordisx/protocol": "github:cordisx/cordisx-protocol#3e3f248abb94fe57e613b020ffa8a6ceaba6c3cd"
-  },
   "devDependencies": {
-    "cordisx": "github:cordisx/cordisx#2cab46c67bd0cd19097410e809c54e8be88893df",
+    "@cordisx/protocol": "github:cordisx/cordisx-protocol#3ad21adb5fa10c75aec88f7280c5b31f87e76dad",
+    "@deepseek-ai/cordis": "4.0.1",
+    "cordisx": "github:cordisx/cordisx#25f8c9b75594ed328cbe5d7a475e119c084276dd",
     "typescript": "^5.9.2"
   }
 }

@@ -19,6 +19,7 @@ export interface ChatroomRoomManagementRegistration {
   readonly id: ChatroomRoomManagementCommand;
   readonly handle: (context: CordisXCommandContext) => Promise<void>;
 }
+
 /**
  * Host-neutral product base shared by room navigation and management consumers.
  * It owns no page, route, DOM, or runtime simulation projection.

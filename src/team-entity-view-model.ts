@@ -7,9 +7,9 @@ import type {
   ChatroomRoomRegistry,
   Room,
   RoomRun,
+  StoredRoomRunDetailsUrl,
 } from './room.js';
 import type { ChatroomAgentConfiguration } from './agent-definition.js';
-import { CHATROOM_SESSION_DETAIL_ROUTE } from './routes.js';
 
 export type TeamEntityRoleFilter = 'all' | 'leader' | 'member';
 export type TeamEntitySessionFilter = 'all' | 'active' | 'without-active';
@@ -29,15 +29,7 @@ export interface TeamEntityActiveSession {
   readonly runId: string;
   readonly runTitle: string;
   readonly status: RoomRun['status'];
-  readonly sessionId: string;
-  readonly route: {
-    readonly id: typeof CHATROOM_SESSION_DETAIL_ROUTE.id;
-    readonly params: {
-      readonly roomId: string;
-      readonly runId: string;
-      readonly sessionId: string;
-    };
-  };
+  readonly detailsUrl: StoredRoomRunDetailsUrl;
 }
 
 export interface TeamEntityDeclaredCapabilities {
@@ -197,7 +189,9 @@ const activeSessionsFor = (
   if (membership === undefined) return [];
   return room.runs.flatMap(run => {
     if (run.memberId !== memberId
-      || run.sessionId === undefined
+      || run.taskBinding?.state !== 'active'
+      || !sameIdentity(run.taskBinding.definition, definition)
+      || run.detailsUrl === undefined
       || (run.presence.state !== 'joined' && run.presence.state !== 'ready')) return [];
     return [Object.freeze({
       roomId: room.id,
@@ -206,11 +200,7 @@ const activeSessionsFor = (
       runId: run.runId,
       runTitle: run.title,
       status: run.status,
-      sessionId: run.sessionId,
-      route: Object.freeze({
-        id: CHATROOM_SESSION_DETAIL_ROUTE.id,
-        params: Object.freeze({ roomId: room.id, runId: run.runId, sessionId: run.sessionId }),
-      }),
+      detailsUrl: Object.freeze({ ...run.detailsUrl }),
     })];
   });
 }).sort((left, right) => left.roomTitle.localeCompare(right.roomTitle)

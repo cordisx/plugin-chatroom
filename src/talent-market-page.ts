@@ -71,11 +71,13 @@ export function registerTalentMarket(
   const { localization } = localeRegistration;
   const disposers: TalentMarketDisposer[] = [...localeRegistration.disposers];
   const TalentMarketPage: CordisXReactPageComponent<TalentMarketMessages> = ({ navigation }) => createElement(EmptyState, {
+    'data-chatroom-talent-market-empty': 'true',
     title: localization.t('empty.title'),
     description: localization.t('empty.description'),
     action: createElement(Button, {
       type: 'button',
       variant: 'secondary',
+      'data-chatroom-talent-market-back': 'true',
       onClick: () => void navigation.back('manager.content'),
     }, localization.t('action.back')),
   });

@@ -15,6 +15,7 @@ export interface TalentMarketMessages {
   readonly 'empty.description': undefined;
   readonly 'action.back': undefined;
 }
+
 export type TalentMarketDisposer = () => void | Promise<void>;
 
 export interface TalentMarketLocaleRegistration {

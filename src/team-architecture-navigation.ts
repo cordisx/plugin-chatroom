@@ -240,7 +240,7 @@ export function teamArchitectureManagerContentRecordTitles(
   })));
 }
 
-const zhCNMessages: Readonly<Record<keyof TeamArchitectureMessages, string>> = Object.freeze({
+const zhCNMessages: TeamArchitectureMessages = Object.freeze({
   'body.introduction': '以配置中的稳定成员身份展示真实组织关系；定义继承与关联关系不会被当作上下级。',
   'search.label': '搜索团队成员',
   'search.placeholder': '成员名称、成员 ID、Agent ID、版本或声明能力',
@@ -336,11 +336,10 @@ const zhCNMessages: Readonly<Record<keyof TeamArchitectureMessages, string>> = O
   'detail.session.participant': 'Participant',
   'detail.session.status': '运行状态',
   'detail.session.target': '详情目标',
-  'detail.session.open': '打开会话',
   'detail.unavailable': '不可用',
 });
 
-const enMessages: Readonly<Record<keyof TeamArchitectureMessages, string>> = Object.freeze({
+const enMessages: TeamArchitectureMessages = Object.freeze({
   'body.introduction': 'Shows real reporting lines from stable configured member identities. Definition inheritance and related-member links never become hierarchy.',
   'search.label': 'Search team members',
   'search.placeholder': 'Name, member ID, Agent ID, revision, or declared capability',
@@ -436,7 +435,6 @@ const enMessages: Readonly<Record<keyof TeamArchitectureMessages, string>> = Obj
   'detail.session.participant': 'Participant',
   'detail.session.status': 'Run status',
   'detail.session.target': 'Details target',
-  'detail.session.open': 'Open session',
   'detail.unavailable': 'Unavailable',
 });
 

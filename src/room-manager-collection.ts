@@ -205,7 +205,7 @@ function renameAction(room: Room): ManagerCollectionAction {
       'manager.feedback.renamed', 'Chat renamed',
       'manager.feedback.rename-failed', 'Could not rename chat',
     ),
-  } as const satisfies ManagerCollectionAction);
+  });
 }
 
 function deleteAction(room: Room): ManagerCollectionAction {
@@ -309,6 +309,7 @@ export class ChatroomRoomManagerCollectionSource implements ManagerCollectionSou
     const rooms = this.coordinator.store.rooms.snapshot()
       .filter(room => room.archived === (this.mode === 'archived'))
       .sort((left, right) => (this.mode === 'active' ? Number(right.pinned) - Number(left.pinned) : 0)
+        || (latestRoomMessage(right)?.sequence ?? -1) - (latestRoomMessage(left)?.sequence ?? -1)
         || compareOpaqueIds(left.id, right.id));
     if (rooms.length > 1000) {
       throw new Error('Manager collection selected view exceeds the 1000-row snapshot bound.');

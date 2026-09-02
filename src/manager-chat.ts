@@ -201,7 +201,7 @@ readonly CordisXManagerContentNavigationDeclarationV2[] = Object.freeze([
   route: { id: routeId },
   header: { title: { kind: 'route' } },
   tabs,
-} as const satisfies CordisXManagerContentNavigationDeclarationV2)));
+})));
 
 const english: Readonly<Record<keyof ChatroomManagerMessages, string>> = Object.freeze({
   'manager.navigation.title': 'Manage chats',
@@ -354,6 +354,7 @@ export interface ChatroomManagerIntegrationContext {
   readonly routes: CordisXRoutes;
   readonly slots: CordisXSlots;
 }
+
 export interface ChatroomManagerIntegrationHandle {
   readonly product: ChatroomProductBase;
   dispose(): void;
