@@ -89,10 +89,14 @@ test('rejects missing ancestors, cycles, duplicates, and unreachable definitions
 test('ships introduction, personality, and memory with isolated runtime/filter defaults', () => {
   const parsed = parseChatroomAgentConfiguration(CHATROOM_DEFAULT_AGENT_CONFIGURATION);
   const selected = parsed.definitions[0];
-  assert.equal(parsed.members.length, 2);
+  assert.equal(parsed.members.length, 5);
   assert.deepEqual(parsed.seedLeaderIds, ['leader']);
   assert.deepEqual(parsed.members.map(member => [member.role, member.attentionPolicy]), [
-    ['leader', 'ambient'], ['member', 'mention-only'],
+    ['leader', 'ambient'],
+    ['member', 'mention-only'],
+    ['member', 'mention-only'],
+    ['member', 'mention-only'],
+    ['member', 'mention-only'],
   ]);
   assert.deepEqual(selected.promptSections.map(section => section.kind), ['introduction', 'personality', 'memory']);
   assert.deepEqual(selected.tools, { include: ['read', 'search'], exclude: ['external-channel'] });
@@ -107,6 +111,18 @@ test('ships introduction, personality, and memory with isolated runtime/filter d
       kind: 'asset', ref: 'oneworks-avatar:asset.arctic-fox.v1',
       revision: 'oneworks-avatar:editor-arctic-fox-2c262adc567c423a94d497bfea9c9906f2da71cdde0e0cef6d71c263ceaf3011',
     },
+    {
+      kind: 'asset', ref: 'oneworks-avatar:asset.d85c0abccffd4d539da85cb67eb8bcbf.v1',
+      revision: 'oneworks-avatar:editor-syrian-hamster-5eebb3ea9c0131005fd336e7c8494c74fce92903373272632da940f22307c1f7',
+    },
+    {
+      kind: 'asset', ref: 'oneworks-avatar:asset.5089b05857414a4c9f2bf1c0c5079edc.v1',
+      revision: 'oneworks-avatar:editor-asian-small-clawed-otter-4ceef0184bd3d2fd6a469b20decf1d0dd3cd726bbeaf3d07c43389ba5b2bab6f',
+    },
+    {
+      kind: 'asset', ref: 'oneworks-avatar:asset.7ca113246df74241ab1bdedc04f6fde9.v1',
+      revision: 'oneworks-avatar:editor-yellow-duckling-a8d6820ff62d33d931b2554f6080126c2685ad84eed34a559ef7407374b447c6',
+    },
   ]);
   assert.deepEqual(parsed.members.map(member => agentAvatarForDefinition(member.definition, parsed.definitions)),
     parsed.definitions.map(item => item.avatar));
@@ -119,6 +135,9 @@ test('builds one exact target ancestor closure without unrelated child definitio
 
   assert.deepEqual(lead.map(definition => definition.identity.agentId), ['chatroom.generalist']);
   assert.deepEqual(reviewer.map(definition => definition.identity.agentId), ['chatroom.generalist', 'chatroom.reviewer']);
+  assert.deepEqual(parsed.members.map(member => member.reportsToMemberId), [
+    undefined, 'leader', 'leader', 'reviewer', 'integrator',
+  ]);
 });
 
 test('parses, freezes, and resolves formal Agent Avatar inheritance', () => {

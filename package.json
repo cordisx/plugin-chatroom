@@ -2,26 +2,30 @@
   "name": "@cordisx/chatroom",
   "version": "0.1.0",
   "private": true,
-  "description": "Host-neutral Room collaboration plugin",
+  "description": "Host-neutral Room collaboration plugin with Agent/Session runtime",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    "plugin"
+    "plugin",
+    "cordisx-package.json"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/copy-build-assets.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test test/*.mjs",
+    "test": "node --import ./test/support/register-css.mjs --test test/*.mjs",
     "check": "npm run typecheck && npm run build && npm test"
   },
   "engines": {
     "node": ">=22.19"
   },
+  "dependencies": {
+    "@cordisx/protocol": "github:cordisx/cordisx-protocol#3e3f248abb94fe57e613b020ffa8a6ceaba6c3cd"
+  },
   "devDependencies": {
-    "@cordisx/protocol": "github:cordisx/cordisx-protocol#609800003f802b94945e2fa17c0d77846e1a8eda",
+    "cordisx": "github:cordisx/cordisx#2cab46c67bd0cd19097410e809c54e8be88893df",
     "typescript": "^5.9.2"
   }
 }
