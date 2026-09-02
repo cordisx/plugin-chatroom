@@ -1,4 +1,5 @@
 import type { AgentConversationItem } from '@cordisx/protocol/agent-conversation-shell/v3';
+import type { MessageId, SessionId } from '@cordisx/protocol/sessions/v1';
 import type {
   AgentLoopApprovalDecision,
   AgentLoopTaskBinding,
@@ -248,6 +249,8 @@ export interface RoomRun {
   readonly memberId: string;
   readonly title: string;
   readonly status: RoomRunStatus;
+  /** Sole persisted identity for the Agent/Session runtime path. AgentId is identical. */
+  readonly sessionId?: SessionId;
   /** One private AgentLoop task/session binding belongs to this run only. */
   readonly taskBinding?: AgentLoopTaskBinding;
   /** Persisted with the binding; closed historical runs retain this URL. */
@@ -276,11 +279,19 @@ export interface RoomRun {
   };
   /** Durable, model-owned free-form introduction request for this exact membership run. */
   readonly selfIntroduction?: RoomMemberSelfIntroduction;
+  /** Chatroom correlation only; admission and completion remain SessionEvent facts. */
+  readonly sessionSelfIntroduction?: RoomSessionSelfIntroduction;
   readonly presence: RoomRunPresence;
   /** Highest accepted AgentLoop event sequence for this exact binding. */
-  readonly agentLoopCursor: number;
+  readonly agentLoopCursor?: number;
   /** Durable semantic correlations survive the bounded public timeline window. */
   readonly publicProjections?: readonly RoomRunPublicProjection[];
+}
+
+export interface RoomSessionSelfIntroduction {
+  readonly requestMessageId: MessageId;
+  readonly correlationId: string;
+  readonly requestedAt: string;
 }
 
 export type RoomMemberSelfIntroductionAttentionCode =
@@ -591,6 +602,28 @@ function freezeRun(run: RoomRun, member: RoomMembership): RoomRun {
       throw new Error('Room run public projection must retain its exact kind/participant association.');
     }
   }
+  const frozenPresence = Object.freeze({
+    ...presence,
+    ...(presence.failure === undefined ? {} : { failure: Object.freeze({
+      ...presence.failure,
+      ...(presence.failure.retryCommand === undefined ? {} : {
+        retryCommand: Object.freeze({ ...presence.failure.retryCommand }),
+      }),
+    }) }),
+  });
+  if (run.sessionId !== undefined) {
+    return Object.freeze({
+      runId: run.runId,
+      memberId: run.memberId,
+      title: run.title,
+      status: run.status,
+      sessionId: run.sessionId,
+      ...(run.sessionSelfIntroduction === undefined ? {} : {
+        sessionSelfIntroduction: Object.freeze({ ...run.sessionSelfIntroduction }),
+      }),
+      presence: frozenPresence,
+    });
+  }
   return Object.freeze({
     ...run,
     ...(run.taskBinding === undefined ? {} : { taskBinding: freezeTaskBinding(run.taskBinding) }),
@@ -622,15 +655,7 @@ function freezeRun(run: RoomRun, member: RoomMembership): RoomRun {
         }),
       }),
     }) }),
-    presence: Object.freeze({
-      ...presence,
-      ...(presence.failure === undefined ? {} : { failure: Object.freeze({
-        ...presence.failure,
-        ...(presence.failure.retryCommand === undefined ? {} : {
-          retryCommand: Object.freeze({ ...presence.failure.retryCommand }),
-        }),
-      }) }),
-    }),
+    presence: frozenPresence,
     publicProjections: Object.freeze(publicProjections.map(projection => Object.freeze({ ...projection }))),
   });
 }
@@ -791,6 +816,10 @@ export function createRoom(input: CreateRoomInput): Room {
     return freezeRun(run, member);
   }));
   if (new Set(runs.map(run => run.runId)).size !== runs.length) throw new Error('Room run ids must be unique.');
+  const sessionIds = runs.flatMap(run => run.sessionId === undefined ? [] : [run.sessionId]);
+  if (new Set(sessionIds).size !== sessionIds.length) {
+    throw new Error('A Session may belong to only one Room run.');
+  }
   const publicProjectionIds = runs.flatMap(run => (run.publicProjections ?? []).map(projection => projection.itemId));
   if (new Set(publicProjectionIds).size !== publicProjectionIds.length) {
     throw new Error('Room run public projection identities must be globally unique.');
@@ -801,6 +830,22 @@ export function createRoom(input: CreateRoomInput): Room {
     if (member === undefined) throw new Error('Room run must reference a member.');
     if (run.taskBinding !== undefined && !sameIdentity(member.definition, run.taskBinding.definition)) {
       throw new Error('TaskBinding Agent identity does not match the Room member.');
+    }
+    if (run.sessionId !== undefined && (run.sessionId.trim() === ''
+      || run.taskBinding !== undefined
+      || run.detailsUrl !== undefined
+      || run.rebind !== undefined
+      || run.selfIntroduction !== undefined
+      || (run.publicProjections?.length ?? 0) !== 0)) {
+      throw new Error('Session-backed Room runs cannot retain AgentLoop runtime truth.');
+    }
+    if (run.sessionSelfIntroduction !== undefined) {
+      const introduction = run.sessionSelfIntroduction;
+      requireShellOpaqueId(introduction.requestMessageId, 'Session self-introduction messageId');
+      requireShellOpaqueId(introduction.correlationId, 'Session self-introduction correlationId');
+      if (run.sessionId === undefined || !Number.isFinite(Date.parse(introduction.requestedAt))) {
+        throw new Error('Session self-introduction requires one exact Session-backed Room run.');
+      }
     }
     if (run.detailsUrl !== undefined && run.taskBinding === undefined) {
       throw new Error('Run details URL requires a persisted TaskBinding.');
@@ -875,8 +920,9 @@ export function createRoom(input: CreateRoomInput): Room {
       }
     }
     if ((run.presence.state === 'joined' || run.presence.state === 'ready')
+      && run.sessionId === undefined
       && (run.taskBinding === undefined || run.detailsUrl === undefined)) {
-      throw new Error('Joined/ready member presence requires a persisted binding and details URL.');
+      throw new Error('Joined/ready member presence requires a Session or persisted binding and details URL.');
     }
   }
   for (const member of memberships) {
@@ -1421,6 +1467,82 @@ export function bindRoomRun(room: Room, runId: string, binding: AgentLoopTaskBin
     ...replaceRoomRun(room, runId, { ...run, status: 'active', taskBinding: binding }),
     memberships,
   });
+}
+
+/**
+ * Atomically moves one run to the Agent/Session authority. Legacy AgentLoop
+ * identity and replay state are removed instead of being kept as a second
+ * runtime truth.
+ */
+export function bindRoomRunSession(room: Room, runId: string, sessionId: SessionId): Room {
+  if (sessionId.trim() === '') throw new Error('Room run SessionId must not be empty.');
+  const run = room.runs.find(candidate => candidate.runId === runId);
+  if (run === undefined) throw new Error('Room run is unavailable.');
+  if (run.sessionId !== undefined && run.sessionId !== sessionId) {
+    throw new Error('Room run is already bound to a different Session.');
+  }
+  if (room.runs.some(candidate => candidate.runId !== runId && candidate.sessionId === sessionId)) {
+    throw new Error('Session already belongs to another Room run.');
+  }
+  const migrated: RoomRun = {
+    runId: run.runId,
+    memberId: run.memberId,
+    title: run.title,
+    sessionId,
+    status: 'active',
+    ...(run.sessionSelfIntroduction === undefined ? {} : {
+      sessionSelfIntroduction: run.sessionSelfIntroduction,
+    }),
+    presence: {
+      ...run.presence,
+      state: 'ready',
+      sequence: Math.max(run.presence.sequence, room.timelineSequence),
+      failure: undefined,
+    },
+  };
+  return createRoom({
+    ...room,
+    runs: room.runs.map(candidate => candidate.runId === runId ? migrated : candidate),
+    deliveries: room.deliveries.filter(delivery => delivery.runId !== runId),
+    outbox: room.outbox.filter(delivery => delivery.runId !== runId),
+    approvalDecisions: room.approvalDecisions.filter(decision => decision.runId !== runId),
+  });
+}
+
+export function recordRoomSessionSelfIntroduction(
+  room: Room,
+  runId: string,
+  introduction: RoomSessionSelfIntroduction,
+): Room {
+  const run = room.runs.find(candidate => candidate.runId === runId);
+  if (run?.sessionId === undefined) throw new Error('Session-backed Room run is unavailable.');
+  const prior = run.sessionSelfIntroduction;
+  if (prior !== undefined && (prior.requestMessageId !== introduction.requestMessageId
+    || prior.correlationId !== introduction.correlationId)) {
+    throw new Error('Room Session self-introduction identity changed.');
+  }
+  return prior === undefined
+    ? replaceRoomRun(room, runId, { ...run, sessionSelfIntroduction: introduction })
+    : room;
+}
+
+export function roomRunForSession(room: Room, sessionId: SessionId): RoomRun | undefined {
+  return room.runs.find(run => run.sessionId === sessionId);
+}
+
+export function approvalAuthorityMemberIds(room: Room, memberId: string): readonly string[] {
+  const members = new Map(room.memberships.map(member => [member.memberId, member]));
+  if (!members.has(memberId)) throw new Error('Room member is unavailable.');
+  const result: string[] = [];
+  const visited = new Set<string>([memberId]);
+  let current = members.get(memberId)?.reportsToMemberId;
+  while (current !== undefined) {
+    if (visited.has(current)) throw new Error('Room reporting hierarchy contains a cycle.');
+    visited.add(current);
+    result.push(current);
+    current = members.get(current)?.reportsToMemberId;
+  }
+  return Object.freeze(result);
 }
 
 export function closeRoomRun(room: Room, runId: string, binding: AgentLoopTaskBinding['binding']): Room {

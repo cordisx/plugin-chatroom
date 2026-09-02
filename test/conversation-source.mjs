@@ -247,7 +247,7 @@ test('creates and projects a Room only from the first Host-generated composer su
     kind: 'send-message', roomId: 'room-1', roomCreated: true,
     deliveries: [{ memberId: 'leader', runId: 'run-1', runCreated: true, reason: 'ambient' }],
     userItemId: 'message-1',
-    bindingId: 'binding-1', generation: 'owner-1', text: 'bounded host text',
+    bindingId: 'binding-1', generation: 'owner-1', dispatchText: 'bounded host text',
   });
   assert.deepEqual(controller.takePendingIntents(), [
     intent,
@@ -274,7 +274,7 @@ test('creates and projects a Room only from the first Host-generated composer su
     assert.equal(userMessage.runState, 'idle');
   }
   const room = controller.rooms.get('room-1');
-  assert.equal(room.memberships.length, 2);
+  assert.equal(room.memberships.length, 5);
   assert.deepEqual(room.seedLeaderIds, ['leader']);
   assert.deepEqual(room.runs.map(run => [run.memberId, run.status]), [['leader', 'creating']]);
 });
@@ -357,7 +357,7 @@ test('appends a later Host-generated submit to the selected Room without creatin
     kind: 'send-message', roomId: 'review', roomCreated: false,
     deliveries: [{ memberId: 'leader', runId: 'run-1', runCreated: true, reason: 'ambient' }],
     userItemId: 'message-1',
-    bindingId: 'binding-existing', generation: 'owner-1', text: 'Continue',
+    bindingId: 'binding-existing', generation: 'owner-1', dispatchText: 'Continue',
   });
   assert.equal(controller.rooms.snapshot().length, 1);
   const snapshot = await source.snapshot();
@@ -387,23 +387,21 @@ test('routes @member to a reusable or lazy-created member run and @member/run ex
 
   const member = command('@reviewer Inspect this');
   assert.deepEqual({
-    kind: member.kind, deliveries: member.deliveries, text: member.text,
+    kind: member.kind, deliveries: member.deliveries, dispatchText: member.dispatchText,
   }, {
     kind: 'send-message', deliveries: [
-      { memberId: 'leader', runId: 'run-1', runCreated: true, reason: 'ambient' },
-      { memberId: 'reviewer', runId: 'run-2', runCreated: true, reason: 'mention' },
-    ], text: 'Inspect this',
+      { memberId: 'reviewer', runId: 'run-1', runCreated: true, reason: 'mention' },
+    ], dispatchText: 'Inspect this',
   });
-  const exact = command('@reviewer/run-2 Continue exactly');
+  const exact = command('@reviewer/run-1 Continue exactly');
   assert.deepEqual({
-    deliveries: exact.deliveries, text: exact.text,
+    deliveries: exact.deliveries, dispatchText: exact.dispatchText,
   }, {
     deliveries: [
-      { memberId: 'leader', runId: 'run-1', runCreated: false, reason: 'ambient' },
-      { memberId: 'reviewer', runId: 'run-2', runCreated: false, reason: 'mention' },
-    ], text: 'Continue exactly',
+      { memberId: 'reviewer', runId: 'run-1', runCreated: false, reason: 'mention' },
+    ], dispatchText: 'Continue exactly',
   });
-  assert.equal(controller.rooms.get('team').runs.length, 2);
+  assert.equal(controller.rooms.get('team').runs.length, 1);
 });
 
 test('returns explicit target errors without creating a run or public message', () => {
