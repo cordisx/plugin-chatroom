@@ -324,7 +324,7 @@ function statusProjection(
 export function projectAgentLoopEvent(room: Room, runId: string, event: AgentLoopEvent): AgentLoopProjectionResult {
   const run = room.runs.find(candidate => candidate.runId === runId);
   if (run === undefined || !roomRunOwnsAgentLoopBinding(room, runId, event.binding)
-    || event.sequence <= run.agentLoopCursor) {
+    || event.sequence <= (run.agentLoopCursor ?? -1)) {
     return { accepted: false, room };
   }
   if (event.type === 'message') return { accepted: true, room: messageProjection(room, runId, event) };
@@ -410,14 +410,15 @@ function updateCausationAcknowledgement(
     : room.deliveries.find(candidate => candidate.operationId === operationId
       && candidate.stage === 'send' && candidate.runId === runId);
   if (delivery?.operation.kind !== 'send') return room;
+  const sendOperation = delivery.operation;
   const acknowledgement = room.acknowledgements.find(candidate =>
-    candidate.acknowledgementKey === delivery.operation.acknowledgementKey);
+    candidate.acknowledgementKey === sendOperation.acknowledgementKey);
   // Acknowledgement is first-terminal-wins. Replayed or contradictory late
   // lifecycle events may advance the cursor, but cannot replace its outcome.
   if (acknowledgement?.state !== 'pending') return room;
   const acknowledged = state === 'completed'
-    ? completeRoomAcknowledgement(room, delivery.operation.acknowledgementKey)
-    : failRoomAcknowledgement(room, delivery.operation.acknowledgementKey, failureCode);
+    ? completeRoomAcknowledgement(room, sendOperation.acknowledgementKey)
+    : failRoomAcknowledgement(room, sendOperation.acknowledgementKey, failureCode);
   return createRoom({
     ...acknowledged,
     items: acknowledged.items.map(item => item.kind === 'message' && item.itemId === delivery.userItemId

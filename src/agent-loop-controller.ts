@@ -490,7 +490,7 @@ export class ChatroomAgentLoopController {
     const run = this.requireRun(room, runId);
     let result: Awaited<ReturnType<BoundAgentLoopClient['subscribe']>>;
     try {
-      result = await this.client.subscribe(source, run.agentLoopCursor);
+      result = await this.client.subscribe(source, run.agentLoopCursor ?? -1);
     } catch {
       if (this.isCurrentGeneration(controllerGeneration)) {
         this.localHydratedRuns.set(this.localRunKey(roomId, runId), {
@@ -1342,7 +1342,7 @@ export class ChatroomAgentLoopController {
     const run = this.requireRun(room, runId);
     let result: AgentLoopSubscribeRuntimeResult;
     try {
-      result = await this.client.subscribe(binding, run.agentLoopCursor);
+      result = await this.client.subscribe(binding, run.agentLoopCursor ?? -1);
     } catch (error) {
       if (!this.isCurrentGeneration(controllerGeneration)) return undefined;
       throw error;
@@ -1473,7 +1473,7 @@ export class ChatroomAgentLoopController {
         && candidate.stage === 'send' && candidate.state === 'accepted'
         && candidate.acceptance?.kind === 'send');
       if (!hasPendingAcknowledgement && hasAcceptedSend) continue;
-      for (const projection of run.publicProjections) {
+      for (const projection of run.publicProjections ?? []) {
         const item = itemsById.get(projection.itemId);
         if (item?.kind === 'message' && item.source === 'agent-loop'
           && item.semantic.purpose === 'conversation') replayableItemIds.add(item.itemId);
@@ -1484,7 +1484,7 @@ export class ChatroomAgentLoopController {
       ...room,
       runs: room.runs.map(run => ({
         ...run,
-        publicProjections: run.publicProjections.filter(candidate =>
+        publicProjections: (run.publicProjections ?? []).filter(candidate =>
           !replayableItemIds.has(candidate.itemId)),
       })),
       items: room.items.filter(item => !replayableItemIds.has(item.itemId)),

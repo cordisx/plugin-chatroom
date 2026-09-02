@@ -42,14 +42,15 @@ const reusableRun = (
   locallyUnavailableRunIds: ReadonlySet<string>,
 ): RoomRun | undefined => {
   const memberRuns = room.runs.filter(run => run.memberId === member.memberId);
+  const ownsRuntime = (run: RoomRun) => run.sessionId !== undefined || run.taskBinding?.state === 'active';
   return memberRuns.find(run => !locallyUnavailableRunIds.has(run.runId)
-      && run.status === 'waiting' && run.taskBinding?.state === 'active')
+      && run.status === 'waiting' && ownsRuntime(run))
     ?? memberRuns.find(run => !locallyUnavailableRunIds.has(run.runId)
-      && run.status === 'active' && run.taskBinding?.state === 'active')
+      && run.status === 'active' && ownsRuntime(run))
     ?? memberRuns.find(run => !locallyUnavailableRunIds.has(run.runId)
-      && run.status === 'running' && run.taskBinding?.state === 'active')
+      && run.status === 'running' && ownsRuntime(run))
     ?? memberRuns.find(run => !locallyUnavailableRunIds.has(run.runId)
-      && run.status === 'completed' && run.taskBinding?.state === 'active')
+      && run.status === 'completed' && ownsRuntime(run))
     ?? memberRuns.find(run => run.status === 'creating'
       && run.taskBinding === undefined && run.rebind === undefined);
 };
