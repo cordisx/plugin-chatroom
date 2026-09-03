@@ -1344,7 +1344,7 @@ export class ChatroomAgentSessionRoomSimulationOwner implements PlaygroundRoomSi
       binding.roomId,
       projection.targetRunId,
       projection.itemId,
-      `${delegationContextText(projection.context)}\n\n${projection.text}`,
+      projection.text,
       'followup',
       'agent-delegation',
     );

@@ -81,7 +81,8 @@ test('discovers the Room from SessionId and delegates to another Room entity', a
   assert.equal(delegated.value.runId, 'run-reviewer');
   assert.equal(sent.length, 1);
   assert.deepEqual(sent[0].slice(0, 3), ['room-one', 'run-reviewer', 'item-operation-one']);
-  assert.match(sent[0][3], /Review the final chain\./u);
+  assert.equal(sent[0][3], 'Review the final chain.');
+  assert.doesNotMatch(sent[0][3], /Chatroom delegation context|delegatedBy|availableTargets/u);
   owner.dispose();
 });
 

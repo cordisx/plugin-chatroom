@@ -63,6 +63,66 @@ const bodyFor = (content: UserMessage['content']): AgentConversationMessageItem[
   return blocks.length === 0 ? undefined : [blocks[0], ...blocks.slice(1)];
 };
 
+const DELEGATION_CONTEXT_ENVELOPE = /^(?<prefix>Playground Agent\/Session fixture reply:[ \t]*)?\[Chatroom delegation context\]\r?\n(?<context>\{[^\r\n]*\})\r?\n\r?\n(?<task>[\s\S]+)$/u;
+const DELEGATION_COMMUNICATION_RULE =
+  'Prefix an ordinary Room message with @<memberId-or-label> to deliver it only to that entity. Without @, the message is Room-visible only.';
+const DELEGATION_APPROVAL_RULE =
+  'Approval and permission requests follow reportsToMemberId upward; they do not use arbitrary @ routing.';
+
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const hasExactKeys = (value: Readonly<Record<string, unknown>>, keys: readonly string[]): boolean => {
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+};
+
+const hasStrings = (value: unknown, keys: readonly string[]): boolean => isRecord(value)
+  && hasExactKeys(value, keys)
+  && keys.every(key => typeof value[key] === 'string' && value[key] !== '');
+
+function isDelegationContext(value: unknown): boolean {
+  if (!isRecord(value) || !hasExactKeys(value, [
+    'self', 'delegatedBy', 'reportsTo', 'availableTargets', 'communication', 'approvals',
+  ])) return false;
+  if (!hasStrings(value.self, ['memberId', 'label', 'runId'])
+    || !hasStrings(value.delegatedBy, ['memberId', 'label', 'runId'])
+    || (value.reportsTo !== null && !hasStrings(value.reportsTo, ['memberId', 'label']))
+    || !Array.isArray(value.availableTargets)
+    || !value.availableTargets.every(target => hasStrings(target, ['memberId', 'label']))) return false;
+  if (!isRecord(value.communication)
+    || !hasExactKeys(value.communication, ['mode', 'rule'])
+    || value.communication.mode !== 'explicit-mention-required'
+    || value.communication.rule !== DELEGATION_COMMUNICATION_RULE) return false;
+  if (!isRecord(value.approvals)
+    || !hasExactKeys(value.approvals, ['mode', 'next', 'rule'])
+    || value.approvals.mode !== 'reports-to-hierarchy'
+    || value.approvals.rule !== DELEGATION_APPROVAL_RULE
+    || JSON.stringify(value.approvals.next) !== JSON.stringify(value.reportsTo)) return false;
+  return true;
+}
+
+function visibleAssistantText(textValue: string): string {
+  const match = DELEGATION_CONTEXT_ENVELOPE.exec(textValue);
+  if (match?.groups === undefined) return textValue;
+  let context: unknown;
+  try {
+    context = JSON.parse(match.groups.context);
+  } catch {
+    return textValue;
+  }
+  return isDelegationContext(context)
+    ? `${match.groups.prefix ?? ''}${match.groups.task}`
+    : textValue;
+}
+
+const visibleAssistantContent = (content: UserMessage['content']): UserMessage['content'] => (
+  content.map(block => block.type === 'text'
+    ? { ...block, text: visibleAssistantText(block.text) }
+    : block)
+);
+
 const approvalState = (outcome: ApprovalOutcome): 'approved' | 'denied' | 'cancelled' | 'failed' => {
   if (outcome === 'allowed-once') return 'approved';
   if (outcome === 'rejected') return 'denied';
@@ -238,10 +298,10 @@ export class ChatroomAgentSessionProjector {
   private projectAssistantMessage(
     event: Extract<SessionEvent, { readonly type: 'assistant/message' }>,
   ): ChatroomSessionProjectionChange | undefined {
-    const body = bodyFor(event.data.message.content);
+    const requests = this.sourceUserMessages(event);
+    const body = bodyFor(visibleAssistantContent(event.data.message.content));
     if (body === undefined) return undefined;
     const author = this.agentParticipant();
-    const requests = this.sourceUserMessages(event);
     const introduction = this.run.sessionSelfIntroduction;
     const introductionRequest = introduction === undefined
       ? undefined

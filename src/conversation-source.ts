@@ -927,11 +927,7 @@ export class ChatroomConversationController {
     const targetMember = inspection.room.memberships.find(candidate =>
       candidate.memberId === targetMemberId && candidate.memberId !== correlation.memberId);
     if (targetMember === undefined) return { status: 'missing-target' };
-    const announcementTask = task.replace(/[。！？.!?]+$/u, '');
-    const work = announcementTask.replace(/^完成(?:一下)?/u, '').trimStart();
-    const announcement = work === ''
-      ? `我会通知 @${targetMember.label} 去处理这项工作。`
-      : `我会通知 @${targetMember.label} 去完成${work}的工作。`;
+    const announcement = `已向 @${targetMember.label} 下发任务：${task}${/[。！？.!?]$/u.test(task) ? '' : '。'}`;
     const targetRunId = createChatroomOpaqueId('session-delegation-run', operationId);
     const itemId = createChatroomOpaqueId('session-agent-delegation', operationId);
     const reportsTo = targetMember.reportsToMemberId === undefined ? undefined
