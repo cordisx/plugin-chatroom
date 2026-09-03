@@ -23,6 +23,7 @@ import { ChatroomProductBase } from './product-base.js';
 import { CHATROOM_COMMAND_ROOM_DELETE } from './room-management.js';
 import {
   CHATROOM_MANAGER_ARCHIVED_REGISTRATION,
+  CHATROOM_MANAGER_I18N_NAMESPACE,
   CHATROOM_MANAGER_ROOMS_REGISTRATION,
   ChatroomRoomManagerCollectionSource,
   ChatroomRoomManagerCoordinator,
@@ -105,7 +106,7 @@ export const chatroomManagerMessage = (
   key: keyof ChatroomManagerMessages,
   fallback: string,
 ): CordisXLocalizedText => ({
-  namespace: 'chatroom', key, fallback,
+  namespace: CHATROOM_MANAGER_I18N_NAMESPACE, key, fallback,
 });
 
 const message = chatroomManagerMessage;
@@ -376,10 +377,15 @@ export async function registerChatroomManager(
   };
   try {
     retain(context.i18n.define<ChatroomManagerMessages>({
-      namespace: 'chatroom', locale: 'en', default: true, messages: english,
+      namespace: CHATROOM_MANAGER_I18N_NAMESPACE,
+      locale: 'en',
+      default: true,
+      messages: english,
     }));
     retain(context.i18n.define<ChatroomManagerMessages>({
-      namespace: 'chatroom', locale: 'zh-CN', messages: simplifiedChinese,
+      namespace: CHATROOM_MANAGER_I18N_NAMESPACE,
+      locale: 'zh-CN',
+      messages: simplifiedChinese,
     }));
 
     for (const registration of product.managementCommands) {

@@ -39,6 +39,7 @@ const ACTION_RESULT_SCHEMA =
 
 export const CHATROOM_MANAGER_ROOMS_COLLECTION_ID = 'rooms' as const;
 export const CHATROOM_MANAGER_ARCHIVED_COLLECTION_ID = 'archived-rooms' as const;
+export const CHATROOM_MANAGER_I18N_NAMESPACE = 'chatroom-manager' as const;
 export type ChatroomManagerRoomMode = 'active' | 'archived';
 
 const localized = (
@@ -46,7 +47,10 @@ const localized = (
   fallback: string,
   params?: Readonly<Record<string, string | number | boolean | null>>,
 ): ManagerCollectionDisplayText => ({
-  namespace: 'chatroom', key, fallback, ...(params === undefined ? {} : { params }),
+  namespace: CHATROOM_MANAGER_I18N_NAMESPACE,
+  key,
+  fallback,
+  ...(params === undefined ? {} : { params }),
 });
 
 const feedback = (
