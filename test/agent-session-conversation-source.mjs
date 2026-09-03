@@ -92,8 +92,10 @@ function domainSource() {
 }
 
 function sessionProjection() {
+  let listener;
   return {
-    subscribeProjection() { return () => {}; },
+    subscribeProjection(next) { listener = next; return () => { listener = undefined; }; },
+    emit(roomId = 'room-one') { listener?.(roomId); },
     projectionForRoom() {
       return {
         activeRuns: [{
@@ -141,5 +143,38 @@ test('Shell v4 subscription close is first-terminal and unsubscribe is idempoten
   assert.deepEqual(second, first);
   assert.equal(await result.handle.closed, first);
   assert.equal(first.code, 'unsubscribed');
+  source.dispose();
+});
+
+test('snapshot-to-subscribe gap rebases absolute refreshes onto one contiguous live stream', async () => {
+  const projection = sessionProjection();
+  const source = new ChatroomAgentSessionConversationSource(binding, domainSource(), projection);
+  const snapshot = await source.snapshot();
+  const result = await source.subscribe(snapshot.snapshotSequence);
+  assert.equal(result.result.status, 'accepted');
+
+  // Model the boundary race precisely: one source refresh lands after the
+  // consumer snapshot but before this accepted stream can observe it.
+  const stream = [...source.streams][0];
+  source.streams.delete(stream);
+  projection.emit();
+  await new Promise(resolve => setImmediate(resolve));
+  source.streams.add(stream);
+
+  const pages = result.handle.pages[Symbol.asyncIterator]();
+  projection.emit();
+  const first = (await pages.next()).value;
+  assert.equal(first.phase, 'live');
+  assert.equal(first.afterSequence, snapshot.snapshotSequence);
+  assert.equal(first.updates[0].sequence, snapshot.snapshotSequence + 1);
+  assert.equal(first.updates[0].snapshot.snapshotSequence, snapshot.snapshotSequence + 1);
+  assert.equal(first.nextAfterSequence, snapshot.snapshotSequence + 1);
+
+  projection.emit();
+  const second = (await pages.next()).value;
+  assert.equal(second.afterSequence, first.nextAfterSequence);
+  assert.equal(second.updates[0].sequence, first.nextAfterSequence + 1);
+  assert.equal(second.updates[0].snapshot.snapshotSequence, first.nextAfterSequence + 1);
+  await result.handle.unsubscribe();
   source.dispose();
 });
