@@ -88,6 +88,81 @@ test('projects exact SessionEvent message identity and explicit self-introductio
   });
 });
 
+test('keeps the submitted Room message before first-run self-introduction and reply', () => {
+  const submitted = {
+    kind: 'message', itemId: 'room-user-item', messageId: 'room-user-message', sequence: 1,
+    source: 'agent-loop',
+    author: {
+      participantId: 'user', role: 'human',
+      displayName: { namespace: 'chatroom', key: 'participant.name', fallback: 'You' },
+    },
+    semantic: { purpose: 'conversation' },
+    body: [{ kind: 'text', text: { namespace: 'chatroom', key: 'message', fallback: 'hi' } }],
+    reactions: [], timestamp: '2026-09-03T00:00:00.000Z', deliveryState: 'pending',
+    runState: 'idle', ariaLive: 'off', actions: [],
+  };
+  let room = createRoom({
+    id: 'room', title: 'Room', timelineSequence: submitted.sequence,
+    participants: [
+      { id: 'user', name: 'You', kind: 'human' },
+      { id: 'reviewer', name: 'Reviewer', kind: 'agent' },
+    ],
+    items: [submitted],
+  });
+  room = addRoomRun(room, {
+    runId: 'review-run', memberId: 'reviewer', title: 'Reviewer', status: 'creating',
+  });
+  room = bindRoomRunSession(room, 'review-run', sessionId);
+  room = recordRoomSessionSelfIntroduction(room, 'review-run', {
+    requestMessageId: 'intro-request', correlationId: 'intro-correlation',
+    requestedAt: '2026-09-03T00:00:00.001Z',
+  });
+  let sequence = room.timelineSequence;
+  const projector = new ChatroomAgentSessionProjector(
+    room, room.runs[0], sessionId, () => ++sequence, { generation: 9 },
+  );
+  const projected = projector.project(page('live', [
+    event(1, 'user/message', {
+      id: 'intro-request', role: 'user', content: [{ type: 'text', text: 'Introduce yourself' }],
+      source: {
+        kind: 'plugin', pluginId: 'chatroom', generation: 7, form: 'instructions',
+        correlation: { namespace: 'chatroom.member-self-introduction', id: 'intro-correlation' },
+      },
+    }),
+    event(2, 'assistant/message', {
+      turn: 1, step: 1,
+      message: {
+        id: 'assistant-introduction', role: 'assistant',
+        content: [{ type: 'text', text: 'I review changes.' }],
+        source: { kind: 'model', provider: 'provider', model: 'model' },
+      },
+    }, { sourceEventSeqs: [1] }),
+    event(3, 'user/message', {
+      id: 'room-runtime-message', role: 'user', content: [{ type: 'text', text: 'hi' }],
+      source: {
+        kind: 'plugin', pluginId: 'chatroom', generation: 7, form: 'relay',
+        correlation: { namespace: 'chatroom.room-message', id: submitted.itemId },
+      },
+    }),
+    event(4, 'assistant/message', {
+      turn: 2, step: 1,
+      message: {
+        id: 'assistant-reply', role: 'assistant', content: [{ type: 'text', text: 'hello' }],
+        source: { kind: 'model', provider: 'provider', model: 'model' },
+      },
+    }, { sourceEventSeqs: [3] }),
+  ], 4));
+
+  const ordered = [...projected.items].sort((left, right) => left.sequence - right.sequence);
+  assert.deepEqual(ordered.map(item => item.messageId), [
+    'room-runtime-message', 'assistant-introduction', 'assistant-reply',
+  ]);
+  assert.equal(ordered[0].sequence, submitted.sequence);
+  assert.ok(ordered[0].sequence < ordered[1].sequence);
+  assert.ok(ordered[1].sequence < ordered[2].sequence);
+  assert.equal(ordered[0].timestamp, submitted.timestamp);
+});
+
 test('projects approvals only with real Agent generation and updates from the matching SessionEvent decision', () => {
   const room = roomFixture();
   let sequence = room.timelineSequence;
