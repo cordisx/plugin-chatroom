@@ -188,6 +188,64 @@ test('projects approvals only with real Agent generation and updates from the ma
   assert.equal(decided.items.length, 1);
 });
 
+test('hides a persisted delegation context envelope even without source event correlation', () => {
+  const room = roomFixture();
+  let sequence = room.timelineSequence;
+  const projector = new ChatroomAgentSessionProjector(
+    room, room.runs[0], sessionId, () => ++sequence, { generation: 9 },
+  );
+  const context = JSON.stringify({
+    self: { memberId: 'reviewer', label: 'Reviewer', runId: 'review-run' },
+    delegatedBy: { memberId: 'leader', label: 'Lead', runId: 'lead-run' },
+    reportsTo: { memberId: 'leader', label: 'Lead' },
+    availableTargets: [{ memberId: 'qa', label: 'QA' }],
+    communication: {
+      mode: 'explicit-mention-required',
+      rule: 'Prefix an ordinary Room message with @<memberId-or-label> to deliver it only to that entity. Without @, the message is Room-visible only.',
+    },
+    approvals: {
+      mode: 'reports-to-hierarchy',
+      next: { memberId: 'leader', label: 'Lead' },
+      rule: 'Approval and permission requests follow reportsToMemberId upward; they do not use arbitrary @ routing.',
+    },
+  });
+  const projected = projector.project(page('replay', [event(20, 'assistant/message', {
+    turn: 2, step: 1,
+    message: {
+      id: 'assistant-delegated', role: 'assistant',
+      content: [{
+        type: 'text',
+        text: `Playground Agent/Session fixture reply: [Chatroom delegation context]\n${context}\n\n最终链路验证`,
+      }],
+      source: { kind: 'model', provider: 'deterministic-agent-session', model: 'deterministic-v1' },
+    },
+  }, { sourceEventSeqs: null })], 20));
+
+  const message = projected.changes[0].item;
+  assert.equal(message.kind, 'message');
+  assert.equal(message.body[0].text.fallback,
+    'Playground Agent/Session fixture reply: 最终链路验证');
+  assert.doesNotMatch(JSON.stringify(message.body), /Chatroom delegation context|delegatedBy/u);
+});
+
+test('keeps lookalike delegation text visible unless the exact legacy envelope validates', () => {
+  const room = roomFixture();
+  let sequence = room.timelineSequence;
+  const projector = new ChatroomAgentSessionProjector(
+    room, room.runs[0], sessionId, () => ++sequence, { generation: 9 },
+  );
+  const lookalike = '[Chatroom delegation context]\n{"delegatedBy":"not-the-envelope"}\n\n保留正文';
+  const projected = projector.project(page('replay', [event(21, 'assistant/message', {
+    turn: 2, step: 1,
+    message: {
+      id: 'assistant-lookalike', role: 'assistant', content: [{ type: 'text', text: lookalike }],
+      source: { kind: 'model', provider: 'provider', model: 'model' },
+    },
+  }, { sourceEventSeqs: null })], 21));
+
+  assert.equal(projected.changes[0].item.body[0].text.fallback, lookalike);
+});
+
 test('never invents an Agent generation or self-introduction causation from missing facts', () => {
   const room = roomFixture();
   let sequence = room.timelineSequence;

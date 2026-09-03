@@ -6,7 +6,7 @@ import {
 } from '../dist/conversation-model.js';
 import { ChatroomConversationController } from '../dist/conversation-source.js';
 import { CHATROOM_DEFAULT_AGENT_CONFIGURATION } from '../dist/agent-definition.js';
-import { addRoomRun, createRoom } from '../dist/room.js';
+import { addRoomRun, bindRoomRunSession, createRoom } from '../dist/room.js';
 import { failRoomRunPresence } from '../dist/room-engagement.js';
 
 const binding = Object.freeze({
@@ -234,6 +234,28 @@ test('publishes one stable member presence lifecycle as item-updated', async () 
   assert.equal(update.item.state, 'failed');
   assert.equal(update.item.retryable, true);
   source.dispose();
+});
+
+test('projects a delegated task as an explicit source-authored Room announcement', async () => {
+  let room = createRoom({ id: 'delegation-room', title: 'Delegation' });
+  room = addRoomRun(room, {
+    runId: 'lead-run', memberId: 'leader', title: 'Lead', status: 'creating',
+  });
+  room = bindRoomRunSession(room, 'lead-run', 'cx-session.delegation.lead');
+  const controller = new ChatroomConversationController([room]);
+
+  const result = await controller.projectAgentSessionDelegation({
+    sessionId: 'cx-session.delegation.lead', roomId: room.id,
+    runId: 'lead-run', memberId: 'leader', bindingId: 'binding',
+    ownerGeneration: 'owner', generation: 'generation',
+  }, 'delegation-operation', 'reviewer', '最终链路验证');
+
+  assert.equal(result.status, 'accepted');
+  const announcement = controller.rooms.get(room.id).items.find(item =>
+    item.kind === 'message' && item.itemId === result.itemId);
+  assert.equal(announcement.kind, 'message');
+  assert.equal(announcement.author.displayName.fallback, 'Lead');
+  assert.equal(announcement.body[0].text.fallback, '已向 @Reviewer 下发任务：最终链路验证。');
 });
 
 test('creates and projects a Room only from the first Host-generated composer submit', async () => {
