@@ -213,13 +213,21 @@ export class ChatroomAgentSessionProjector {
       kind: 'message',
       itemId: projectionItemId('message', this.sessionId, String(event.seq)),
       messageId: message.id,
-      sequence: this.nextPresentationSequence(),
+      // The durable Room item is created when the human submits, before any
+      // first-run self-introduction is orchestrated. Reuse that public
+      // position when the authoritative SessionEvent arrives so the Shell
+      // renders the human message before the introduction and reply.
+      sequence: durableDisplay?.kind === 'message'
+        ? durableDisplay.sequence
+        : this.nextPresentationSequence(),
       source: { kind: 'session-event', sessionId: this.sessionId, eventSeq: event.seq },
       author,
       semantic: { purpose: 'conversation' },
       body,
       reactions: [],
-      timestamp: new Date(event.time).toISOString(),
+      timestamp: durableDisplay?.kind === 'message'
+        ? durableDisplay.timestamp
+        : new Date(event.time).toISOString(),
       deliveryState: 'delivered',
       runState: 'running',
       ariaLive: 'off',
