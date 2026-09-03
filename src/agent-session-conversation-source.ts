@@ -52,7 +52,18 @@ class V4Stream {
 
   replace(snapshot: AgentConversationShellSnapshot): void {
     if (this.terminal !== undefined) return;
-    this.updates.push({ kind: 'snapshot-replaced', sequence: snapshot.snapshotSequence, snapshot });
+    // A source refresh may complete between snapshot() and subscribe(). That
+    // refresh advances the source snapshot without belonging to this stream,
+    // so publishing its later absolute sequence would create a gap at the
+    // subscriber. Each accepted stream owns a contiguous update cursor; retain
+    // the latest snapshot facts while projecting them at the next stream-local
+    // sequence.
+    const sequence = this.cursor + this.updates.length + 1;
+    const orderedSnapshot: AgentConversationShellSnapshot = {
+      ...snapshot,
+      snapshotSequence: sequence,
+    };
+    this.updates.push({ kind: 'snapshot-replaced', sequence, snapshot: orderedSnapshot });
     this.wake?.();
     this.wake = undefined;
   }
