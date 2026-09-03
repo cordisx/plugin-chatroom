@@ -3,6 +3,7 @@ import type {
   CordisXI18n,
   CordisXLocalizedText,
   CordisXManagerContentNavigationDeclarationV2,
+  CordisXManagerContentNavigationDeclarationV5,
   CordisXPageMetadataV3,
   CordisXPages,
   CordisXRouteDefinitionV2,
@@ -11,14 +12,12 @@ import type {
 } from 'cordisx/contracts';
 import {
   CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V2,
+  CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V5,
   CORDISX_PAGE_SCHEMA_V3,
   CORDISX_ROUTE_SCHEMA_V2,
 } from 'cordisx/contracts';
 
-import {
-  createChatroomManagerCollectionPage,
-  chatroomManagerSettingsPage,
-} from './manager-pages.js';
+import { createChatroomManagerCollectionPage } from './manager-pages.js';
 import { ChatroomProductBase } from './product-base.js';
 import { CHATROOM_COMMAND_ROOM_DELETE } from './room-management.js';
 import {
@@ -98,8 +97,6 @@ export type ChatroomManagerMessages = {
   'manager.feedback.restore-failed': undefined;
   'manager.feedback.deleted': undefined;
   'manager.feedback.delete-failed': undefined;
-  'manager.settings.empty.title': undefined;
-  'manager.settings.empty.description': undefined;
 };
 
 export const chatroomManagerMessage = (
@@ -135,7 +132,7 @@ const archivedPage = Object.freeze({
 const settingsPage = Object.freeze({
   ...roomsPage,
   id: CHATROOM_MANAGER_SETTINGS_ROUTE_ID,
-  description: message('manager.page.settings.description', 'Review available Chatroom settings.'),
+  description: message('manager.page.settings.description', 'Choose how the Room composer sends messages.'),
   icon: 'host:settings',
 } as const satisfies CordisXPageMetadataV3);
 
@@ -169,7 +166,7 @@ const settingsRoute = Object.freeze({
   outlet: 'manager.content',
   page: CHATROOM_MANAGER_SETTINGS_ROUTE_ID,
   title: message('manager.tab.settings', 'Settings'),
-  description: message('manager.page.settings.description', 'Review available Chatroom settings.'),
+  description: message('manager.page.settings.description', 'Choose how the Room composer sends messages.'),
 } as const satisfies CordisXRouteDefinitionV2<'manager.content'>);
 
 const tabs = Object.freeze([
@@ -190,19 +187,42 @@ const tabs = Object.freeze([
   }),
 ]);
 
-export const CHATROOM_MANAGER_CONTENT_DECLARATIONS:
-readonly CordisXManagerContentNavigationDeclarationV2[] = Object.freeze([
-  CHATROOM_MANAGER_ROOMS_ROUTE_ID,
-  CHATROOM_MANAGER_ARCHIVED_ROUTE_ID,
-  CHATROOM_MANAGER_SETTINGS_ROUTE_ID,
-].map((routeId, index): CordisXManagerContentNavigationDeclarationV2 => Object.freeze({
-  $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V2,
-  schemaVersion: 2,
-  id: tabs[index]!.id,
-  route: { id: routeId },
-  header: { title: { kind: 'route' } },
-  tabs,
-})));
+export const CHATROOM_MANAGER_CONTENT_DECLARATIONS: readonly (
+  CordisXManagerContentNavigationDeclarationV2 | CordisXManagerContentNavigationDeclarationV5
+)[] = Object.freeze([
+  Object.freeze({
+    $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V2,
+    schemaVersion: 2,
+    id: 'rooms',
+    route: { id: CHATROOM_MANAGER_ROOMS_ROUTE_ID },
+    header: { title: { kind: 'route' } },
+    tabs,
+  } satisfies CordisXManagerContentNavigationDeclarationV2),
+  Object.freeze({
+    $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V2,
+    schemaVersion: 2,
+    id: 'archived',
+    route: { id: CHATROOM_MANAGER_ARCHIVED_ROUTE_ID },
+    header: { title: { kind: 'route' } },
+    tabs,
+  } satisfies CordisXManagerContentNavigationDeclarationV2),
+  Object.freeze({
+    $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V5,
+    schemaVersion: 5,
+    id: 'settings',
+    route: { id: CHATROOM_MANAGER_SETTINGS_ROUTE_ID },
+    header: { title: { kind: 'route' } },
+    tabs,
+    body: {
+      kind: 'plugin-config-form',
+      namespace: 'chatroom',
+      defaultMaterialization: {
+        mode: 'missing-only',
+        fields: [{ path: ['shortcutPolicy'], value: 'enter' }],
+      },
+    },
+  } satisfies CordisXManagerContentNavigationDeclarationV5),
+]);
 
 const english: Readonly<Record<keyof ChatroomManagerMessages, string>> = Object.freeze({
   'manager.navigation.title': 'Manage chats',
@@ -210,7 +230,7 @@ const english: Readonly<Record<keyof ChatroomManagerMessages, string>> = Object.
   'manager.page.title': 'Manage chats',
   'manager.page.rooms.description': 'Manage active chats.',
   'manager.page.archived.description': 'Find, restore, or delete archived chats.',
-  'manager.page.settings.description': 'Review available Chatroom settings.',
+  'manager.page.settings.description': 'Choose how the Room composer sends messages.',
   'manager.tab.rooms': 'Rooms',
   'manager.tab.archived': 'Archived',
   'manager.tab.settings': 'Settings',
@@ -272,8 +292,6 @@ const english: Readonly<Record<keyof ChatroomManagerMessages, string>> = Object.
   'manager.feedback.restore-failed': 'Could not restore room',
   'manager.feedback.deleted': 'Room deleted',
   'manager.feedback.delete-failed': 'Could not delete room',
-  'manager.settings.empty.title': 'No editable Chatroom settings',
-  'manager.settings.empty.description': 'Chatroom does not currently expose any settings that can be changed here.',
 });
 
 const simplifiedChinese: Readonly<Record<keyof ChatroomManagerMessages, string>> = Object.freeze({
@@ -282,7 +300,7 @@ const simplifiedChinese: Readonly<Record<keyof ChatroomManagerMessages, string>>
   'manager.page.title': '管理聊天',
   'manager.page.rooms.description': '管理活跃聊天。',
   'manager.page.archived.description': '查找、恢复或删除已归档聊天。',
-  'manager.page.settings.description': '查看当前可用的聊天设置。',
+  'manager.page.settings.description': '选择在房间输入框中发送消息的方式。',
   'manager.tab.rooms': '房间',
   'manager.tab.archived': '已归档',
   'manager.tab.settings': '设置',
@@ -344,8 +362,6 @@ const simplifiedChinese: Readonly<Record<keyof ChatroomManagerMessages, string>>
   'manager.feedback.restore-failed': '无法恢复房间',
   'manager.feedback.deleted': '已删除房间',
   'manager.feedback.delete-failed': '无法删除房间',
-  'manager.settings.empty.title': '暂无可编辑的聊天设置',
-  'manager.settings.empty.description': 'Chatroom 当前没有可在这里修改的设置。',
 });
 
 export interface ChatroomManagerIntegrationContext {
@@ -422,7 +438,9 @@ export async function registerChatroomManager(
         CHATROOM_MANAGER_ARCHIVED_REGISTRATION,
         () => new ChatroomRoomManagerCollectionSource(coordinator, 'archived'),
       )));
-    retain(context.pages.register<ChatroomManagerMessages>(settingsPage, chatroomManagerSettingsPage));
+    // Navigation v5 replaces this metadata seat before the mount is called;
+    // Chatroom deliberately contributes no settings body or form renderer.
+    retain(context.pages.register<ChatroomManagerMessages>(settingsPage, () => undefined));
 
     retain(context.routes.register(roomsRoute));
     retain(context.routes.register(archivedRoute));

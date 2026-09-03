@@ -116,8 +116,8 @@ function sessionProjection(itemOverride) {
   };
 }
 
-test('Shell v4 preserves domain product items while replacing execution facts with Session facts', async () => {
-  const source = new ChatroomAgentSessionConversationSource(binding, domainSource(), sessionProjection());
+test('Shell v5 preserves domain product items while replacing execution facts with Session facts', async () => {
+  const source = new ChatroomAgentSessionConversationSource(binding, domainSource(), sessionProjection(), 'enter');
   const snapshot = await source.snapshot();
 
   assert.equal(v3BindingFor(binding).routeSelection.selectedRoomParam, 'room-one');
@@ -129,6 +129,7 @@ test('Shell v4 preserves domain product items while replacing execution facts wi
   assert.deepEqual(snapshot.items[2].source, {
     kind: 'session-event', sessionId: 'session-one', eventSeq: 7,
   });
+  assert.equal(snapshot.composer.shortcutPolicy, 'enter');
   source.dispose();
 });
 
@@ -174,7 +175,7 @@ test('merges persisted and new delegation acknowledgements into stable Session c
   }));
   const projection = sessionProjection(sessionItems);
   const source = new ChatroomAgentSessionConversationSource(
-    binding, domainSource(domainItems), projection,
+    binding, domainSource(domainItems), projection, 'enter',
   );
   const first = await source.snapshot();
   const expected = [
@@ -195,7 +196,7 @@ test('merges persisted and new delegation acknowledgements into stable Session c
   source.dispose();
 
   const replayedSource = new ChatroomAgentSessionConversationSource(
-    binding, domainSource(domainItems), sessionProjection(sessionItems),
+    binding, domainSource(domainItems), sessionProjection(sessionItems), 'enter',
   );
   const replayed = await replayedSource.snapshot();
   assert.deepEqual(replayed.items.map(item => [item.itemId, item.sequence]),
@@ -203,8 +204,8 @@ test('merges persisted and new delegation acknowledgements into stable Session c
   replayedSource.dispose();
 });
 
-test('Shell v4 subscription close is first-terminal and unsubscribe is idempotent', async () => {
-  const source = new ChatroomAgentSessionConversationSource(binding, domainSource(), sessionProjection());
+test('Shell v5 subscription close is first-terminal and unsubscribe is idempotent', async () => {
+  const source = new ChatroomAgentSessionConversationSource(binding, domainSource(), sessionProjection(), 'enter');
   const snapshot = await source.snapshot();
   const result = await source.subscribe(snapshot.snapshotSequence);
   assert.equal(result.result.status, 'accepted');
@@ -214,12 +215,14 @@ test('Shell v4 subscription close is first-terminal and unsubscribe is idempoten
   assert.deepEqual(second, first);
   assert.equal(await result.handle.closed, first);
   assert.equal(first.code, 'unsubscribed');
+  assert.equal(first.contract, 'cordisx.agent-conversation-shell-subscription-close/v5');
+  assert.equal(first.schemaVersion, 5);
   source.dispose();
 });
 
 test('snapshot-to-subscribe gap rebases absolute refreshes onto one contiguous live stream', async () => {
   const projection = sessionProjection();
-  const source = new ChatroomAgentSessionConversationSource(binding, domainSource(), projection);
+  const source = new ChatroomAgentSessionConversationSource(binding, domainSource(), projection, 'enter');
   const snapshot = await source.snapshot();
   const result = await source.subscribe(snapshot.snapshotSequence);
   assert.equal(result.result.status, 'accepted');
@@ -246,6 +249,28 @@ test('snapshot-to-subscribe gap rebases absolute refreshes onto one contiguous l
   assert.equal(second.afterSequence, first.nextAfterSequence);
   assert.equal(second.updates[0].sequence, first.nextAfterSequence + 1);
   assert.equal(second.updates[0].snapshot.snapshotSequence, first.nextAfterSequence + 1);
+  await result.handle.unsubscribe();
+  source.dispose();
+});
+
+test('committed shortcut changes replace every live Shell v5 snapshot without changing submit', async () => {
+  const source = new ChatroomAgentSessionConversationSource(
+    binding, domainSource(), sessionProjection(), 'enter',
+  );
+  const initial = await source.snapshot();
+  assert.equal(initial.composer.shortcutPolicy, 'enter');
+  assert.deepEqual(initial.composer.submit, { id: 'chatroom.submit' });
+
+  const result = await source.subscribe(initial.snapshotSequence);
+  assert.equal(result.result.status, 'accepted');
+  const pages = result.handle.pages[Symbol.asyncIterator]();
+  source.setComposerShortcutPolicy('mod-enter');
+  const page = (await pages.next()).value;
+  assert.equal(page.updates[0].kind, 'snapshot-replaced');
+  assert.equal(page.updates[0].snapshot.composer.shortcutPolicy, 'mod-enter');
+  assert.deepEqual(page.updates[0].snapshot.composer.submit, { id: 'chatroom.submit' });
+  assert.equal((await source.snapshot()).composer.shortcutPolicy, 'mod-enter');
+
   await result.handle.unsubscribe();
   source.dispose();
 });

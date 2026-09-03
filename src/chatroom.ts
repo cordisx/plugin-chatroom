@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis';
+import { Config, ChatroomComposerSettings, configApplies } from './composer-settings.js';
 import {
   CORDISX_PAGE_SCHEMA_V3,
   CORDISX_PLUGIN_MANIFEST_SCHEMA_V5,
@@ -6,7 +7,7 @@ import {
   type CordisXCommandContext,
   type CordisXPluginManifestV5,
 } from 'cordisx/contracts';
-import type { AgentConversationShellCommandContext } from '@cordisx/protocol/agent-conversation-shell/v4';
+import type { AgentConversationShellCommandContext } from '@cordisx/protocol/agent-conversation-shell/v5';
 
 import {
   CHATROOM_COMMAND_APPROVAL_APPROVE,
@@ -83,12 +84,16 @@ export type ChatroomMessages = {
   'page.description': undefined;
   'composer.placeholder': undefined;
   'composer.unavailable': undefined;
+  'composer.shortcut.enter': undefined;
+  'composer.shortcut.mod-enter': undefined;
   'permission.tasks.create': undefined;
   'permission.tasks.content.read': undefined;
   'permission.turns.submit': undefined;
   'permission.turns.introduce': undefined;
   'permission.approvals.decide': undefined;
 };
+
+export { Config, configApplies };
 
 const message = (key: keyof ChatroomMessages, fallback: string) => ({
   namespace: 'chatroom', key, fallback,
@@ -115,6 +120,7 @@ export const manifest = {
 export const inject = [
   'i18n', 'commands', 'pages', 'routes', 'slots', 'managerContent',
   'agentConversationShell', 'agents', 'sessions', 'approvals', 'entities', 'documents',
+  'settings',
 ];
 
 const page = {
@@ -215,6 +221,8 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       'page.description': 'Open a Room in the Agent Desktop conversation shell.',
       'composer.placeholder': 'Write a message',
       'composer.unavailable': 'Messaging is not available yet.',
+      'composer.shortcut.enter': 'Enter sends',
+      'composer.shortcut.mod-enter': 'Command/Ctrl+Enter sends',
       'permission.tasks.create': 'Create a task for a new Room.',
       'permission.tasks.content.read': 'Read replies and task status for a Room.',
       'permission.turns.submit': 'Send Room messages to its Agent.',
@@ -260,6 +268,8 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       'page.description': '在 Agent Desktop 会话壳中打开一个房间。',
       'composer.placeholder': '输入消息',
       'composer.unavailable': '消息功能暂不可用。',
+      'composer.shortcut.enter': 'Enter 发送',
+      'composer.shortcut.mod-enter': 'Command/Ctrl+Enter 发送',
       'permission.tasks.create': '为新房间创建任务。',
       'permission.tasks.content.read': '读取房间回复和任务状态。',
       'permission.turns.submit': '向房间 Agent 发送消息。',
@@ -274,6 +284,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     async room => { await roomStore.upsert(room); },
     (roomId, runId) => agentSession.isRunLocallyUnavailable(roomId, runId),
   );
+  const composerSettings = new ChatroomComposerSettings(ctx.settings);
   const product = ChatroomProductBase.attach(roomStore);
   const handleConversationCommand = async (context: CordisXCommandContext) => {
     const hostContext = conversationContext(context);
@@ -321,9 +332,18 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   ctx.commands.register({ id: CHATROOM_COMMAND_APPROVAL_DENY, title: text('approval.deny', 'Deny') }, handleConversationCommand);
   ctx.commands.register({ id: CHATROOM_COMMAND_APPROVAL_CANCEL, title: text('approval.cancel', 'Cancel') }, handleConversationCommand);
 
-  const conversation = ctx.agentConversationShell.registerSourceV4(binding => {
+  const conversation = ctx.agentConversationShell.registerSourceV5(binding => {
     const domain = controller.createSource(v3BindingFor(binding));
-    return new ChatroomAgentSessionConversationSource(binding, domain, agentSession);
+    let unsubscribeSettings = () => {};
+    const source = new ChatroomAgentSessionConversationSource(
+      binding,
+      domain,
+      agentSession,
+      composerSettings.current,
+      () => unsubscribeSettings(),
+    );
+    unsubscribeSettings = composerSettings.subscribe(policy => source.setComposerShortcutPolicy(policy));
+    return source;
   });
   const playgroundBridge = ctx.reflect.get(
     'playgroundRoomSimulationBridge', false,
@@ -375,6 +395,8 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     for (const dispose of managerDisposers.reverse()) void dispose();
     teamSource.dispose();
     manager?.dispose();
+    conversation.dispose();
+    composerSettings.dispose();
     disposePlaygroundBridge?.();
     void agentSession.dispose();
     controller.dispose();
@@ -382,6 +404,8 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     throw error;
   }
   ctx.effect(() => () => {
+    conversation.dispose();
+    composerSettings.dispose();
     void disposeManagerProjection?.();
     for (const dispose of managerDisposers.reverse()) void dispose();
     manager?.dispose();

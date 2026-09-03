@@ -8,7 +8,13 @@ test('keeps base Chatroom and Manager catalogs in independent namespaces', async
   const collection = await readFile(new URL('../src/room-manager-collection.ts', import.meta.url), 'utf8');
 
   assert.match(chatroom, /namespace: 'chatroom',[\s\S]*?'navigation\.title': '新建房间'/u);
-  assert.doesNotMatch(manager, /namespace: 'chatroom'/u);
+  assert.match(chatroom, /'composer\.shortcut\.enter': 'Enter 发送'/u);
+  assert.match(chatroom, /'composer\.shortcut\.mod-enter': 'Command\/Ctrl\+Enter 发送'/u);
+  assert.equal(
+    (manager.match(/namespace: 'chatroom'/gu) ?? []).length,
+    1,
+    'the only base namespace in Manager source is the Host-owned config binding',
+  );
   assert.match(collection, /CHATROOM_MANAGER_I18N_NAMESPACE = 'chatroom-manager'/u);
   assert.equal(
     (manager.match(/namespace: CHATROOM_MANAGER_I18N_NAMESPACE/gu) ?? []).length,
@@ -18,4 +24,6 @@ test('keeps base Chatroom and Manager catalogs in independent namespaces', async
     (collection.match(/namespace: CHATROOM_MANAGER_I18N_NAMESPACE/gu) ?? []).length,
     1,
   );
+  assert.doesNotMatch(manager, /manager\.settings\.empty|No editable Chatroom settings|暂无可编辑的聊天设置/u);
+  assert.doesNotMatch(manager, /\[\[chatroom:/u);
 });
