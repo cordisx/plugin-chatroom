@@ -15,17 +15,18 @@ import type {
   AgentConversationShellSubscriptionClosed,
   AgentConversationShellSubscribeRuntimeResult,
   AgentConversationShellUpdate,
-} from '@cordisx/protocol/agent-conversation-shell/v4';
+} from '@cordisx/protocol/agent-conversation-shell/v5';
 
 import type { ChatroomAgentSessionController } from './agent-session-controller.js';
+import type { ChatroomComposerShortcutPolicy } from './composer-settings.js';
 
 const closeEnvelope = (
   subscription: AgentConversationShellSubscription,
   code: AgentConversationShellSubscriptionClosed['code'],
 ): AgentConversationShellSubscriptionClosed => Object.freeze({
-  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-conversation-shell-subscription-close.v4.schema.json',
-  contract: 'cordisx.agent-conversation-shell-subscription-close/v4',
-  schemaVersion: 4,
+  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-conversation-shell-subscription-close.v5.schema.json',
+  contract: 'cordisx.agent-conversation-shell-subscription-close/v5',
+  schemaVersion: 5,
   subscriptionId: subscription.subscriptionId,
   binding: subscription.binding,
   generation: subscription.generation,
@@ -33,7 +34,7 @@ const closeEnvelope = (
   code,
 });
 
-class V4Stream {
+class V5Stream {
   private cursor: number;
   private terminal?: AgentConversationShellSubscriptionClosed;
   private readonly updates: AgentConversationShellUpdate[] = [];
@@ -167,7 +168,7 @@ function chronologicalRoomItems(items: readonly AgentConversationItem[]): readon
 }
 
 /**
- * Atomic Shell-v4 adapter around the accepted Chatroom domain source. Domain
+ * Atomic Shell-v5 adapter around the accepted Chatroom domain source. Domain
  * state/copy stays unchanged; only execution facts are replaced by the
  * SessionEvent projector.
  */
@@ -177,7 +178,7 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
   private subscriptions = 0;
   private snapshotValue?: AgentConversationShellSnapshot;
   private roomId?: string;
-  private readonly streams = new Set<V4Stream>();
+  private readonly streams = new Set<V5Stream>();
   private readonly ready: Promise<void>;
   private unsubscribeDomain?: () => void;
   private readonly unsubscribeProjection: () => void;
@@ -186,6 +187,7 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
     private readonly binding: Readonly<AgentConversationShellBinding>,
     private readonly domain: AgentConversationShellSourceV3,
     private readonly sessions: ChatroomAgentSessionController,
+    private shortcutPolicy: ChatroomComposerShortcutPolicy,
     private readonly onDispose: () => void = () => {},
   ) {
     this.unsubscribeProjection = sessions.subscribeProjection(roomId => {
@@ -196,7 +198,7 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
 
   async snapshot(): Promise<AgentConversationShellSnapshot> {
     await this.ready;
-    if (this.snapshotValue === undefined) throw new Error('Chatroom Shell v4 source is unavailable.');
+    if (this.snapshotValue === undefined) throw new Error('Chatroom Shell v5 source is unavailable.');
     return this.snapshotValue;
   }
 
@@ -212,8 +214,8 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
       afterSequence,
       snapshotSequence: snapshot.snapshotSequence,
     };
-    let stream!: V4Stream;
-    stream = new V4Stream(subscription, () => this.streams.delete(stream));
+    let stream!: V5Stream;
+    stream = new V5Stream(subscription, () => this.streams.delete(stream));
     this.streams.add(stream);
     return {
       result: { type: 'subscribe', status: 'accepted', code: 'allowed', subscription },
@@ -262,6 +264,12 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
       ...(result.currentSnapshotSequence === undefined
         ? {} : { currentSnapshotSequence: (await this.snapshot()).snapshotSequence }),
     };
+  }
+
+  setComposerShortcutPolicy(policy: ChatroomComposerShortcutPolicy): void {
+    if (this.disposed || policy === this.shortcutPolicy) return;
+    this.shortcutPolicy = policy;
+    void this.ready.then(() => this.refresh()).catch(() => this.dispose());
   }
 
   dispose(): void {
@@ -345,7 +353,7 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
       snapshotSequence: this.sequence,
       selection,
       items,
-      composer: domain.composer,
+      composer: { ...domain.composer, shortcutPolicy: this.shortcutPolicy },
       headerActions: domain.headerActions,
     };
     if (this.snapshotValue !== undefined && JSON.stringify(this.snapshotValue) === JSON.stringify(snapshot)) return;

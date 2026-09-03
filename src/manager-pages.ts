@@ -1,4 +1,4 @@
-import { createElement, useEffect } from 'cordisx/react';
+import { useEffect } from 'cordisx/react';
 import { defineReactPage } from 'cordisx/react';
 import type {
   CordisXPageMount,
@@ -6,7 +6,6 @@ import type {
   ManagerCollectionRegistrationV1,
   ManagerCollectionSourceV1,
 } from 'cordisx/contracts';
-import { EmptyState } from 'cordisx/ui';
 
 import type { ChatroomManagerMessages } from './manager-chat.js';
 
@@ -25,12 +24,3 @@ export function createChatroomManagerCollectionPage(
     return null;
   });
 }
-
-export const chatroomManagerSettingsPage = defineReactPage<ChatroomManagerMessages>(
-  function ChatroomManagerSettingsPage({ t }: CordisXReactPageProps<ChatroomManagerMessages>) {
-    return createElement(EmptyState, {
-      title: t('manager.settings.empty.title'),
-      description: t('manager.settings.empty.description'),
-    });
-  },
-);
