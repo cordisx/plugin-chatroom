@@ -139,6 +139,33 @@ function domainItem(
   return undefined;
 }
 
+const stableItemOrder = (left: AgentConversationItem, right: AgentConversationItem): number => {
+  if (left.sequence !== right.sequence) return left.sequence - right.sequence;
+  return left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0;
+};
+
+const itemTime = (item: AgentConversationItem): number | undefined => {
+  if (item.kind !== 'message') return undefined;
+  const value = Date.parse(item.timestamp);
+  return Number.isFinite(value) ? value : undefined;
+};
+
+/**
+ * Domain acknowledgements and SessionEvent messages arrive with independent
+ * sequence coordinates. Preserve the stable sequence slots for non-message
+ * product items, while ordering the timestamped message facts by their actual
+ * cross-source chronology. Original sequence and itemId make equal timestamps
+ * deterministic, so replay cannot reshuffle or duplicate unchanged facts.
+ */
+function chronologicalRoomItems(items: readonly AgentConversationItem[]): readonly AgentConversationItem[] {
+  const stable = [...items].sort(stableItemOrder);
+  const chronological = stable
+    .filter(item => itemTime(item) !== undefined)
+    .sort((left, right) => itemTime(left)! - itemTime(right)! || stableItemOrder(left, right));
+  let timedIndex = 0;
+  return stable.map(item => itemTime(item) === undefined ? item : chronological[timedIndex++]);
+}
+
 /**
  * Atomic Shell-v4 adapter around the accepted Chatroom domain source. Domain
  * state/copy stays unchanged; only execution facts are replaced by the
@@ -300,13 +327,14 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
         : { ...common, multiParticipant: false, participantPresentation: 'none' };
     }
     let itemSequence = -1;
-    const items = [
+    const mergedItems = [
       ...domain.items.flatMap(item => {
         const mapped = domainItem(item, sessionByRun);
         return mapped === undefined ? [] : [mapped];
       }),
       ...projection.items,
-    ].sort((left, right) => left.sequence - right.sequence).map(item => {
+    ];
+    const items = chronologicalRoomItems(mergedItems).map(item => {
       itemSequence = Math.max(itemSequence + 1, item.sequence);
       return item.sequence === itemSequence ? item : { ...item, sequence: itemSequence };
     });

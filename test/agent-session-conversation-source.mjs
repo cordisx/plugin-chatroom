@@ -21,7 +21,7 @@ const agent = {
   agentIdentity: { provider: 'codex', model: 'gpt-5', role: 'reviewer' },
 };
 
-function domainSource() {
+function domainSource(itemOverride) {
   const snapshot = {
     binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration },
     generation: binding.ownerGeneration,
@@ -37,7 +37,7 @@ function domainSource() {
         detailsUrl: { kind: 'host-route', routeId: 'legacy', params: {} },
       }],
     },
-    items: [
+    items: itemOverride ?? [
       {
         kind: 'message', itemId: 'ack', messageId: 'ack-message', sequence: 1,
         source: 'chatroom-acknowledgement', author: human,
@@ -91,7 +91,7 @@ function domainSource() {
   };
 }
 
-function sessionProjection() {
+function sessionProjection(itemOverride) {
   let listener;
   return {
     subscribeProjection(next) { listener = next; return () => { listener = undefined; }; },
@@ -103,7 +103,7 @@ function sessionProjection() {
           sessionId: 'session-one', lifecycle: { phase: 'running' },
           details: { kind: 'host', ref: 'detail-one' },
         }],
-        items: [{
+        items: itemOverride ?? [{
           kind: 'message', itemId: 'session-message', messageId: 'assistant-one', sequence: 4,
           source: { kind: 'session-event', sessionId: 'session-one', eventSeq: 7 },
           author: agent, semantic: { purpose: 'conversation' },
@@ -130,6 +130,77 @@ test('Shell v4 preserves domain product items while replacing execution facts wi
     kind: 'session-event', sessionId: 'session-one', eventSeq: 7,
   });
   source.dispose();
+});
+
+test('merges persisted and new delegation acknowledgements into stable Session chronology', async () => {
+  const lead = {
+    participantId: 'lead', role: 'agent',
+    displayName: { namespace: 'chatroom', key: 'lead', fallback: 'Lead' },
+    agentIdentity: { provider: 'codex', model: 'gpt-5', role: 'lead' },
+  };
+  const domainItems = [
+    {
+      kind: 'message', itemId: 'delegation-existing', messageId: 'delegation-existing', sequence: 20,
+      source: 'chatroom-acknowledgement', author: lead,
+      semantic: { purpose: 'chatroom-acknowledgement' },
+      body: [{ kind: 'text', text: { key: 'old-ack', fallback: '我会通知 @Reviewer 去完成旧任务的工作。' } }],
+      reactions: [], timestamp: '2026-09-03T00:00:02.000Z', deliveryState: 'delivered',
+      runState: 'idle', ariaLive: 'polite', actions: [],
+    },
+    {
+      kind: 'message', itemId: 'delegation-new', messageId: 'delegation-new', sequence: 21,
+      source: 'chatroom-acknowledgement', author: lead,
+      semantic: { purpose: 'chatroom-acknowledgement' },
+      body: [{ kind: 'text', text: { key: 'new-ack', fallback: '已向 @Reviewer 下发任务：新任务。' } }],
+      reactions: [], timestamp: '2026-09-03T00:00:06.000Z', deliveryState: 'delivered',
+      runState: 'idle', ariaLive: 'polite', actions: [],
+    },
+  ];
+  const sessionItems = [
+    ['human', 500, '2026-09-03T00:00:00.000Z', human, '先处理主任务'],
+    ['lead-reply-one', 501, '2026-09-03T00:00:01.000Z', lead, 'Lead 原回复'],
+    ['reviewer-intro-one', 502, '2026-09-03T00:00:03.000Z', agent, 'Reviewer introduction'],
+    ['reviewer-reply-one', 503, '2026-09-03T00:00:04.000Z', agent, 'Reviewer reply'],
+    ['lead-reply-two', 504, '2026-09-03T00:00:05.000Z', lead, 'Lead 后续回复'],
+    ['reviewer-intro-two', 505, '2026-09-03T00:00:07.000Z', agent, 'Reviewer second introduction'],
+    ['reviewer-reply-two', 506, '2026-09-03T00:00:08.000Z', agent, 'Reviewer second reply'],
+  ].map(([itemId, sequence, timestamp, author, fallback], index) => ({
+    kind: 'message', itemId, messageId: itemId, sequence,
+    source: { kind: 'session-event', sessionId: index < 2 || index === 4 ? 'session-lead' : 'session-reviewer', eventSeq: index + 1 },
+    author, semantic: { purpose: 'conversation' },
+    body: [{ kind: 'text', text: { key: itemId, fallback } }],
+    reactions: [], timestamp, deliveryState: 'delivered', runState: 'idle',
+    ariaLive: 'polite', actions: [],
+  }));
+  const projection = sessionProjection(sessionItems);
+  const source = new ChatroomAgentSessionConversationSource(
+    binding, domainSource(domainItems), projection,
+  );
+  const first = await source.snapshot();
+  const expected = [
+    'human', 'lead-reply-one', 'delegation-existing', 'reviewer-intro-one',
+    'reviewer-reply-one', 'lead-reply-two', 'delegation-new',
+    'reviewer-intro-two', 'reviewer-reply-two',
+  ];
+  assert.deepEqual(first.items.map(item => item.itemId), expected);
+  assert.equal(new Set(first.items.map(item => item.sequence)).size, first.items.length);
+  assert.deepEqual(first.items.map(item => item.sequence),
+    [...first.items.map(item => item.sequence)].sort((left, right) => left - right));
+
+  projection.emit();
+  await new Promise(resolve => setImmediate(resolve));
+  const refreshed = await source.snapshot();
+  assert.deepEqual(refreshed.items.map(item => [item.itemId, item.sequence]),
+    first.items.map(item => [item.itemId, item.sequence]));
+  source.dispose();
+
+  const replayedSource = new ChatroomAgentSessionConversationSource(
+    binding, domainSource(domainItems), sessionProjection(sessionItems),
+  );
+  const replayed = await replayedSource.snapshot();
+  assert.deepEqual(replayed.items.map(item => [item.itemId, item.sequence]),
+    first.items.map(item => [item.itemId, item.sequence]));
+  replayedSource.dispose();
 });
 
 test('Shell v4 subscription close is first-terminal and unsubscribe is idempotent', async () => {
