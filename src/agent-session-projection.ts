@@ -195,7 +195,18 @@ export class ChatroomAgentSessionProjector {
     const message = event.data;
     if (message.source.kind === 'plugin'
       && message.source.correlation?.namespace !== 'chatroom.room-message') return undefined;
-    const body = bodyFor(message.content);
+    const correlation = message.source.kind === 'plugin' ? message.source.correlation : undefined;
+    const durableDisplay = correlation?.namespace === 'chatroom.room-message'
+      ? this.room.items.find(item => item.kind === 'message'
+        && item.itemId === correlation.id
+        && item.author.role === 'human'
+        && item.semantic.purpose === 'conversation')
+      : undefined;
+    // The Session fact retains the parsed Agent payload. Chatroom's durable
+    // Room message owns presentation, including explicit routing mentions.
+    const body = durableDisplay?.kind === 'message'
+      ? durableDisplay.body
+      : bodyFor(message.content);
     const author = this.humanParticipant();
     if (body === undefined || author === undefined) return undefined;
     return this.append(event.seq, {
