@@ -269,6 +269,9 @@ test('creates and projects a Room only from the first Host-generated composer su
   if (userMessage.kind === 'message') {
     assert.equal(userMessage.source, 'agent-loop');
     assert.equal(userMessage.author.role, 'human');
+    assert.deepEqual(userMessage.author.displayName, {
+      namespace: 'chatroom', key: 'participant.name', fallback: 'You',
+    });
     assert.equal(userMessage.body[0].text.fallback, 'bounded host text');
     assert.equal(userMessage.deliveryState, 'pending');
     assert.equal(userMessage.runState, 'idle');

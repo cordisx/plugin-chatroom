@@ -477,6 +477,29 @@ test('observer hydration stays read-only until the first explicit mutation resum
   store.dispose();
 });
 
+test('permission lease replacement keeps the durable Session resumable on explicit mutation', async () => {
+  const room = roomWithRun('session-existing');
+  const harness = runtimeHarness({ room });
+  const store = DurableChatroomRoomStore.memory([room]);
+  const controller = new ChatroomAgentSessionController(
+    { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+
+  await controller.hydrate();
+  await harness.sessions.get('session-existing').close('permission-revoked');
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(controller.isRunLocallyUnavailable('room', 'review-run'), false);
+  const result = await controller.sendToRoom('room', 'review-run', 'user-1', 'Resume');
+  assert.equal(result.status, 'accepted');
+  assert.equal(result.disposition, 'resumed');
+  assert.deepEqual(harness.resumes.map(item => item.sessionId), ['session-existing']);
+  await controller.dispose();
+  store.dispose();
+});
+
 test('SessionEvent replay prevents a persisted self-introduction correlation from being resubmitted', async () => {
   let room = roomWithRun('session-existing');
   room = recordRoomSessionSelfIntroduction(room, 'review-run', {

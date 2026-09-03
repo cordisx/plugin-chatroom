@@ -651,7 +651,9 @@ export class ChatroomAgentSessionController {
     this.subscriptions.delete(key);
     this.projectors.delete(key);
     if (closed.code === 'unsubscribed') return;
-    this.localUnavailableRuns.set(key, closed.code);
+    // Permission decisions replace the issued lease, not the durable Session.
+    // The next explicit action may resume that Session under refreshed grants.
+    if (closed.code !== 'permission-revoked') this.localUnavailableRuns.set(key, closed.code);
     const owner = this.owners.get(key);
     this.owners.delete(key);
     this.settleSessionApprovals(active.sessionId);
