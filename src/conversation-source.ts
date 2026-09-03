@@ -712,7 +712,7 @@ export class ChatroomConversationController {
       semantic: { purpose: 'conversation', causation: { operationId } },
       author: {
         participantId: 'user', role: 'human',
-        displayName: { namespace: 'chatroom', key: 'participant.user.name', fallback: 'You' },
+        displayName: { namespace: 'chatroom', key: 'participant.name', fallback: 'You' },
       },
       body: [{ kind: 'text', text: { namespace: 'chatroom', key: 'message.user', fallback: text } }],
       reactions: [], timestamp: now(), deliveryState: 'pending', runState: 'idle',
@@ -1375,7 +1375,7 @@ export class ChatroomConversationController {
       semantic: { purpose: 'conversation' },
       author: {
         participantId: 'user', role: 'human',
-        displayName: { namespace: 'chatroom', key: 'participant.user.name', fallback: 'You' },
+        displayName: { namespace: 'chatroom', key: 'participant.name', fallback: 'You' },
       },
       body: [{ kind: 'text', text: { namespace: 'chatroom', key: 'message.user', fallback: displayText } }],
       reactions: [],
