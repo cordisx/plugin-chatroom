@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from 'cordisx/react';
 import { defineReactPage } from 'cordisx/react';
-import { EmptyState, Select } from 'cordisx/ui';
+import { EmptyState, MarkdownViewer, Select, SelectionRail } from 'cordisx/ui';
 import type { CordisXLocalizationSeat, CordisXReactPageProps } from 'cordisx/contracts';
 import {
   buildTeamArchitectureViewModel,
@@ -54,6 +54,7 @@ export type TeamArchitectureMessages = {
   'detail.missing.title': undefined;
   'detail.missing.description': undefined;
   'detail.record-title': { label: string };
+  'detail.record-description': { description: string };
   'detail.identity': undefined;
   'detail.tab.overview': undefined;
   'detail.tab.prompts': undefined;
@@ -248,6 +249,69 @@ function EntityReferenceList({
   </ul>;
 }
 
+function detailTabLabel(tab: TeamEntityDetailTab, t: Translate): string {
+  if (tab === 'overview') return t('detail.tab.overview');
+  if (tab === 'prompts') return t('detail.tab.prompts');
+  if (tab === 'relationships') return t('detail.tab.relationships');
+  if (tab === 'capabilities') return t('detail.tab.capabilities');
+  return t('detail.tab.sessions');
+}
+
+function PromptWorkspace({ entity, t }: {
+  readonly entity: TeamEntityViewModel;
+  readonly t: Translate;
+}) {
+  const sections = entity.declaredCapabilities.promptSections;
+  const [selectedId, setSelectedId] = useState(sections[0]?.sectionId ?? '');
+  const selected = sections.find(section => section.sectionId === selectedId) ?? sections[0];
+  if (selected === undefined) {
+    return <EmptyState title={t('detail.none')} />;
+  }
+  const upstream = entity.extendsDefinitions.map(identity => `${identity.agentId}@${identity.revision}`);
+  return <section className="cx-team-architecture__section" aria-label={t('detail.tab.prompts')}>
+    <div className="cx-team-architecture__prompt-metadata">
+      <span>
+        <strong>{t('detail.prompt-inherit')}</strong>{' '}
+        <code>{entity.declaredCapabilities.inheritance?.promptSections ?? t('detail.unavailable')}</code>
+      </span>
+      <span>
+        <strong>{t('detail.prompt-upstream')}</strong>{' '}
+        {upstream.length === 0
+          ? <span className="cx-team-architecture__muted">{t('detail.none')}</span>
+          : upstream.map((identity, index) => <Fragment key={identity}>
+            {index === 0 ? null : ', '}<code>{identity}</code>
+          </Fragment>)}
+      </span>
+    </div>
+    <div className="cx-team-architecture__prompt-workspace">
+      <SelectionRail
+        className="cx-team-architecture__prompt-selector"
+        aria-label={t('detail.prompts')}
+        value={selected.sectionId}
+        options={sections.map(section => ({
+          value: section.sectionId,
+          label: promptKindLabel(section.kind, t),
+          description: <span><code>{section.sectionId}</code> · {t('detail.provenance.direct')}</span>,
+          controls: 'team-entity-prompt-content',
+        }))}
+        onChange={setSelectedId}
+        layout="responsive"
+      />
+      <div
+        id="team-entity-prompt-content"
+        className="cx-team-architecture__prompt-content"
+        role="tabpanel"
+        aria-label={`${promptKindLabel(selected.kind, t)} · ${selected.sectionId}`}
+      >
+        <MarkdownViewer
+          aria-label={`${promptKindLabel(selected.kind, t)} · ${selected.sectionId}`}
+          source={selected.text}
+        />
+      </div>
+    </div>
+  </section>;
+}
+
 function EntityDetail({ entity, entities, tab, t }: {
   readonly entity: TeamEntityViewModel;
   readonly entities: readonly TeamEntityViewModel[];
@@ -266,8 +330,7 @@ function EntityDetail({ entity, entities, tab, t }: {
   ].filter((value): value is string => value !== undefined);
   let panel: ReactNode;
   if (tab === 'overview') {
-    panel = <section className="cx-team-architecture__section">
-      <h3>{t('detail.identity')}</h3>
+    panel = <section className="cx-team-architecture__section" aria-label={t('detail.tab.overview')}>
       <dl className="cx-team-architecture__facts">
         <Fact label={t('detail.member-id')}><code>{entity.memberId}</code></Fact>
         <Fact label={t('detail.definition-identity')}>
@@ -282,9 +345,6 @@ function EntityDetail({ entity, entities, tab, t }: {
           {entity.attentionPolicy === 'ambient'
             ? t('detail.attention.ambient') : t('detail.attention.mention-only')}
         </Fact>
-      </dl>
-      <h3>{t('detail.source')}</h3>
-      <dl className="cx-team-architecture__facts">
         <Fact label={t('detail.source.kind')}>{entity.source.kind}</Fact>
         <Fact label={t('detail.source.contract')}>
           <code>{entity.source.contract ?? t('detail.unavailable')}</code>
@@ -296,41 +356,13 @@ function EntityDetail({ entity, entities, tab, t }: {
       </dl>
     </section>;
   } else if (tab === 'prompts') {
-    panel = <section className="cx-team-architecture__section">
-      <h3>{t('detail.prompts')}</h3>
-      <p className="cx-team-architecture__section-note">{t('detail.prompts.note')}</p>
-      <dl className="cx-team-architecture__facts">
-        <Fact label={t('detail.prompt-inherit')}>
-          <code>{capabilities.inheritance?.promptSections ?? t('detail.unavailable')}</code>
-        </Fact>
-        <Fact label={t('detail.prompt-upstream')}>
-          {entity.extendsDefinitions.length === 0
-            ? <span className="cx-team-architecture__muted">{t('detail.none')}</span>
-            : <ul className="cx-team-architecture__references">
-              {entity.extendsDefinitions.map(identity => <li key={`${identity.agentId}@${identity.revision}`}>
-                <code>{identity.agentId}@{identity.revision}</code>
-              </li>)}
-            </ul>}
-        </Fact>
-      </dl>
-      {capabilities.promptSections.length === 0
-        ? <span className="cx-team-architecture__muted">{t('detail.none')}</span>
-        : <ol className="cx-team-architecture__prompt-sections">
-          {capabilities.promptSections.map(section => <li key={section.sectionId}>
-            <header className="cx-team-architecture__prompt-section-heading">
-              <strong>{promptKindLabel(section.kind, t)}</strong>
-              <span className="cx-team-architecture__prompt-section-meta">
-                <span>{t('detail.prompt-section.id')} <code>{section.sectionId}</code></span>
-                <span>{t('detail.prompt-section.provenance')} {t('detail.provenance.direct')}</span>
-              </span>
-            </header>
-            <p className="cx-team-architecture__prompt-section-text">{section.text}</p>
-          </li>)}
-        </ol>}
-    </section>;
+    panel = <PromptWorkspace
+      key={`${entity.definitionIdentity.agentId}@${entity.definitionIdentity.revision}`}
+      entity={entity}
+      t={t}
+    />;
   } else if (tab === 'relationships') {
-    panel = <section className="cx-team-architecture__section">
-      <h3>{t('detail.relationships')}</h3>
+    panel = <section className="cx-team-architecture__section" aria-label={t('detail.tab.relationships')}>
       <dl className="cx-team-architecture__facts">
         <Fact label={t('detail.manager')}>
           {entity.relationships.kind === 'unestablished'
@@ -359,8 +391,7 @@ function EntityDetail({ entity, entities, tab, t }: {
       </dl>
     </section>;
   } else if (tab === 'capabilities') {
-    panel = <section className="cx-team-architecture__section">
-      <h3>{t('detail.capabilities')}</h3>
+    panel = <section className="cx-team-architecture__section" aria-label={t('detail.tab.capabilities')}>
       <p className="cx-team-architecture__section-note">{t('detail.capabilities.note')}</p>
       <dl className="cx-team-architecture__facts">
         <Fact label={t('detail.rules')}><StringList values={capabilities.rules} empty={t('detail.none')} /></Fact>
@@ -381,8 +412,7 @@ function EntityDetail({ entity, entities, tab, t }: {
       </dl>
     </section>;
   } else {
-    panel = <section className="cx-team-architecture__section">
-      <h3>{t('detail.active-sessions')}</h3>
+    panel = <section className="cx-team-architecture__section" aria-label={t('detail.tab.sessions')}>
       {entity.activeSessions.length === 0
         ? <EmptyState title={t('detail.status.without-active')} />
         : <ul className="cx-team-architecture__sessions">
@@ -408,20 +438,7 @@ function EntityDetail({ entity, entities, tab, t }: {
         </ul>}
     </section>;
   }
-  return <article className="cx-team-architecture__detail" aria-labelledby="team-entity-detail-title">
-    <header className="cx-team-architecture__detail-heading">
-      <div>
-        <p className="cx-team-architecture__eyebrow">{entity.definitionIdentity.agentId}</p>
-        <h2 id="team-entity-detail-title">{entity.label}</h2>
-        {entity.description !== undefined && <p>{entity.description}</p>}
-      </div>
-      <span className={entity.sessionState === 'active'
-        ? 'cx-team-architecture__status cx-team-architecture__status--active'
-        : 'cx-team-architecture__status'}>
-        {entity.sessionState === 'active'
-          ? t('detail.status.active') : t('detail.status.without-active')}
-      </span>
-    </header>
+  return <article className="cx-team-architecture__detail" aria-label={detailTabLabel(tab, t)}>
     <div className="cx-team-architecture__detail-panel" data-detail-tab={tab}>{panel}</div>
   </article>;
 }
