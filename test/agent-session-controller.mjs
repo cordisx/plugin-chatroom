@@ -3,6 +3,8 @@ import test from 'node:test';
 
 import { CHATROOM_DEFAULT_AGENT_CONFIGURATION } from '../dist/agent-definition.js';
 import { ChatroomAgentSessionController } from '../dist/agent-session-controller.js';
+import { CHATROOM_COMMAND_SUBMIT } from '../dist/conversation-model.js';
+import { ChatroomConversationController } from '../dist/conversation-source.js';
 import {
   addRoomRun,
   bindRoomRun,
@@ -359,6 +361,63 @@ test('first explicit mutation creates once, persists only SessionId, and retains
     'chatroom.member-self-introduction');
   assert.deepEqual(harness.handles[0].calls.messages[1].message.source.correlation, {
     namespace: 'chatroom.room-message', id: 'user-1',
+  });
+  await controller.dispose();
+  store.dispose();
+});
+
+test('explicit mention stays in the durable Room display while Agent admission receives stripped dispatch text', async () => {
+  const domain = new ChatroomConversationController();
+  domain.rooms.upsert(createRoom({ id: 'room', title: 'Room' }));
+  domain.createSource({
+    bindingId: 'binding-display', shell: 'agent-desktop', ownerGeneration: 'owner-1',
+    routeSelection: { scope: 'room-or-new', selectedRoomParam: 'room' },
+  });
+  const intent = domain.handle({
+    binding: { bindingId: 'binding-display', ownerGeneration: 'owner-1' }, generation: 'owner-1',
+    scope: 'composer-submit', command: { id: CHATROOM_COMMAND_SUBMIT },
+    submitPayload: '@Reviewer 请回复：显式路由成功。',
+  });
+  assert.equal(intent.kind, 'send-message');
+  assert.deepEqual(intent.deliveries.map(delivery => delivery.memberId), ['reviewer']);
+  assert.equal(intent.dispatchText, '请回复：显式路由成功。');
+  const room = domain.rooms.get('room');
+  assert.equal(room.items.find(item => item.itemId === intent.userItemId).body[0].text.fallback,
+    '@Reviewer 请回复：显式路由成功。');
+
+  const harness = runtimeHarness({ room });
+  const store = DurableChatroomRoomStore.memory([room]);
+  const observations = [];
+  const controller = new ChatroomAgentSessionController(
+    { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+    observation => { observations.push(observation); },
+  );
+  await controller.sendToRoom(
+    'room', intent.deliveries[0].runId, intent.userItemId, intent.dispatchText,
+  );
+  const [introduction, admitted] = harness.handles[0].calls.messages.map(call => call.message);
+  assert.equal(admitted.content[0].text, '请回复：显式路由成功。');
+  assert.deepEqual(admitted.source.correlation, {
+    namespace: 'chatroom.room-message', id: intent.userItemId,
+  });
+
+  await harness.sessions.get('session-created-1').emitLive([
+    messageEvent('session-created-1', 0, introduction),
+    messageEvent('session-created-1', 1, {
+      id: 'assistant-introduction', role: 'assistant',
+      content: [{ type: 'text', text: 'I review changes.' }],
+      source: { kind: 'model', provider: 'provider', model: 'model' },
+    }, [0]),
+    messageEvent('session-created-1', 2, admitted),
+  ]);
+  const display = observations[0].projection.changes
+    .map(change => change.item)
+    .find(item => item.kind === 'message' && item.messageId === admitted.id);
+  assert.equal(display.body[0].text.fallback, '@Reviewer 请回复：显式路由成功。');
+  assert.deepEqual(display.source, {
+    kind: 'session-event', sessionId: 'session-created-1', eventSeq: 2,
   });
   await controller.dispose();
   store.dispose();
