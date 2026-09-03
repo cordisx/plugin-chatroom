@@ -251,6 +251,7 @@ export class ChatroomAgentSessionController {
     userItemId: string,
     text: string,
     mode: ChatroomAgentSendMode = 'followup',
+    source: 'room-message' | 'agent-delegation' = 'room-message',
   ): Promise<ChatroomAgentSessionOutcome> {
     this.assertUsable();
     if (text.trim() === '') throw new Error('Room message must not be empty.');
@@ -271,7 +272,7 @@ export class ChatroomAgentSessionController {
       acquired.handle,
       messageId,
       text,
-      'chatroom.room-message',
+      source === 'room-message' ? 'chatroom.room-message' : 'chatroom.agent-delegation',
       userItemId,
       'relay',
     );
@@ -789,6 +790,11 @@ export class ChatroomAgentSessionController {
       );
       await acquired.handle.agent.followup(message);
     }
+  }
+
+  reservePresentationSequence(): number {
+    this.assertUsable();
+    return this.nextPresentationSequence();
   }
 
   private nextPresentationSequence(): number {

@@ -64,6 +64,8 @@ export type ChatroomCommandIntent =
   | { readonly kind: 'target-error'; readonly roomId?: string; readonly code: 'empty' | 'no-recipients' | 'missing' | 'ambiguous' | 'empty-targeted-message'; readonly mention?: string };
 
 export interface ChatroomPlaygroundSourceCorrelation {
+  /** Exact Session identity for route-independent Room discovery. */
+  readonly sessionId?: string;
   readonly roomId: string;
   readonly runId: string;
   readonly memberId: string;
@@ -618,6 +620,26 @@ export class ChatroomConversationController {
   inspectPlaygroundSource(
     correlation: Readonly<ChatroomPlaygroundSourceCorrelation>,
   ): ChatroomPlaygroundSourceInspection {
+    if (correlation.sessionId !== undefined) {
+      const matches = this.rooms.snapshot().flatMap(room => room.runs
+        .filter(run => run.sessionId === correlation.sessionId)
+        .map(run => ({ room, run })));
+      if (matches.length !== 1) {
+        return { status: 'unavailable', code: matches.length === 0 ? 'missing' : 'correlation-invalid' };
+      }
+      const { room, run } = matches[0]!;
+      if (room.id !== correlation.roomId || run.runId !== correlation.runId
+        || run.memberId !== correlation.memberId) {
+        return { status: 'unavailable', code: 'correlation-invalid' };
+      }
+      if (room.archived) return { status: 'unavailable', code: 'archived' };
+      const member = room.memberships.find(candidate => candidate.memberId === run.memberId);
+      if (member === undefined || this.isRunLocallyUnavailable(room.id, run.runId)
+        || (run.presence.state !== 'joined' && run.presence.state !== 'ready')) {
+        return { status: 'unavailable', code: 'retired' };
+      }
+      return { status: 'available', room, run, member };
+    }
     const key = `${correlation.bindingId}:${correlation.ownerGeneration}:${correlation.generation}`;
     const source = this.sources.get(key) ?? this.playgroundSourceCorrelations.get(key);
     if (source === undefined) {
@@ -648,8 +670,9 @@ export class ChatroomConversationController {
     if (member === undefined || run?.memberId !== member.memberId) {
       return { status: 'unavailable', code: 'correlation-invalid' };
     }
-    if (this.isRunLocallyUnavailable(room.id, run.runId)
-      || run.taskBinding?.state !== 'active' || run.detailsUrl === undefined
+    const hasRuntimeIdentity = run.sessionId !== undefined
+      || (run.taskBinding?.state === 'active' && run.detailsUrl !== undefined);
+    if (this.isRunLocallyUnavailable(room.id, run.runId) || !hasRuntimeIdentity
       || (run.presence.state !== 'joined' && run.presence.state !== 'ready')) {
       return { status: 'unavailable', code: 'retired' };
     }
@@ -884,6 +907,133 @@ export class ChatroomConversationController {
       ...(turnId === undefined ? {} : { turnId }),
       ...(sourceMessageId === undefined ? {} : { sourceMessageId }),
       ...(inReplyToMessageId === undefined ? {} : { inReplyToMessageId }),
+    };
+  }
+
+  async projectAgentSessionDelegation(
+    correlation: Readonly<ChatroomPlaygroundSourceCorrelation>,
+    operationId: string,
+    targetMemberId: string,
+    textValue: string,
+    presentationSequence?: number,
+    now: () => string = () => new Date().toISOString(),
+  ): Promise<ChatroomPlaygroundAgentDelegationProjection> {
+    const inspection = this.inspectPlaygroundSource(correlation);
+    if (inspection.status !== 'available') {
+      throw new Error(`Agent Session source is unavailable: ${inspection.code}.`);
+    }
+    const task = textValue.trim();
+    if (task === '') throw new Error('Delegated task text is empty.');
+    const targetMember = inspection.room.memberships.find(candidate =>
+      candidate.memberId === targetMemberId && candidate.memberId !== correlation.memberId);
+    if (targetMember === undefined) return { status: 'missing-target' };
+    const announcementTask = task.replace(/[。！？.!?]+$/u, '');
+    const work = announcementTask.replace(/^完成(?:一下)?/u, '').trimStart();
+    const announcement = work === ''
+      ? `我会通知 @${targetMember.label} 去处理这项工作。`
+      : `我会通知 @${targetMember.label} 去完成${work}的工作。`;
+    const targetRunId = createChatroomOpaqueId('session-delegation-run', operationId);
+    const itemId = createChatroomOpaqueId('session-agent-delegation', operationId);
+    const reportsTo = targetMember.reportsToMemberId === undefined ? undefined
+      : inspection.room.memberships.find(member => member.memberId === targetMember.reportsToMemberId);
+    const context: ChatroomPlaygroundDelegationContext = Object.freeze({
+      source: Object.freeze({
+        memberId: inspection.member.memberId,
+        label: inspection.member.label,
+        runId: correlation.runId,
+      }),
+      target: Object.freeze({
+        memberId: targetMember.memberId,
+        label: targetMember.label,
+        runId: targetRunId,
+      }),
+      ...(reportsTo === undefined ? {} : {
+        reportsTo: Object.freeze({ memberId: reportsTo.memberId, label: reportsTo.label }),
+      }),
+      availableTargets: Object.freeze(inspection.room.memberships
+        .filter(member => member.memberId !== targetMember.memberId)
+        .map(member => Object.freeze({ memberId: member.memberId, label: member.label }))),
+      communicationMode: 'explicit-mention-required',
+      approvalMode: 'reports-to-hierarchy',
+    });
+    const existingItem = inspection.room.items.find(item => item.itemId === itemId);
+    const existingRun = inspection.room.runs.find(run => run.runId === targetRunId);
+    if (existingItem !== undefined || existingRun !== undefined) {
+      if (existingItem?.kind !== 'message'
+        || existingItem.source !== 'chatroom-acknowledgement'
+        || existingItem.author.participantId !== inspection.member.participantId
+        || existingItem.body.length !== 1
+        || existingItem.body[0].kind !== 'text'
+        || existingItem.body[0].text.fallback !== announcement
+        || existingRun?.memberId !== targetMemberId) {
+        return { status: 'conflict', code: 'operation-conflict' };
+      }
+      let replayItem = existingItem;
+      const targetPresenceSequence = existingRun.presence?.sequence ?? -1;
+      if (replayItem.sequence <= targetPresenceSequence) {
+        const sequence = Math.max(inspection.room.timelineSequence, targetPresenceSequence) + 1;
+        replayItem = { ...replayItem, sequence };
+        await this.commitDirectRoom(createRoom({
+          ...inspection.room,
+          items: inspection.room.items.map(item => item.itemId === itemId ? replayItem : item),
+          timelineSequence: sequence,
+        }));
+      }
+      return {
+        status: 'accepted', roomId: correlation.roomId,
+        sourceRunId: correlation.runId, sourceMemberId: correlation.memberId,
+        sourceParticipantId: inspection.member.participantId,
+        targetRunId, targetMemberId, targetParticipantId: targetMember.participantId,
+        itemId, messageId: replayItem.messageId, text: task, context,
+        timestamp: replayItem.timestamp, replayed: true,
+      };
+    }
+    const participant = projectRoomParticipant(
+      inspection.room.participants.find(candidate => candidate.id === inspection.member.participantId) ?? {
+        id: inspection.member.participantId,
+        name: inspection.member.label,
+        kind: 'agent',
+        avatar: inspection.member.avatar,
+      },
+      inspection.room,
+    );
+    if (participant.role !== 'agent') throw new Error('Delegation requires the source member Agent identity.');
+    const timestamp = now();
+    // addRoomRun consumes the next Room sequence for member presence; the
+    // delegation acknowledgement follows it in the same atomic commit.
+    const sequence = Math.max(inspection.room.timelineSequence + 2, presentationSequence ?? -1);
+    const item: Extract<AgentConversationItem, { kind: 'message' }> = {
+      kind: 'message', itemId, messageId: itemId, sequence,
+      source: 'chatroom-acknowledgement',
+      semantic: { purpose: 'chatroom-acknowledgement' },
+      author: participant,
+      body: [{
+        kind: 'text',
+        text: { namespace: 'chatroom', key: 'message.agent-session-delegation', fallback: announcement },
+      }],
+      reactions: [], timestamp, deliveryState: 'delivered', runState: 'idle',
+      ariaLive: 'polite', actions: [],
+    };
+    const withTargetRun = addRoomRun(this.retireLocallyUnavailableRuns(
+      inspection.room,
+      targetMemberId,
+    ), {
+      runId: targetRunId,
+      memberId: targetMemberId,
+      title: `${targetMember.label} delegated run`,
+      status: 'creating',
+    });
+    await this.commitDirectRoom(createRoom({
+      ...withTargetRun,
+      items: [...withTargetRun.items, item],
+      timelineSequence: sequence,
+    }));
+    return {
+      status: 'accepted', roomId: correlation.roomId,
+      sourceRunId: correlation.runId, sourceMemberId: correlation.memberId,
+      sourceParticipantId: inspection.member.participantId,
+      targetRunId, targetMemberId, targetParticipantId: targetMember.participantId,
+      itemId, messageId: itemId, text: task, context, timestamp, replayed: false,
     };
   }
 

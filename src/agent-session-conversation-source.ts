@@ -299,13 +299,17 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
         ? { ...common, multiParticipant: true, participantPresentation: domain.selection.participantPresentation }
         : { ...common, multiParticipant: false, participantPresentation: 'none' };
     }
+    let itemSequence = -1;
     const items = [
       ...domain.items.flatMap(item => {
         const mapped = domainItem(item, sessionByRun);
         return mapped === undefined ? [] : [mapped];
       }),
       ...projection.items,
-    ].sort((left, right) => left.sequence - right.sequence);
+    ].sort((left, right) => left.sequence - right.sequence).map(item => {
+      itemSequence = Math.max(itemSequence + 1, item.sequence);
+      return item.sequence === itemSequence ? item : { ...item, sequence: itemSequence };
+    });
     this.sequence = Math.max(this.sequence, domain.snapshotSequence) + (this.snapshotValue === undefined ? 0 : 1);
     const snapshot: AgentConversationShellSnapshot = {
       binding: { bindingId: this.binding.bindingId, ownerGeneration: this.binding.ownerGeneration },

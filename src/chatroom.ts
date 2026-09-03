@@ -43,6 +43,10 @@ import {
   teamArchitectureManagerContentRecordTitles,
 } from './team-architecture-navigation.js';
 import { createTeamArchitectureDataSource } from './team-entity-view-model.js';
+import {
+  registerChatroomAgentSessionRoomSimulationOwner,
+  type PlaygroundRoomSimulationBridgeService,
+} from './playground-room-simulation-bridge.js';
 
 export type ChatroomMessages = {
   'navigation.title': undefined;
@@ -321,6 +325,14 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     const domain = controller.createSource(v3BindingFor(binding));
     return new ChatroomAgentSessionConversationSource(binding, domain, agentSession);
   });
+  const playgroundBridge = ctx.reflect.get(
+    'playgroundRoomSimulationBridge', false,
+  ) as PlaygroundRoomSimulationBridgeService | undefined;
+  const disposePlaygroundBridge = playgroundBridge === undefined
+    ? undefined
+    : registerChatroomAgentSessionRoomSimulationOwner(
+      playgroundBridge, controller, agentSession,
+    );
   ctx.pages.register(page, conversation.mount);
   ctx.routes.register(newRoomRoute);
   ctx.routes.register(roomRoute);
@@ -363,6 +375,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     for (const dispose of managerDisposers.reverse()) void dispose();
     teamSource.dispose();
     manager?.dispose();
+    disposePlaygroundBridge?.();
     void agentSession.dispose();
     controller.dispose();
     product.dispose();
@@ -372,6 +385,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     void disposeManagerProjection?.();
     for (const dispose of managerDisposers.reverse()) void dispose();
     manager?.dispose();
+    disposePlaygroundBridge?.();
     void agentSession.dispose();
     controller.dispose();
     product.dispose();
