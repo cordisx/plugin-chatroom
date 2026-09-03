@@ -1,12 +1,11 @@
 import type {
   Agent,
-  AgentAcquireResult,
   AgentAdmission,
   AgentHandle,
   AgentMessageDiscardResult,
   AgentMutationResult,
-  AgentSetup,
 } from '@cordisx/protocol/agents/v1';
+import type { EntityAgentAcquireResult } from '@cordisx/protocol/entities/v1';
 import {
   CORDISX_AGENT_SESSION_LEGACY_ACQUIRE_CONTRACT_V1,
   CORDISX_AGENT_SESSION_LEGACY_ACQUIRE_SCHEMA_V1,
@@ -30,7 +29,7 @@ import type {
   UserMessage,
 } from '@cordisx/protocol/sessions/v1';
 
-import { agentDefinitionCatalogFor, type ChatroomAgentConfiguration } from './agent-definition.js';
+import type { ChatroomAgentConfiguration } from './agent-definition.js';
 import {
   ChatroomAgentSessionProjector,
   type ChatroomSessionAgentFacts,
@@ -111,8 +110,8 @@ export interface ChatroomRoomSessionProjection {
   readonly items: readonly import('@cordisx/protocol/agent-conversation-shell/v4').AgentConversationItem[];
 }
 
-type RuntimeAcquireResult = AgentAcquireResult | CordisXAgentSessionLegacyAcquireResultV1;
-type RuntimeAcquireFailure = Exclude<AgentAcquireResult, { readonly status: 'accepted' }>
+type RuntimeAcquireResult = EntityAgentAcquireResult | CordisXAgentSessionLegacyAcquireResultV1;
+type RuntimeAcquireFailure = Exclude<EntityAgentAcquireResult, { readonly status: 'accepted' }>
   | Exclude<CordisXAgentSessionLegacyAcquireResultV1, { readonly status: 'accepted' }>;
 
 const runKey = (roomId: string, runId: string) =>
@@ -463,14 +462,10 @@ export class ChatroomAgentSessionController {
     const room = this.requireRoom(roomId);
     const run = this.requireRun(room, runId);
     const member = this.requireMember(room, run.memberId);
-    const setup: AgentSetup = {
-      definition: member.definition,
-      definitions: agentDefinitionCatalogFor(member.definition, this.configuration.definitions),
-    };
     const raw: RuntimeAcquireResult = run.sessionId !== undefined
       ? await this.runtime.agents.resume({
         sessionId: run.sessionId,
-        setup,
+        definitionSource: 'session-persisted',
         mutationId: acquisitionMutationId('resume', roomId, runId),
       })
       : run.taskBinding !== undefined
@@ -479,11 +474,10 @@ export class ChatroomAgentSessionController {
           contract: CORDISX_AGENT_SESSION_LEGACY_ACQUIRE_CONTRACT_V1,
           schemaVersion: 1,
           binding: run.taskBinding,
-          setup,
           mutationId: acquisitionMutationId('migrate', roomId, runId),
         })
         : await this.runtime.agents.create({
-        setup,
+        definition: member.definition,
         mutationId: acquisitionMutationId('create', roomId, runId),
       });
     if (raw.status !== 'accepted') return raw;

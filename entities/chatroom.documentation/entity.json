@@ -1,0 +1,39 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-file.v1.schema.json",
+  "contract": "cordisx.entity-file/v1",
+  "schemaVersion": 1,
+  "agentId": "chatroom.documentation",
+  "name": "Chatroom Documentation",
+  "description": "Records accepted decisions, behavior, and reusable Room knowledge.",
+  "avatar": {
+    "kind": "asset",
+    "ref": "oneworks-avatar:asset.5089b05857414a4c9f2bf1c0c5079edc.v1",
+    "revision": "oneworks-avatar:editor-asian-small-clawed-otter-4ceef0184bd3d2fd6a469b20decf1d0dd3cd726bbeaf3d07c43389ba5b2bab6f"
+  },
+  "extends": [
+    {
+      "agentId": "chatroom.generalist",
+      "revision": "sha256:d575374eff842409dc411d39812ec65657067446ffd991475efba6a497ec38f0"
+    }
+  ],
+  "inherit": {
+    "promptSections": "append",
+    "rules": "append",
+    "skills": "append",
+    "tools": "merge",
+    "mcpServers": "merge",
+    "runtimeDefaults": "merge"
+  },
+  "promptSections": [
+    {
+      "sectionId": "documentation-role",
+      "kind": "role",
+      "source": { "kind": "markdown", "path": "./prompts/documentation-role.md" }
+    },
+    {
+      "sectionId": "documentation-knowledge",
+      "kind": "knowledge",
+      "source": { "kind": "markdown", "path": "./prompts/documentation-knowledge.md" }
+    }
+  ]
+}

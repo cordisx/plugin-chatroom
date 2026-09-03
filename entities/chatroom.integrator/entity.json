@@ -1,0 +1,39 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-file.v1.schema.json",
+  "contract": "cordisx.entity-file/v1",
+  "schemaVersion": 1,
+  "agentId": "chatroom.integrator",
+  "name": "Chatroom Integrator",
+  "description": "Coordinates implementation handoffs and integration across Room member runs.",
+  "avatar": {
+    "kind": "asset",
+    "ref": "oneworks-avatar:asset.d85c0abccffd4d539da85cb67eb8bcbf.v1",
+    "revision": "oneworks-avatar:editor-syrian-hamster-5eebb3ea9c0131005fd336e7c8494c74fce92903373272632da940f22307c1f7"
+  },
+  "extends": [
+    {
+      "agentId": "chatroom.generalist",
+      "revision": "sha256:d575374eff842409dc411d39812ec65657067446ffd991475efba6a497ec38f0"
+    }
+  ],
+  "inherit": {
+    "promptSections": "append",
+    "rules": "append",
+    "skills": "append",
+    "tools": "merge",
+    "mcpServers": "merge",
+    "runtimeDefaults": "merge"
+  },
+  "promptSections": [
+    {
+      "sectionId": "integrator-role",
+      "kind": "role",
+      "source": { "kind": "markdown", "path": "./prompts/integrator-role.md" }
+    },
+    {
+      "sectionId": "integrator-operations",
+      "kind": "operations",
+      "source": { "kind": "markdown", "path": "./prompts/integrator-operations.md" }
+    }
+  ]
+}

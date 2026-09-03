@@ -1,31 +1,53 @@
 {
-  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-package.v1.schema.json",
-  "schemaVersion": 1,
+  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-package.v5.schema.json",
+  "schemaVersion": 5,
   "id": "chatroom",
   "version": "0.1.0",
-  "entry": "./src/chatroom.ts",
+  "entry": "./dist/chatroom.js",
   "readme": "./README.md",
   "canonicalSource": "https://github.com/cordisx/plugin-chatroom",
+  "distribution": {
+    "mode": "explicit-local-v1",
+    "signature": "unsupported"
+  },
   "compatibility": {
     "runtimeAbi": 1,
-    "protocol": 1
+    "protocolSchemas": [
+      "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v5.schema.json",
+      "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-file.v1.schema.json"
+    ]
   },
   "dependencies": [],
   "runtimeManifest": {
-    "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v5.schema.json",
-    "schemaVersion": 5,
-    "id": "chatroom",
-    "name": "Chatroom",
-    "capabilities": [
-      { "name": "agents.create", "required": true, "scope": {} },
-      { "name": "agents.resume", "required": true, "scope": {} },
-      { "name": "agents.get", "required": true, "scope": {} },
-      { "name": "agents.message.submit", "required": true, "scope": {} },
-      { "name": "agents.message.cancel", "required": true, "scope": {} },
-      { "name": "sessions.get", "required": true, "scope": {} },
-      { "name": "sessions.subscribe", "required": true, "scope": {} },
-      { "name": "approvals.answer", "required": true, "scope": {} }
-    ],
-    "services": []
-  }
+    "path": "./runtime-manifest.json",
+    "schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v5.schema.json",
+    "digest": "sha256:7000a0f9e3e14ab833b1a36c853e5e0589345baefb17c5d9fbe19ec50ae4a68a"
+  },
+  "entityTemplates": [
+    {
+      "agentId": "chatroom.generalist",
+      "entityPath": "./entities/chatroom.generalist/entity.json",
+      "digest": "sha256:d575374eff842409dc411d39812ec65657067446ffd991475efba6a497ec38f0"
+    },
+    {
+      "agentId": "chatroom.reviewer",
+      "entityPath": "./entities/chatroom.reviewer/entity.json",
+      "digest": "sha256:5c52ac24a8eb4592c0919336fbc804bd117741c22b108af030c83b8ef590512d"
+    },
+    {
+      "agentId": "chatroom.integrator",
+      "entityPath": "./entities/chatroom.integrator/entity.json",
+      "digest": "sha256:cf89bc7dc1406f57369a29cfda1ad0bd826ea84f02b845a0660d36f7d269004b"
+    },
+    {
+      "agentId": "chatroom.documentation",
+      "entityPath": "./entities/chatroom.documentation/entity.json",
+      "digest": "sha256:64e5a6f1268a792380318e419520c7bdea9695ead0a0d08dfc30565b9273d045"
+    },
+    {
+      "agentId": "chatroom.qa",
+      "entityPath": "./entities/chatroom.qa/entity.json",
+      "digest": "sha256:161da39865680f98bad1aef6aab6036b0d9921dfe7a88150d9252c06cce7d521"
+    }
+  ]
 }

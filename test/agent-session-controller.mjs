@@ -348,6 +348,9 @@ test('first explicit mutation creates once, persists only SessionId, and retains
   assert.equal(harness.creates.length, 1);
   assert.equal(harness.resumes.length, 0);
   assert.equal(harness.creates[0].sessionId, undefined, 'Host mints a new SessionId');
+  assert.deepEqual(harness.creates[0].definition,
+    room.memberships.find(member => member.memberId === 'reviewer').definition);
+  assert.equal('setup' in harness.creates[0], false);
   assert.equal(persisted.sessionId, 'session-created-1');
   assert.equal(persisted.taskBinding, undefined);
   assert.equal(persisted.detailsUrl, undefined);
@@ -449,6 +452,8 @@ test('first explicit mutation migrates an exact legacy TaskBinding through Host 
   assert.equal(harness.resumes.length, 0);
   assert.equal(harness.legacyAcquires.length, 1);
   assert.deepEqual(harness.legacyAcquires[0].binding, binding, 'TaskBinding remains opaque');
+  assert.equal('setup' in harness.legacyAcquires[0], false,
+    'legacy Session resumes its persisted definition binding');
   assert.equal(store.rooms.get('room').runs[0].sessionId, 'session-legacy-exact');
   assert.equal(store.rooms.get('room').runs[0].taskBinding, undefined);
   await controller.dispose();
@@ -531,6 +536,9 @@ test('observer hydration stays read-only until the first explicit mutation resum
   assert.equal(result.disposition, 'resumed');
   assert.equal(harness.creates.length, 0);
   assert.deepEqual(harness.resumes.map(item => item.sessionId), ['session-existing']);
+  assert.equal(harness.resumes[0].definitionSource, 'session-persisted');
+  assert.equal('definition' in harness.resumes[0], false);
+  assert.equal('setup' in harness.resumes[0], false);
   assert.equal(controller.ownerHandleCount, 1);
   await controller.dispose();
   store.dispose();

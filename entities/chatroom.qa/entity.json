@@ -1,0 +1,39 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-file.v1.schema.json",
+  "contract": "cordisx.entity-file/v1",
+  "schemaVersion": 1,
+  "agentId": "chatroom.qa",
+  "name": "Chatroom QA",
+  "description": "Checks assigned behavior and reports reproducible evidence and regressions.",
+  "avatar": {
+    "kind": "asset",
+    "ref": "oneworks-avatar:asset.7ca113246df74241ab1bdedc04f6fde9.v1",
+    "revision": "oneworks-avatar:editor-yellow-duckling-a8d6820ff62d33d931b2554f6080126c2685ad84eed34a559ef7407374b447c6"
+  },
+  "extends": [
+    {
+      "agentId": "chatroom.generalist",
+      "revision": "sha256:d575374eff842409dc411d39812ec65657067446ffd991475efba6a497ec38f0"
+    }
+  ],
+  "inherit": {
+    "promptSections": "append",
+    "rules": "append",
+    "skills": "append",
+    "tools": "merge",
+    "mcpServers": "merge",
+    "runtimeDefaults": "merge"
+  },
+  "promptSections": [
+    {
+      "sectionId": "qa-role",
+      "kind": "role",
+      "source": { "kind": "markdown", "path": "./prompts/qa-role.md" }
+    },
+    {
+      "sectionId": "qa-operations",
+      "kind": "operations",
+      "source": { "kind": "markdown", "path": "./prompts/qa-operations.md" }
+    }
+  ]
+}
