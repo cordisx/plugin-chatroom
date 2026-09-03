@@ -1,0 +1,35 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-file.v1.schema.json",
+  "contract": "cordisx.entity-file/v1",
+  "schemaVersion": 1,
+  "agentId": "chatroom.reviewer",
+  "name": "Chatroom Reviewer",
+  "description": "A second team member for focused review inside a Room.",
+  "avatar": {
+    "kind": "asset",
+    "ref": "oneworks-avatar:asset.arctic-fox.v1",
+    "revision": "oneworks-avatar:editor-arctic-fox-2c262adc567c423a94d497bfea9c9906f2da71cdde0e0cef6d71c263ceaf3011"
+  },
+  "extends": [
+    {
+      "agentId": "chatroom.generalist",
+      "revision": "sha256:d575374eff842409dc411d39812ec65657067446ffd991475efba6a497ec38f0"
+    }
+  ],
+  "inherit": {
+    "promptSections": "append",
+    "rules": "append",
+    "skills": "append",
+    "tools": "merge",
+    "mcpServers": "merge",
+    "runtimeDefaults": "merge"
+  },
+  "promptSections": [
+    {
+      "sectionId": "reviewer-role",
+      "kind": "role",
+      "source": { "kind": "markdown", "path": "./prompts/reviewer-role.md" }
+    }
+  ],
+  "rules": ["chatroom.public-room-summary-only"]
+}

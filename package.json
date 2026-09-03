@@ -9,10 +9,12 @@
   "types": "./dist/chatroom.d.ts",
   "files": [
     "dist",
-    "cordisx-package.json"
+    "entities",
+    "cordisx-package.json",
+    "runtime-manifest.json"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-build-assets.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/build-runtime-bundle.mjs && node scripts/copy-build-assets.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test test/*.mjs",
     "check": "npm run typecheck && npm run build && npm test",
@@ -23,9 +25,12 @@
     "node": ">=22.19"
   },
   "devDependencies": {
-    "@cordisx/protocol": "github:cordisx/cordisx-protocol#8891722a7735a3bd00bdd5315084b35b748f5e7f",
+    "@cordisx/protocol": "github:cordisx/cordisx-protocol#c96c290697f9e802a68c6d3bb094fd27d8d00d1e",
     "@deepseek-ai/cordis": "4.0.1",
-    "cordisx": "github:cordisx/cordisx#eb68d7a314c922e07c6f422ad35ee24f581be1ac",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "cordisx": "github:cordisx/cordisx#ff9cf8b1ba4e4caffa23abbd767dbba0b8884c8a",
+    "esbuild": "^0.28.2",
     "typescript": "^5.9.2"
   }
 }

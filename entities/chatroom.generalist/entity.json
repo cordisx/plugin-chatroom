@@ -1,0 +1,55 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-file.v1.schema.json",
+  "contract": "cordisx.entity-file/v1",
+  "schemaVersion": 1,
+  "agentId": "chatroom.generalist",
+  "name": "Chatroom Agent",
+  "description": "An internal Agent for focused Room conversations.",
+  "avatar": {
+    "kind": "asset",
+    "ref": "oneworks-avatar:asset.red-fox.v1",
+    "revision": "oneworks-avatar:editor-red-fox-2b30c25a3fcd29bf349fed927df85f1ba4b0a6096a9dfc1d2d1088e05654d8aa"
+  },
+  "extends": [],
+  "inherit": {
+    "promptSections": "append",
+    "rules": "merge",
+    "skills": "merge",
+    "tools": "replace",
+    "mcpServers": "replace",
+    "runtimeDefaults": "merge"
+  },
+  "promptSections": [
+    {
+      "sectionId": "introduction",
+      "kind": "introduction",
+      "source": { "kind": "markdown", "path": "./prompts/introduction.md" }
+    },
+    {
+      "sectionId": "personality",
+      "kind": "personality",
+      "source": { "kind": "markdown", "path": "./prompts/personality.md" }
+    },
+    {
+      "sectionId": "memory",
+      "kind": "memory",
+      "source": { "kind": "markdown", "path": "./prompts/memory.md" }
+    }
+  ],
+  "rules": [
+    "chatroom.room-isolation",
+    "chatroom.no-fabricated-replies"
+  ],
+  "skills": [],
+  "tools": {
+    "include": ["read", "search"],
+    "exclude": ["external-channel"]
+  },
+  "mcpServers": {
+    "exclude": ["external-channel"]
+  },
+  "runtimeDefaults": {
+    "adapterId": "codex",
+    "effort": "medium"
+  }
+}

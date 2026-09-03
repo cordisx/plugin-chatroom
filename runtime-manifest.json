@@ -1,0 +1,17 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v5.schema.json",
+  "schemaVersion": 5,
+  "id": "chatroom",
+  "name": "Chatroom",
+  "capabilities": [
+    { "name": "agents.create", "required": true, "scope": {} },
+    { "name": "agents.resume", "required": true, "scope": {} },
+    { "name": "agents.get", "required": true, "scope": {} },
+    { "name": "agents.message.submit", "required": true, "scope": {} },
+    { "name": "agents.message.cancel", "required": true, "scope": {} },
+    { "name": "sessions.get", "required": true, "scope": {} },
+    { "name": "sessions.subscribe", "required": true, "scope": {} },
+    { "name": "approvals.answer", "required": true, "scope": {} }
+  ],
+  "services": []
+}

@@ -31,6 +31,7 @@ import {
   registerChatroomManager,
 } from './manager-chat.js';
 import { ChatroomProductBase } from './product-base.js';
+import { configurationFromEntitySnapshot } from './entity-registry-configuration.js';
 import { DurableChatroomRoomStore } from './room-store.js';
 import {
   registerTalentMarket,
@@ -109,7 +110,7 @@ export const manifest = {
 
 export const inject = [
   'i18n', 'commands', 'pages', 'routes', 'slots', 'managerContent',
-  'agentConversationShell', 'agents', 'sessions', 'approvals', 'documents',
+  'agentConversationShell', 'agents', 'sessions', 'approvals', 'entities', 'documents',
 ];
 
 const page = {
@@ -156,7 +157,8 @@ function agentConfiguration(config: unknown): ChatroomAgentConfiguration {
 }
 
 export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
-  const agent = agentConfiguration(config);
+  const entitySnapshot = await ctx.entities.snapshot();
+  const agent = configurationFromEntitySnapshot(agentConfiguration(config), entitySnapshot);
   const roomStore = await DurableChatroomRoomStore.openOwnerDocuments(ctx.documents);
   const agentSession = new ChatroomAgentSessionController(
     { agents: ctx.agents, sessions: ctx.sessions, approvals: ctx.approvals },
