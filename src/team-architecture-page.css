@@ -36,8 +36,7 @@
 }
 
 .cx-team-architecture__section-note,
-.cx-team-architecture__muted,
-.cx-team-architecture__eyebrow {
+.cx-team-architecture__muted {
   color: color-mix(in srgb, currentColor 68%, transparent);
 }
 
@@ -110,10 +109,6 @@
 .cx-team-architecture__section {
   display: grid;
   gap: 14px;
-  padding: 18px;
-  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, currentColor 2.5%, transparent);
 }
 
 .cx-team-architecture__chart-scroll {
@@ -328,29 +323,6 @@
   font-weight: 650;
 }
 
-.cx-team-architecture__detail-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 4px 2px;
-}
-
-.cx-team-architecture__detail-heading > div {
-  display: grid;
-  gap: 7px;
-}
-
-.cx-team-architecture__detail-heading h2 {
-  font-size: clamp(1.4rem, 2vw, 1.85rem);
-}
-
-.cx-team-architecture__eyebrow {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.76rem;
-  letter-spacing: 0.03em;
-}
-
 .cx-team-architecture__facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -374,38 +346,27 @@
   min-width: 0;
 }
 
-.cx-team-architecture__prompt-sections {
-  display: grid;
-  gap: 10px;
-}
-
-.cx-team-architecture__prompt-sections > li {
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
-  border-radius: 9px;
-  background: color-mix(in srgb, currentColor 2%, transparent);
-}
-
-.cx-team-architecture__prompt-section-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.cx-team-architecture__prompt-section-meta {
+.cx-team-architecture__prompt-metadata {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 4px 10px;
-  color: color-mix(in srgb, currentColor 62%, transparent);
-  font-size: 0.74rem;
+  gap: 6px 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+  color: color-mix(in srgb, currentColor 68%, transparent);
+  font-size: 0.78rem;
 }
 
-.cx-team-architecture__prompt-section-text {
-  white-space: pre-wrap;
+.cx-team-architecture__prompt-workspace {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  align-items: start;
+  gap: 18px;
+}
+
+.cx-team-architecture__prompt-selector,
+.cx-team-architecture__prompt-content {
+  min-width: 0;
 }
 
 .cx-team-architecture__tokens,
@@ -434,9 +395,13 @@
 .cx-team-architecture__sessions > li {
   display: grid;
   gap: 12px;
-  padding: 14px;
-  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
-  border-radius: 9px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.cx-team-architecture__sessions > li:first-child {
+  padding-top: 0;
+  border-top: 0;
 }
 
 .cx-team-architecture__session-heading {
@@ -451,21 +416,8 @@
     grid-template-columns: 1fr;
   }
 
-  .cx-team-architecture__detail-heading {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .cx-team-architecture__prompt-section-heading {
-    flex-direction: column;
-  }
-
-  .cx-team-architecture__prompt-section-meta {
-    justify-content: flex-start;
-  }
-
-  .cx-team-architecture__section {
-    padding: 14px;
+  .cx-team-architecture__prompt-workspace {
+    grid-template-columns: 1fr;
   }
 
   .cx-team-architecture__chart-scroll {

@@ -1,12 +1,14 @@
 import {
   CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V1,
   CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V2,
+  CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V3,
   CORDISX_PAGE_SCHEMA_V3,
   CORDISX_ROUTE_SCHEMA_V2,
   type CordisXI18n,
   type CordisXLocaleCatalog,
   type CordisXManagerContentNavigationDeclarationV1,
   type CordisXManagerContentNavigationDeclarationV2,
+  type CordisXManagerContentNavigationDeclarationV3,
   type CordisXManagerContentRecordTitleV1,
   type CordisXPageMetadataV3,
   type CordisXPages,
@@ -14,6 +16,7 @@ import {
   type CordisXRouteDefinitionV2,
   type CordisXSlots,
 } from 'cordisx/contracts';
+import { agentAvatarForDefinition } from './agent-definition.js';
 import {
   createTeamArchitecturePage,
   type TeamArchitectureDetailRouteIds,
@@ -142,7 +145,8 @@ readonly CordisXManagerContentNavigationDeclarationV1[] = Object.freeze([
 
 type TeamArchitectureManagerContentNavigationDeclaration =
   | CordisXManagerContentNavigationDeclarationV1
-  | CordisXManagerContentNavigationDeclarationV2;
+  | CordisXManagerContentNavigationDeclarationV2
+  | CordisXManagerContentNavigationDeclarationV3;
 
 function detailTabs(memberId: string): NonNullable<CordisXManagerContentNavigationDeclarationV2['tabs']> {
   return Object.freeze([
@@ -204,9 +208,20 @@ export function teamArchitectureManagerContentDeclarations(
   ]);
   const details = snapshot.configuration.members.flatMap((member, index) => {
     const tabs = detailTabs(member.memberId);
-    return detailRoutes.map(({ tab, routeId }): CordisXManagerContentNavigationDeclarationV2 => Object.freeze({
-      $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V2,
-      schemaVersion: 2,
+    const definition = snapshot.configuration.definitions.find(candidate => (
+      candidate.identity.agentId === member.definition.agentId
+      && candidate.identity.revision === member.definition.revision
+    ));
+    const definitionDisplayName = definition?.name ?? member.label;
+    return detailRoutes.map(({ tab, routeId }):
+    CordisXManagerContentNavigationDeclarationV2 | CordisXManagerContentNavigationDeclarationV3 => Object.freeze({
+      ...(definition === undefined ? {
+        $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V2,
+        schemaVersion: 2 as const,
+      } : {
+        $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V3,
+        schemaVersion: 3 as const,
+      }),
       id: `team-architecture-detail-${index + 1}-${tab}`,
       route: Object.freeze({
         id: routeId,
@@ -221,6 +236,34 @@ export function teamArchitectureManagerContentDeclarations(
         }),
       }),
       tabs,
+      ...(definition === undefined ? {} : {
+        ...(tab !== 'overview' ? {} : {
+          subject: Object.freeze({
+            kind: 'agent-definition' as const,
+            identity: Object.freeze({ ...member.definition }),
+          }),
+        }),
+        recordSummary: Object.freeze({
+          leadingVisual: Object.freeze({
+            kind: 'agent-avatar' as const,
+            avatar: agentAvatarForDefinition(member.definition, snapshot.configuration.definitions),
+          }),
+          title: Object.freeze({
+            namespace: TEAM_ARCHITECTURE_LOCALE_NAMESPACE,
+            key: 'detail.record-title',
+            params: Object.freeze({ label: definitionDisplayName }),
+            fallback: definitionDisplayName,
+          }),
+          ...(definition.description === undefined ? {} : {
+            description: Object.freeze({
+              namespace: TEAM_ARCHITECTURE_LOCALE_NAMESPACE,
+              key: 'detail.record-description',
+              params: Object.freeze({ description: definition.description }),
+              fallback: definition.description,
+            }),
+          }),
+        }),
+      }),
     }));
   });
   return Object.freeze([...TEAM_ARCHITECTURE_MANAGER_CONTENT_DECLARATIONS, ...details]);
@@ -240,7 +283,11 @@ export function teamArchitectureManagerContentRecordTitles(
   })));
 }
 
-const zhCNMessages: TeamArchitectureMessages = Object.freeze({
+type TeamArchitectureMessageCatalog = Readonly<{
+  [Key in keyof TeamArchitectureMessages]: string;
+}>;
+
+const zhCNMessages: TeamArchitectureMessageCatalog = Object.freeze({
   'body.introduction': '以配置中的稳定成员身份展示真实组织关系；定义继承与关联关系不会被当作上下级。',
   'search.label': '搜索团队成员',
   'search.placeholder': '成员名称、成员 ID、Agent ID、版本或声明能力',
@@ -275,6 +322,7 @@ const zhCNMessages: TeamArchitectureMessages = Object.freeze({
   'detail.missing.title': '成员不存在',
   'detail.missing.description': '当前 Agent 配置中没有该稳定 memberId。',
   'detail.record-title': '{label}',
+  'detail.record-description': '{description}',
   'detail.identity': '成员详情',
   'detail.tab.overview': '概览',
   'detail.tab.prompts': '提示词',
@@ -339,7 +387,7 @@ const zhCNMessages: TeamArchitectureMessages = Object.freeze({
   'detail.unavailable': '不可用',
 });
 
-const enMessages: TeamArchitectureMessages = Object.freeze({
+const enMessages: TeamArchitectureMessageCatalog = Object.freeze({
   'body.introduction': 'Shows real reporting lines from stable configured member identities. Definition inheritance and related-member links never become hierarchy.',
   'search.label': 'Search team members',
   'search.placeholder': 'Name, member ID, Agent ID, revision, or declared capability',
@@ -374,6 +422,7 @@ const enMessages: TeamArchitectureMessages = Object.freeze({
   'detail.missing.title': 'Member not found',
   'detail.missing.description': 'The current Agent configuration does not contain this stable memberId.',
   'detail.record-title': '{label}',
+  'detail.record-description': '{description}',
   'detail.identity': 'Member details',
   'detail.tab.overview': 'Overview',
   'detail.tab.prompts': 'Prompts',
