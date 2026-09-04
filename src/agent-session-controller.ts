@@ -31,6 +31,12 @@ import type {
   AgentConversationShellCommandContext,
 } from '@cordisx/protocol/agent-conversation-shell/v7';
 import type {
+  AgentAdmissionTarget,
+  AgentAdmissionTargetOriginService,
+  AgentAdmissionTargetReservationService,
+} from '@cordisx/protocol/agent-admission/v3';
+import type { AgentCommandOrigin } from '@cordisx/protocol/agent-admission/v1';
+import type {
   AgentCancelCause,
   MessageId,
   Session,
@@ -65,6 +71,7 @@ import {
   routeChatroomDriverApproval,
   type ChatroomApprovalRequestExecution,
 } from './approval-bubble.js';
+import { submitChatroomAgentAdmissionV3 } from './agent-admission-v3.js';
 
 export interface ChatroomAgentRuntimeContext {
   readonly agents: CordisXAgentRegistryV1;
@@ -93,6 +100,18 @@ export type ChatroomApprovalPolicy = (
 ) => ApprovalOutcome | Promise<ApprovalOutcome>;
 
 export type ChatroomAgentSendMode = 'send' | 'followup' | 'steer' | 'inject';
+/** One resolved Chatroom intent delivery, before its target origin is issued. */
+export interface ChatroomAgentAdmissionDelivery {
+  readonly memberId: string;
+  readonly runId: string;
+}
+
+export interface ChatroomAgentAdmissionDeliveryOutcome {
+  readonly memberId: string;
+  readonly runId: string;
+  readonly outcome: ChatroomAgentSessionOutcome;
+}
+
 type ChatroomApprovalCommandContext = Extract<
   AgentConversationShellCommandContext,
   { readonly scope: 'approval' }
@@ -444,6 +463,70 @@ export class ChatroomAgentSessionController {
     }
     return {
       status: 'accepted', roomId, runId, messageId,
+      sessionId: acquired.handle.agent.session.id,
+      disposition: acquired.disposition,
+    };
+  }
+
+  /**
+   * Shell v8 target-scoped pre-submit path. Each delivery receives a distinct
+   * opaque Host-issued target origin derived from the same base command
+   * origin. This method intentionally accepts only public contracts and never
+   * falls through to Chatroom's legacy Agent driver methods.
+   */
+  async submitDeliveriesViaAdmissionV3(
+    roomId: string,
+    deliveries: readonly ChatroomAgentAdmissionDelivery[],
+    origin: AgentCommandOrigin,
+    text: string,
+    origins: AgentAdmissionTargetOriginService,
+    reservations: AgentAdmissionTargetReservationService,
+  ): Promise<readonly ChatroomAgentAdmissionDeliveryOutcome[]> {
+    this.assertUsable();
+    if (text.trim() === '') throw new Error('Room message must not be empty.');
+    return await Promise.all(deliveries.map(async delivery => Object.freeze({
+      memberId: delivery.memberId,
+      runId: delivery.runId,
+      outcome: await this.submitDeliveryViaAdmissionV3(
+        roomId, delivery, origin, text, origins, reservations,
+      ),
+    })));
+  }
+
+  private async submitDeliveryViaAdmissionV3(
+    roomId: string,
+    delivery: ChatroomAgentAdmissionDelivery,
+    origin: AgentCommandOrigin,
+    text: string,
+    origins: AgentAdmissionTargetOriginService,
+    reservations: AgentAdmissionTargetReservationService,
+  ): Promise<ChatroomAgentSessionOutcome> {
+    const room = this.requireRoom(roomId);
+    const run = this.requireRun(room, delivery.runId);
+    if (run.memberId !== delivery.memberId) {
+      throw new Error('Chatroom admission delivery does not match the exact Room run member.');
+    }
+    const member = this.requireMember(room, run.memberId);
+    const acquired = await this.ensureOwner(roomId, delivery.runId);
+    if (!('handle' in acquired)) {
+      return { status: acquired.status, roomId, runId: delivery.runId, code: acquireErrorCode(acquired) };
+    }
+    const target: AgentAdmissionTarget = {
+      participantId: member.participantId,
+      memberId: member.memberId,
+      runId: delivery.runId,
+    };
+    const result = await submitChatroomAgentAdmissionV3(origins, reservations, {
+      handle: acquired.handle,
+      origin,
+      target,
+      message: { text },
+    });
+    if (result.status === 'denied') {
+      return { status: 'denied', roomId, runId: delivery.runId, code: result.code };
+    }
+    return {
+      status: 'accepted', roomId, runId: delivery.runId, messageId: result.admission.messageId,
       sessionId: acquired.handle.agent.session.id,
       disposition: acquired.disposition,
     };

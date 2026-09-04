@@ -804,6 +804,74 @@ test('first explicit mutation creates once, persists only SessionId, and retains
   store.dispose();
 });
 
+test('Shell v8 admission acquires the exact owner, issues one target origin, then reserves without a direct Agent send', async () => {
+  const room = roomWithRun();
+  const member = room.memberships.find(candidate => candidate.memberId === 'reviewer');
+  const harness = runtimeHarness({ room });
+  const store = DurableChatroomRoomStore.memory([room]);
+  const controller = new ChatroomAgentSessionController(
+    { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+  const origin = {
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-command-origin.v1.schema.json',
+    contract: 'cordisx.agent-command-origin/v1', schemaVersion: 1,
+    originId: 'origin-v8', binding: { bindingId: 'binding-v8', ownerGeneration: 'owner-v8' },
+    generation: 'shell-v8', executionId: 'execution-v8', commandId: CHATROOM_COMMAND_SUBMIT,
+    scope: 'composer-submit',
+    room: { roomId: room.id, participantId: 'command-room', memberId: 'command-room', runId: 'command-run' },
+  };
+  let issued;
+  let reserved;
+  const origins = {
+    issue: async request => {
+      issued = request;
+      return {
+        status: 'issued',
+        origin: {
+          $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-admission-target-origin.v3.schema.json',
+          contract: 'cordisx.agent-admission-target-origin/v3', schemaVersion: 3, token: 'opaque-review-run',
+        },
+      };
+    },
+  };
+  const reservations = {
+    reserve: async request => {
+      reserved = request;
+      return {
+        status: 'reserved',
+        reservation: {
+          reservationId: 'reservation-v8',
+          submit: async () => admission('host-v8-message'),
+          revoke: async () => {},
+        },
+      };
+    },
+  };
+
+  const results = await controller.submitDeliveriesViaAdmissionV3(
+    room.id, [{ memberId: 'reviewer', runId: 'review-run' }], origin,
+    'Review the exact v8 dispatch.', origins, reservations,
+  );
+  const result = results[0].outcome;
+
+  assert.equal(result.status, 'accepted');
+  assert.equal(result.messageId, 'host-v8-message');
+  assert.equal(result.disposition, 'created');
+  assert.equal(harness.creates.length, 1);
+  assert.deepEqual(issued, {
+    origin,
+    target: { participantId: member.participantId, memberId: member.memberId, runId: 'review-run' },
+  });
+  assert.equal(reserved.handle, harness.handles[0].handle, 'reserve receives the acquired exact owner handle');
+  assert.equal(reserved.origin.token, 'opaque-review-run');
+  assert.deepEqual(reserved.message, { text: 'Review the exact v8 dispatch.' });
+  assert.deepEqual(harness.handles[0].calls.messages, [], 'v8 admission never falls through to Agent direct dispatch');
+  await controller.dispose();
+  store.dispose();
+});
+
 test('explicit mention stays in the durable Room display while Agent admission receives stripped dispatch text', async () => {
   const domain = new ChatroomConversationController();
   domain.rooms.upsert(createRoom({ id: 'room', title: 'Room' }));
