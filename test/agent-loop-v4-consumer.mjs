@@ -100,7 +100,7 @@ class V4Client {
     this.calls.push(command);
     const created = binding();
     return {
-      $schema: 'result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
       commandId: command.commandId, type: command.type, status: 'accepted',
       authorization: { capability: 'tasks.create', state: 'allowed', code: 'allowed' },
       binding: created, detailsUrl: { url: 'app:simulator/task-lead', target: 'host' },
@@ -111,7 +111,7 @@ class V4Client {
   async requestMemberSelfIntroduction(command) {
     this.calls.push(command);
     return {
-      $schema: 'result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
       commandId: command.commandId, type: command.type, status: 'accepted',
       authorization: { capability: 'turns.introduce', state: 'allowed', code: 'allowed' },
       binding: command.binding,
@@ -125,7 +125,7 @@ class V4Client {
   async cancelMemberSelfIntroduction(command) {
     this.calls.push(command);
     return {
-      $schema: 'result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
       commandId: command.commandId, type: command.type, status: 'accepted',
       authorization: { capability: 'turns.introduce', state: 'allowed', code: 'allowed' },
       binding: command.binding,
@@ -139,7 +139,7 @@ class V4Client {
   async decideApproval(command) {
     this.calls.push(command);
     return {
-      $schema: 'result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
       commandId: command.commandId, type: command.type, status: 'accepted',
       authorization: { capability: 'approvals.decide', state: 'allowed', code: 'allowed' },
       binding: command.binding, turn: command.turn, approvalId: command.approvalId,
@@ -151,7 +151,7 @@ class V4Client {
   async send(command) {
     this.calls.push(command);
     return {
-      $schema: 'result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
       commandId: command.commandId, type: command.type, status: 'accepted',
       authorization: { capability: 'turns.submit', state: 'allowed', code: 'allowed' },
       binding: command.binding, messageId: `message-${command.commandId}`, turn: `turn-${command.commandId}`,
@@ -162,7 +162,7 @@ class V4Client {
   async subscribe(bindingValue, afterSequence) {
     this.calls.push({ type: 'subscribe', binding: bindingValue, afterSequence });
     const subscription = {
-      $schema: 'subscription', contract: 'cordisx.agent-loop-event-subscription/v4', schemaVersion: 4,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event-subscription.v4.schema.json', contract: 'cordisx.agent-loop-event-subscription/v4', schemaVersion: 4,
       subscriptionId: 'subscription-v4', binding: bindingValue.binding,
       afterSequence, snapshotSequence: afterSequence,
     };
@@ -200,7 +200,9 @@ test('durably requests one exact free-form member introduction after binding com
   assert.equal(introductions[0].memberId, 'leader');
   assert.equal(introductions[0].runId, 'run-lead');
   assert.equal(introductions[0].commandId,
-    memberSelfIntroductionOperationId('room-v4', 'leader', 'leader', 'run-lead'));
+    memberSelfIntroductionOperationId(
+      'room-v4', 'leader', 'leader', 'run-lead', introductions[0].binding,
+    ));
   assert.match(introductions[0].commandId, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/);
   const stored = store.rooms.get('room-v4').runs[0].selfIntroduction;
   assert.equal(stored.state, 'accepted');
@@ -216,7 +218,7 @@ test('replays an unknown introduction with the same exact operation and never mi
       this.attempts += 1;
       if (this.attempts === 1) throw new Error('transport outcome unknown');
       return {
-        $schema: 'result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
+        $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
         commandId: command.commandId, type: command.type, status: 'accepted',
         authorization: { capability: 'turns.introduce', state: 'allowed', code: 'allowed' },
         binding: command.binding,
@@ -242,7 +244,7 @@ test('replays an unknown introduction with the same exact operation and never mi
   assert.equal(store.rooms.get('room-replay').runs[0].selfIntroduction.acceptance.disposition, 'reconciled');
 });
 
-test('reload rebind fences an unknown introduction instead of minting a new operation', async () => {
+test('reload hydration preserves an unknown introduction without minting a new operation', async () => {
   let room = markMemberSelfIntroductionSendingUnknown(
     planMemberSelfIntroduction(readyRoom('room-rebind-unknown'), 'run-lead'),
     'run-lead',
@@ -254,7 +256,7 @@ test('reload rebind fences an unknown introduction instead of minting a new oper
       this.calls.push(command);
       const rebound = { ...binding(2), task: command.target.task };
       return {
-        $schema: 'result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
+        $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
         commandId: command.commandId, type: command.type, status: 'accepted',
         authorization: { capability: 'tasks.content.read', state: 'allowed', code: 'allowed' },
         binding: rebound, detailsUrl: { url: 'app:simulator/task-lead', target: 'host' },
@@ -269,8 +271,9 @@ test('reload rebind fences an unknown introduction instead of minting a new oper
   await controller.hydrate();
   room = store.rooms.get('room-rebind-unknown');
   assert.equal(room.runs[0].selfIntroduction.operationId, originalOperationId);
-  assert.equal(room.runs[0].selfIntroduction.state, 'attention');
-  assert.equal(room.runs[0].selfIntroduction.attention.code, 'binding-conflict');
+  assert.equal(room.runs[0].selfIntroduction.state, 'sending-unknown');
+  assert.equal(room.runs[0].selfIntroduction.attention, undefined);
+  assert.equal(client.calls.some(call => call.type === 'create-or-bind'), false);
   assert.equal(client.calls.some(call => call.type === 'request-member-self-introduction'), false);
 });
 
@@ -295,7 +298,7 @@ test('projects only exact purpose and causation as one Agent-authored introducti
   let room = planMemberSelfIntroduction(readyRoom(), 'run-lead');
   const operationId = room.runs[0].selfIntroduction.operationId;
   const event = {
-    $schema: 'event', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
     eventId: 'event-introduction', binding: binding().binding, sequence: 0,
     occurredAt: '2026-08-31T06:00:00.000Z', type: 'message', turn: 'turn-introduction',
     causation: { operationId },
@@ -333,13 +336,15 @@ test('projects only exact purpose and causation as one Agent-authored introducti
   assert.equal(replay.items.length, 1);
   assert.equal(replay.timelineSequence, room.timelineSequence);
 
-  assert.throws(() => projectAgentLoopEvent(
+  const foreign = projectAgentLoopEvent(
     { ...room, runs: [{ ...room.runs[0], agentLoopCursor: -1 }] },
     'run-lead', {
       ...event, eventId: 'event-wrong-causation', sequence: 11,
       causation: { operationId: 'different-operation' },
     },
-  ), /durable request/);
+  ).room;
+  assert.equal(foreign.items.length, 1);
+  assert.equal(foreign.runs[0].agentLoopCursor, 11);
 });
 
 test('maps Shell approval actions to exact v4 decisions and completes by causation', async () => {
@@ -364,7 +369,7 @@ test('maps Shell approval actions to exact v4 decisions and completes by causati
 
   let room = store.rooms.get('room-approval');
   room = projectAgentLoopEvent(room, 'run-lead', {
-    $schema: 'event', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
     eventId: 'approval-pending', binding: binding().binding, sequence: 0,
     occurredAt: '2026-08-31T06:01:00.000Z', type: 'approval', turn: 'turn-approval',
     approval: { approvalId: 'approval-1', kind: 'command', state: 'pending' },
@@ -375,7 +380,7 @@ test('maps Shell approval actions to exact v4 decisions and completes by causati
     ['approve', 'approval.approve'], ['deny', 'approval.deny'], ['cancel', 'approval.cancel'],
   ]);
   room = projectAgentLoopEvent(room, 'run-lead', {
-    $schema: 'event', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
     eventId: 'approval-denied', binding: binding().binding, sequence: 1,
     occurredAt: '2026-08-31T06:02:00.000Z', type: 'approval', turn: 'turn-approval',
     causation: { operationId: result.operationId },
@@ -390,7 +395,7 @@ test('maps Shell approval actions to exact v4 decisions and completes by causati
 test('routes each Shell v3 approval action to its explicit v4 terminal decision token', () => {
   let room = readyRoom('room-shell-approval');
   room = projectAgentLoopEvent(room, 'run-lead', {
-    $schema: 'event', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
     eventId: 'approval-shell-pending', binding: binding().binding, sequence: 0,
     occurredAt: '2026-08-31T06:03:00.000Z', type: 'approval', turn: 'turn-shell',
     approval: { approvalId: 'approval-shell', kind: 'file-change', state: 'pending' },
@@ -442,7 +447,7 @@ test('dispose fences late introduction, approval, and cancellation results witho
     const introductionCommand = await introductionStarted.promise;
     introductionController.dispose();
     introductionResult.resolve({
-      $schema: 'result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
       commandId: introductionCommand.commandId, type: introductionCommand.type, status: 'accepted',
       authorization: { capability: 'turns.introduce', state: 'allowed', code: 'allowed' },
       binding: introductionCommand.binding,
@@ -480,7 +485,7 @@ test('dispose fences late introduction, approval, and cancellation results witho
     const approvalCommand = await approvalStarted.promise;
     approvalController.dispose();
     approvalResult.resolve({
-      $schema: 'result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
       commandId: approvalCommand.commandId, type: approvalCommand.type, status: 'accepted',
       authorization: { capability: 'approvals.decide', state: 'allowed', code: 'allowed' },
       binding: approvalCommand.binding, turn: approvalCommand.turn,
@@ -517,7 +522,7 @@ test('dispose fences late introduction, approval, and cancellation results witho
     const cancellationCommand = await cancellationStarted.promise;
     cancellationController.dispose();
     cancellationResult.resolve({
-      $schema: 'result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
       commandId: cancellationCommand.commandId, type: cancellationCommand.type, status: 'accepted',
       authorization: { capability: 'turns.introduce', state: 'allowed', code: 'allowed' },
       binding: cancellationCommand.binding,
@@ -556,8 +561,8 @@ test('cancellation is terminal against a late accepted result and assistant even
   });
   assert.equal(afterLateAcceptance, room);
   assert.equal(afterLateAcceptance.runs[0].selfIntroduction.state, 'cancelled');
-  assert.throws(() => projectAgentLoopEvent(afterLateAcceptance, 'run-lead', {
-    $schema: 'event', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
+  const afterLateEvent = projectAgentLoopEvent(afterLateAcceptance, 'run-lead', {
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
     eventId: 'event-late-introduction', binding: binding().binding, sequence: 0,
     occurredAt: '2026-08-31T06:10:00.000Z', type: 'message', turn: 'turn-introduction',
     causation: { operationId: introduction.operationId },
@@ -565,7 +570,10 @@ test('cancellation is terminal against a late accepted result and assistant even
       messageId: 'message-introduction', role: 'assistant', purpose: 'member-self-introduction',
       content: [{ kind: 'text', text: 'Too late.' }],
     },
-  }), /cancelled member self-introduction/);
+  }).room;
+  assert.equal(afterLateEvent.items.length, 0);
+  assert.equal(afterLateEvent.runs[0].agentLoopCursor, 0);
+  assert.equal(afterLateEvent.runs[0].selfIntroduction.state, 'cancelled');
 });
 
 test('keeps live approval and cancellation transport failures observable', async () => {
@@ -624,7 +632,7 @@ test('dispose fences accepted, denied, and rejected send outcomes before CAS or 
       controller.dispose();
       if (outcomeKind === 'accepted') {
         result.resolve({
-          $schema: 'result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
+          $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
           commandId: command.commandId, type: command.type, status: 'accepted',
           authorization: { capability: 'turns.submit', state: 'allowed', code: 'allowed' },
           binding: command.binding, messageId: 'message-late-send', turn: 'turn-late-send',
@@ -632,7 +640,7 @@ test('dispose fences accepted, denied, and rejected send outcomes before CAS or 
         });
       } else if (outcomeKind === 'denied') {
         result.resolve({
-          $schema: 'result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
+          $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
           commandId: command.commandId, type: command.type, status: 'denied',
           authorization: { capability: 'turns.submit', state: 'denied', code: 'permission-denied' },
           code: 'permission-denied',
@@ -653,7 +661,7 @@ test('dispose fences accepted, denied, and rejected send outcomes before CAS or 
   }
 });
 
-test('dispose fences late create and hydrate-rebind outcomes before binding/details commit', async t => {
+test('dispose fences late create and hydration-probe outcomes before binding/details commit', async t => {
   await t.test('create accepted', async () => {
     const started = deferred();
     const result = deferred();
@@ -675,7 +683,7 @@ test('dispose fences late create and hydrate-rebind outcomes before binding/deta
     const command = await started.promise;
     controller.dispose();
     result.resolve({
-      $schema: 'result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
       commandId: command.commandId, type: command.type, status: 'accepted',
       authorization: { capability: 'tasks.create', state: 'allowed', code: 'allowed' },
       binding: binding(), detailsUrl: { url: 'app:simulator/task-late-create', target: 'host' },
@@ -716,7 +724,7 @@ test('dispose fences late create and hydrate-rebind outcomes before binding/deta
       controller.dispose();
       if (outcomeKind === 'denied') {
         result.resolve({
-          $schema: 'result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
+          $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
           commandId: command.commandId, type: command.type, status: 'denied',
           authorization: { capability: 'tasks.create', state: 'denied', code: 'permission-denied' },
           code: 'permission-denied',
@@ -736,51 +744,56 @@ test('dispose fences late create and hydrate-rebind outcomes before binding/deta
   }
 
   for (const outcomeKind of ['accepted', 'denied', 'rejected']) {
-    await t.test(`hydrate bind ${outcomeKind}`, async () => {
+    await t.test(`hydrate probe ${outcomeKind}`, async () => {
       const started = deferred();
       const result = deferred();
-      class DeferredBindClient extends V4Client {
-        async createOrBind(command) {
-          this.calls.push(command);
-          started.resolve(command);
+      class DeferredProbeClient extends V4Client {
+        async subscribe(bindingValue, afterSequence) {
+          this.calls.push({ type: 'subscribe', binding: bindingValue, afterSequence });
+          started.resolve({ binding: bindingValue, afterSequence });
           return await result.promise;
         }
       }
       const roomId = `room-bind-${outcomeKind}`;
       const original = readyRoom(roomId);
       const store = DurableChatroomRoomStore.memory([original]);
-      const client = new DeferredBindClient();
+      const client = new DeferredProbeClient();
       const controller = new ChatroomAgentLoopController(
         client, CHATROOM_DEFAULT_AGENT_CONFIGURATION, store,
       );
       const pending = controller.hydrate();
-      const command = await started.promise;
+      const probe = await started.promise;
       controller.dispose();
       if (outcomeKind === 'accepted') {
+        const subscription = {
+          $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event-subscription.v4.schema.json',
+          contract: 'cordisx.agent-loop-event-subscription/v4', schemaVersion: 4,
+          subscriptionId: `subscription-${outcomeKind}`, binding: probe.binding.binding,
+          afterSequence: probe.afterSequence, snapshotSequence: probe.afterSequence,
+        };
         result.resolve({
-          $schema: 'result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
-          commandId: command.commandId, type: command.type, status: 'accepted',
+          status: 'accepted',
           authorization: { capability: 'tasks.content.read', state: 'allowed', code: 'allowed' },
-          binding: { ...binding(2), task: command.target.task },
-          detailsUrl: { url: 'app:simulator/task-late-bind', target: 'host' },
-          delivery: { disposition: 'reconciled' },
+          handle: {
+            subscription, unsubscribe() {},
+            pages: { async *[Symbol.asyncIterator]() {} },
+          },
         });
       } else if (outcomeKind === 'denied') {
         result.resolve({
-          $schema: 'result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
-          commandId: command.commandId, type: command.type, status: 'denied',
+          status: 'denied',
           authorization: { capability: 'tasks.content.read', state: 'denied', code: 'permission-denied' },
-          code: 'permission-denied',
         });
       } else {
-        result.reject(new Error('late rejected bind'));
+        result.reject(new Error('late rejected probe'));
       }
       await pending;
       const run = store.rooms.get(roomId).runs[0];
       assert.deepEqual(run.taskBinding.binding, original.runs[0].taskBinding.binding);
       assert.deepEqual(run.detailsUrl, original.runs[0].detailsUrl);
-      assert.equal(run.rebind.state, 'sending-unknown');
-      assert.equal(client.calls.filter(call => call.type === 'subscribe').length, 0);
+      assert.equal(run.rebind, undefined);
+      assert.equal(client.calls.filter(call => call.type === 'subscribe').length, 1);
+      assert.equal(client.calls.filter(call => call.type === 'create-or-bind').length, 0);
     });
   }
 });
@@ -814,7 +827,7 @@ test('isolates Lead and Reviewer introduction and approval operations in one Roo
     turn: 'turn-reviewer-introduction', messageId: 'message-reviewer-introduction', disposition: 'executed',
   });
   room = projectAgentLoopEvent(room, 'run-reviewer', {
-    $schema: 'event', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
     eventId: 'event-reviewer-introduction', binding: memberBinding('reviewer').binding, sequence: 0,
     occurredAt: '2026-08-31T06:11:00.000Z', type: 'message', turn: 'turn-reviewer-introduction',
     causation: { operationId: reviewerIntroduction.operationId },

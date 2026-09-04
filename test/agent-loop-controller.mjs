@@ -5,6 +5,7 @@ import { CHATROOM_DEFAULT_AGENT_CONFIGURATION } from '../dist/agent-definition.j
 import { ChatroomAgentLoopController } from '../dist/agent-loop-controller.js';
 import { projectAgentLoopEvent } from '../dist/agent-loop-projection.js';
 import {
+  acceptRoomDelivery,
   canonicalRoomPayloadHash,
   markRoomDeliverySendingUnknown,
   planRoomDelivery,
@@ -26,13 +27,14 @@ import {
 const definitionFor = memberId => CHATROOM_DEFAULT_AGENT_CONFIGURATION.members
   .find(member => member.memberId === memberId).definition;
 const taskBinding = (number, definition) => ({
-  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-task-binding.v2.schema.json',
-  contract: 'cordisx.agent-loop-task-binding/v2', schemaVersion: 2,
+  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-task-binding.v4.schema.json',
+  contract: 'cordisx.agent-loop-task-binding/v4', schemaVersion: 4,
   binding: { bindingId: `Opaque:Binding-${number}`, generation: 1 },
   definition,
   task: `Opaque:Task-${number}`,
   state: 'active',
 });
+const acceptedTurnFor = binding => `turn-${binding.binding.bindingId}`;
 
 function roomWithRuns(id, runMembers) {
   let room = createRoom({ id, title: id });
@@ -40,6 +42,38 @@ function roomWithRuns(id, runMembers) {
     room = addRoomRun(room, { runId: `${id}-run-${index + 1}`, memberId, title: `Run ${index + 1}`, status: 'creating' });
   }
   return room;
+}
+
+function acceptConversationDelivery(room, runId, userItemId, binding) {
+  const run = room.runs.find(candidate => candidate.runId === runId);
+  const member = room.memberships.find(candidate => candidate.memberId === run.memberId);
+  const acknowledgement = prepareRoomAcknowledgement(room, CHATROOM_DEFAULT_AGENT_CONFIGURATION, {
+    userItemId, memberId: member.memberId, runId,
+  });
+  room = markRoomAcknowledgementSent(
+    acknowledgement.room,
+    acknowledgement.acknowledgement.acknowledgementKey,
+  );
+  const deliveryId = `fixture-delivery-${userItemId}`;
+  const operationId = `fixture-send-${userItemId}`;
+  room = prepareRoomOutboxDelivery(room, {
+    deliveryId, userItemId, memberId: member.memberId, runId, sendOperationId: operationId,
+  }).room;
+  room = planRoomDelivery(room, {
+    deliveryId, operationId, userItemId, participantId: member.participantId,
+    memberId: member.memberId, runId, issuedAt: '2026-08-31T04:59:59.000Z',
+    operation: {
+      kind: 'send', acknowledgementKey: acknowledgement.acknowledgement.acknowledgementKey,
+      payload: { commandId: operationId, type: 'send', binding },
+    },
+  }).room;
+  return {
+    room: acceptRoomDelivery(room, operationId, {
+      kind: 'send', disposition: 'executed', firstObservedAt: '2026-08-31T05:00:00.000Z',
+      messageId: `fixture-message-${userItemId}`, turn: acceptedTurnFor(binding),
+    }),
+    acceptance: { operationId, turn: acceptedTurnFor(binding) },
+  };
 }
 
 function ownerDocumentsFixture() {
@@ -89,6 +123,7 @@ class FakeAgentLoopClient {
   live = false;
   unsubscribed = 0;
   events = new Map();
+  acceptedDeliveries = new Map();
 
   async createOrBind(command) {
     this.calls.push(command);
@@ -102,7 +137,7 @@ class FakeAgentLoopClient {
       }
       : generated;
     return {
-      $schema: 'agent-loop-result', contract: 'cordisx.agent-loop-result/v2', schemaVersion: 2,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
       commandId: command.commandId, type: 'create-or-bind', status: 'accepted',
       authorization: { capability: 'tasks.create', state: 'allowed', code: 'allowed' }, binding,
       detailsUrl: { url: `app:task/${this.created}`, target: 'host' },
@@ -112,13 +147,24 @@ class FakeAgentLoopClient {
 
   async subscribe(binding, afterSequence) {
     this.calls.push({ type: 'subscribe', binding, afterSequence });
-    const events = this.events.get(binding.binding.bindingId) ?? [];
+    const acceptedDelivery = this.acceptedDeliveries.get(binding.binding.bindingId);
+    const configuredEvents = this.events.get(binding.binding.bindingId) ?? [];
+    const events = configuredEvents.length > 0 || acceptedDelivery === undefined
+      ? configuredEvents
+      : [{
+        $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json',
+        contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
+        eventId: `completed-${binding.binding.bindingId}`, binding: binding.binding,
+        sequence: afterSequence + 1, occurredAt: '2026-08-31T05:00:01.000Z',
+        type: 'lifecycle', turn: acceptedDelivery.turn,
+        causation: { operationId: acceptedDelivery.operationId }, lifecycle: { phase: 'turn.completed' },
+      }];
     let release = () => {};
     const terminal = new Promise(resolve => { release = resolve; });
     const client = this;
     const subscription = {
-      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event-subscription.v1.schema.json',
-      contract: 'cordisx.agent-loop-event-subscription/v2', schemaVersion: 2,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event-subscription.v4.schema.json',
+      contract: 'cordisx.agent-loop-event-subscription/v4', schemaVersion: 4,
       subscriptionId: `subscription-${binding.binding.bindingId}`,
       binding: binding.binding, afterSequence, snapshotSequence: Math.max(afterSequence, events.length - 1),
     };
@@ -131,8 +177,8 @@ class FakeAgentLoopClient {
           for (let offset = 0; offset < events.length; offset += 64) {
             const selected = events.slice(offset, offset + 64);
             yield {
-              $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event-page.v1.schema.json',
-              contract: 'cordisx.agent-loop-event-page/v2', schemaVersion: 2,
+              $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event-page.v4.schema.json',
+              contract: 'cordisx.agent-loop-event-page/v4', schemaVersion: 4,
               subscription,
               afterSequence: cursor,
               phase: 'replay',
@@ -152,24 +198,29 @@ class FakeAgentLoopClient {
     this.calls.push(command);
     if (command.content.some(part => part.kind === 'image-ref')) {
       return {
-        $schema: 'agent-loop-result', contract: 'cordisx.agent-loop-result/v2', schemaVersion: 2,
+        $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
         commandId: command.commandId, type: 'send', status: 'unavailable',
         authorization: { capability: 'turns.submit', state: 'unavailable', code: 'unsupported' },
       };
     }
+    const acceptance = {
+      operationId: command.commandId,
+      turn: acceptedTurnFor(command.binding),
+    };
+    this.acceptedDeliveries.set(command.binding.binding.bindingId, acceptance);
     return {
-      $schema: 'agent-loop-result', contract: 'cordisx.agent-loop-result/v2', schemaVersion: 2,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
       commandId: command.commandId, type: 'send', status: 'accepted',
       authorization: { capability: 'turns.submit', state: 'allowed', code: 'allowed' },
       binding: command.binding, messageId: `Opaque:Message-${this.calls.length}`,
-      turn: `turn-${this.calls.length}`, delivery: { disposition: 'executed' },
+      turn: acceptance.turn, delivery: { disposition: 'executed' },
     };
   }
 
   async requestMemberSelfIntroduction(command) {
     this.calls.push(command);
     return {
-      $schema: 'agent-loop-result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
       commandId: command.commandId, type: command.type, status: 'accepted',
       authorization: { capability: 'turns.introduce', state: 'allowed', code: 'allowed' },
       binding: command.binding,
@@ -182,7 +233,7 @@ class FakeAgentLoopClient {
   async cancelMemberSelfIntroduction(command) {
     this.calls.push(command);
     return {
-      $schema: 'agent-loop-result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
       commandId: command.commandId, type: command.type, status: 'accepted',
       authorization: { capability: 'turns.introduce', state: 'allowed', code: 'allowed' },
       binding: command.binding,
@@ -196,7 +247,7 @@ class FakeAgentLoopClient {
   async decideApproval(command) {
     this.calls.push(command);
     return {
-      $schema: 'agent-loop-result', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
       commandId: command.commandId, type: command.type, status: 'accepted',
       authorization: { capability: 'approvals.decide', state: 'allowed', code: 'allowed' },
       binding: command.binding, turn: command.turn, approvalId: command.approvalId,
@@ -214,8 +265,8 @@ class DeferredPageAgentLoopClient extends FakeAgentLoopClient {
   async subscribe(binding, afterSequence) {
     this.calls.push({ type: 'subscribe', binding, afterSequence });
     const subscription = {
-      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event-subscription.v1.schema.json',
-      contract: 'cordisx.agent-loop-event-subscription/v2', schemaVersion: 2,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event-subscription.v4.schema.json',
+      contract: 'cordisx.agent-loop-event-subscription/v4', schemaVersion: 4,
       subscriptionId: `subscription-${binding.binding.bindingId}`,
       binding: binding.binding, afterSequence, snapshotSequence: afterSequence + 1,
     };
@@ -233,9 +284,11 @@ class DeferredPageAgentLoopClient extends FakeAgentLoopClient {
 
 class ImmediatePageAgentLoopClient extends FakeAgentLoopClient {
   async subscribe(binding, afterSequence) {
+    this.calls.push({ type: 'subscribe', binding, afterSequence });
+    const client = this;
     const subscription = {
-      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event-subscription.v1.schema.json',
-      contract: 'cordisx.agent-loop-event-subscription/v2', schemaVersion: 2,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event-subscription.v4.schema.json',
+      contract: 'cordisx.agent-loop-event-subscription/v4', schemaVersion: 4,
       subscriptionId: `subscription-${binding.binding.bindingId}`,
       binding: binding.binding, afterSequence, snapshotSequence: afterSequence + 1,
     };
@@ -243,7 +296,14 @@ class ImmediatePageAgentLoopClient extends FakeAgentLoopClient {
       status: 'accepted', authorization: { capability: 'tasks.content.read', state: 'allowed', code: 'allowed' },
       handle: {
         subscription, unsubscribe() {},
-        pages: { async *[Symbol.asyncIterator]() { yield assistantPage(binding, afterSequence + 1); } },
+        pages: { async *[Symbol.asyncIterator]() {
+          yield assistantPage(
+            binding,
+            afterSequence + 1,
+            'Late reply',
+            client.acceptedDeliveries.get(binding.binding.bindingId),
+          );
+        } },
       },
     };
   }
@@ -270,23 +330,30 @@ class InterleavedReviewerCreateClient extends DeferredPageAgentLoopClient {
   }
 }
 
-function assistantPage(binding, sequence, text = 'Late reply') {
+function assistantPage(binding, sequence, text = 'Late reply', acceptedDelivery) {
   const subscription = {
-    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event-subscription.v1.schema.json',
-    contract: 'cordisx.agent-loop-event-subscription/v2', schemaVersion: 2,
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event-subscription.v4.schema.json',
+    contract: 'cordisx.agent-loop-event-subscription/v4', schemaVersion: 4,
     subscriptionId: `subscription-${binding.binding.bindingId}`,
     binding: binding.binding, afterSequence: sequence - 1, snapshotSequence: sequence,
   };
   return {
-    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event-page.v1.schema.json',
-    contract: 'cordisx.agent-loop-event-page/v2', schemaVersion: 2,
-    subscription, afterSequence: sequence - 1, phase: 'live', nextAfterSequence: sequence, hasMore: false,
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event-page.v4.schema.json',
+    contract: 'cordisx.agent-loop-event-page/v4', schemaVersion: 4,
+    subscription, afterSequence: sequence - 1, phase: 'live',
+    nextAfterSequence: acceptedDelivery === undefined ? sequence : sequence + 1, hasMore: false,
     events: [{
-      $schema: 'event', contract: 'cordisx.agent-loop-event/v2', schemaVersion: 2,
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
       eventId: `event-${sequence}`, binding: binding.binding, sequence,
       occurredAt: '2026-08-31T05:00:00.000Z', type: 'message',
+      turn: acceptedDelivery?.turn ?? acceptedTurnFor(binding),
       message: { messageId: `assistant-${sequence}`, role: 'assistant', purpose: 'conversation', content: [{ kind: 'text', text }] },
-    }],
+    }, ...(acceptedDelivery === undefined ? [] : [{
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
+      eventId: `event-${sequence + 1}`, binding: binding.binding, sequence: sequence + 1,
+      occurredAt: '2026-08-31T05:00:01.000Z', type: 'lifecycle', turn: acceptedDelivery.turn,
+      causation: { operationId: acceptedDelivery.operationId }, lifecycle: { phase: 'turn.completed' },
+    }])],
   };
 }
 
@@ -343,13 +410,14 @@ test('preserves both run projections while a second same-Room fanout delivery is
   await controller.sendToRoom(
     'room-fanout', 'room-fanout-run-1', 'user-lead', [{ kind: 'text', text: 'Lead request' }],
   );
+  await controller.waitForProjectionDrain();
   await controller.sendToRoom(
     'room-fanout', 'room-fanout-run-2', 'user-reviewer', [{ kind: 'text', text: 'Review request' }],
   );
   await controller.waitForProjectionDrain();
 
   const room = store.rooms.get('room-fanout');
-  assert.deepEqual(room.runs.map(run => run.agentLoopCursor), [0, 0]);
+  assert.deepEqual(room.runs.map(run => run.agentLoopCursor), [1, 1]);
   assert.deepEqual(room.items.filter(item => item.kind === 'message').map(item => item.author.participantId).sort(),
     ['leader', 'reviewer']);
   assert.equal(room.acknowledgements.length, 2);
@@ -370,7 +438,12 @@ test('merges a Lead event that lands while a Reviewer create result is in flight
     'room-interleaved-create', 'room-interleaved-create-run-2', 'user-reviewer', [{ kind: 'text', text: 'Review request' }],
   );
   await client.secondCreateStarted.promise;
-  client.page.resolve(assistantPage(leadBinding, 0, 'Lead event during Reviewer create'));
+  client.page.resolve(assistantPage(
+    leadBinding,
+    0,
+    'Lead event during Reviewer create',
+    client.acceptedDeliveries.get(leadBinding.binding.bindingId),
+  ));
   await new Promise(resolve => setImmediate(resolve));
   client.releaseSecondCreate.resolve();
 
@@ -378,7 +451,7 @@ test('merges a Lead event that lands while a Reviewer create result is in flight
   await controller.waitForProjectionDrain();
   const room = store.rooms.get('room-interleaved-create');
   assert.equal(room.runs[1].taskBinding?.state, 'active');
-  assert.equal(room.runs[0].agentLoopCursor, 0);
+  assert.equal(room.runs[0].agentLoopCursor, 1);
   assert.equal(room.items.some(item => item.kind === 'message' && item.author.participantId === 'leader'), true);
   controller.dispose();
 });
@@ -395,13 +468,18 @@ test('plans a Reviewer create against the latest Room when a Lead event lands fi
   const reviewer = controller.sendToRoom(
     'room-interleaved-plan', 'room-interleaved-plan-run-2', 'user-reviewer', [{ kind: 'text', text: 'Review request' }],
   );
-  client.page.resolve(assistantPage(leadBinding, 0, 'Lead event before Reviewer create planning'));
+  client.page.resolve(assistantPage(
+    leadBinding,
+    0,
+    'Lead event before Reviewer create planning',
+    client.acceptedDeliveries.get(leadBinding.binding.bindingId),
+  ));
 
   assert.equal((await reviewer).status, 'accepted');
   await controller.waitForProjectionDrain();
   const room = store.rooms.get('room-interleaved-plan');
   assert.equal(room.runs[1].taskBinding?.state, 'active');
-  assert.equal(room.runs[0].agentLoopCursor, 0);
+  assert.equal(room.runs[0].agentLoopCursor, 1);
   assert.equal(room.items.some(item => item.kind === 'message' && item.author.participantId === 'leader'), true);
   controller.dispose();
 });
@@ -413,7 +491,9 @@ test('latches a live incompatible projection collision without advancing the run
     room, 'room-collision-run-1', active,
     createStoredRoomRunDetailsUrl({ url: 'app:task/collision', target: 'host' }),
   );
-  const collisionEvent = assistantPage(active, 0).events[0];
+  const accepted = acceptConversationDelivery(room, 'room-collision-run-1', 'fixture-user', active);
+  room = accepted.room;
+  const collisionEvent = assistantPage(active, 0, 'Late reply', accepted.acceptance).events[0];
   const derived = projectAgentLoopEvent(room, 'room-collision-run-1', collisionEvent).room.items[0];
   room = createRoom({
     ...room,
@@ -430,10 +510,10 @@ test('latches a live incompatible projection collision without advancing the run
   await controller.sendToRoom(
     'room-collision', 'room-collision-run-1', 'user-collision', [{ kind: 'text', text: 'Trigger' }],
   );
-  await assert.rejects(controller.waitForProjectionDrain(), /projection identity collided/);
+  await controller.waitForProjectionDrain();
   assert.equal(store.rooms.get('room-collision').runs[0].agentLoopCursor, -1);
   assert.equal(store.rooms.get('room-collision').items[0].kind, 'status');
-  await controller.waitForProjectionDrain();
+  assert.equal(store.rooms.get('room-collision').runs[0].presence.failure.code, 'event-projection-failed');
   controller.dispose();
 });
 
@@ -491,7 +571,7 @@ test('never replays a create operation when the rebuilt catalog command hash cha
   const client = new FakeAgentLoopClient();
   const controller = new ChatroomAgentLoopController(client, CHATROOM_DEFAULT_AGENT_CONFIGURATION, store);
 
-  await controller.hydrate();
+  await controller.recoverUnknownDeliveries(roomId, controller.controllerGeneration);
   assert.equal(client.calls.some(call => call.type === 'create-or-bind' || call.type === 'send'), false);
   const durable = store.rooms.get(roomId).deliveries.find(delivery => delivery.operationId === createOperationId);
   assert.equal(durable.attention.code, 'reconciliation-required');
@@ -510,7 +590,9 @@ test('startup replays one planned/sending-unknown create with the same id and id
   const first = new ChatroomAgentLoopController(unknown, CHATROOM_DEFAULT_AGENT_CONFIGURATION, store,
     () => '2026-08-31T00:00:00.000Z');
   await assert.rejects(
-    first.sendToRoom('room-1', 'room-1-run-1', 'user-unknown', [{ kind: 'text', text: 'Recover' }]),
+    first.sendToRoom(
+      'room-1', 'room-1-run-1', 'user-unknown', [{ kind: 'text', text: 'Recover' }], 'runtime-1',
+    ),
     /outcome unknown/,
   );
   const pending = store.rooms.get('room-1').deliveries.find(delivery => delivery.stage === 'create');
@@ -519,7 +601,7 @@ test('startup replays one planned/sending-unknown create with the same id and id
   const replay = new FakeAgentLoopClient();
   const second = new ChatroomAgentLoopController(replay, CHATROOM_DEFAULT_AGENT_CONFIGURATION, store,
     () => '2026-08-31T00:00:10.000Z');
-  await second.hydrate();
+  await second.recoverUnknownDeliveries('room-1', second.controllerGeneration);
   const replayed = replay.calls.find(call => call.type === 'create-or-bind');
   assert.equal(replayed.commandId, pending.operationId);
   assert.equal(store.rooms.get('room-1').deliveries
@@ -542,7 +624,9 @@ test('does not immediately rebind a recovered bind when the provider preserves b
     new UnknownBindClient(), CHATROOM_DEFAULT_AGENT_CONFIGURATION, store,
   );
   await assert.rejects(
-    first.sendToRoom('room-1', 'room-1-run-1', 'user-bind-unknown', [{ kind: 'text', text: 'Recover bind' }]),
+    first.sendToRoom(
+      'room-1', 'room-1-run-1', 'user-bind-unknown', [{ kind: 'text', text: 'Recover bind' }], 'runtime-1',
+    ),
     /outcome unknown/,
   );
 
@@ -550,7 +634,7 @@ test('does not immediately rebind a recovered bind when the provider preserves b
     async createOrBind(command) {
       this.calls.push(command);
       return {
-        $schema: 'agent-loop-result', contract: 'cordisx.agent-loop-result/v2', schemaVersion: 2,
+        $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-result.v4.schema.json', contract: 'cordisx.agent-loop-result/v4', schemaVersion: 4,
         commandId: command.commandId, type: 'create-or-bind', status: 'accepted',
         authorization: { capability: 'tasks.create', state: 'allowed', code: 'allowed' },
         binding: stale, detailsUrl: { url: 'app:task/recovered', target: 'host' },
@@ -560,9 +644,10 @@ test('does not immediately rebind a recovered bind when the provider preserves b
   }
   const replay = new IdentityPreservingClient();
   const second = new ChatroomAgentLoopController(replay, CHATROOM_DEFAULT_AGENT_CONFIGURATION, store);
-  await second.hydrate();
+  const recovered = await second.recoverUnknownDeliveries('room-1', second.controllerGeneration);
   assert.equal(replay.calls.filter(call => call.type === 'create-or-bind').length, 1);
-  assert.equal(replay.calls.filter(call => call.type === 'subscribe').length, 1);
+  assert.equal(replay.calls.filter(call => call.type === 'subscribe').length, 0);
+  assert.equal(recovered.subscriptions.length, 1);
   assert.equal(store.rooms.get('room-1').runs[0].detailsUrl.url, 'app:task/recovered');
 });
 
@@ -594,9 +679,10 @@ test('reuses only the exact run binding and resumes from that run cursor', async
   const rooms = store.rooms;
   const client = new FakeAgentLoopClient();
   client.events.set(existing.binding.bindingId, [{
-    $schema: 'event', contract: 'cordisx.agent-loop-event/v2', schemaVersion: 2,
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
     eventId: 'event-5', binding: existing.binding, sequence: 5, occurredAt: '2026-08-30T00:00:00.000Z',
-    type: 'message', message: { messageId: 'assistant-5', role: 'assistant', purpose: 'conversation', content: [{ kind: 'text', text: 'Reviewed' }] },
+    type: 'message', turn: acceptedTurnFor(existing),
+    message: { messageId: 'assistant-5', role: 'assistant', purpose: 'conversation', content: [{ kind: 'text', text: 'Reviewed' }] },
   }]);
   const controller = new ChatroomAgentLoopController(client, CHATROOM_DEFAULT_AGENT_CONFIGURATION, store);
 
@@ -609,7 +695,7 @@ test('reuses only the exact run binding and resumes from that run cursor', async
   assert.equal(rooms.get('room-1').items.at(-1).body[0].text.fallback, 'Reviewed');
 });
 
-test('hydrates every persisted active run through a new explicit bind before send or subscribe', async () => {
+test('probes every persisted active run without mutating its durable binding', async () => {
   let room = roomWithRuns('room-1', ['leader']);
   const stale = taskBinding(70, definitionFor('leader'));
   room = acceptRoomRunPresence(room, 'room-1-run-1', stale,
@@ -624,30 +710,27 @@ test('hydrates every persisted active run through a new explicit bind before sen
     () => '2026-08-31T00:00:00.000Z');
 
   await controller.hydrate();
-  const rebound = store.rooms.get('room-1').runs[0];
-  const create = client.calls.find(call => call.type === 'create-or-bind');
+  const hydrated = store.rooms.get('room-1').runs[0];
   const subscribe = client.calls.find(call => call.type === 'subscribe');
-  assert.deepEqual(create.target, { mode: 'bind', task: stale.task });
-  assert.match(create.commandId, /^chatroom-rebind-/);
-  assert.notEqual(rebound.taskBinding.binding.bindingId, stale.binding.bindingId);
-  assert.equal(rebound.taskBinding.task, stale.task);
-  assert.equal(rebound.detailsUrl.url, 'app:task/1');
-  assert.equal(rebound.rebind.state, 'accepted');
-  assert.equal(rebound.rebind.operationId, create.commandId);
-  assert.equal(rebound.rebind.issuedAt, '2026-08-31T00:00:00.000Z');
-  assert.equal(rebound.status, 'active');
-  assert.equal(rebound.agentLoopCursor, -1);
-  assert.equal(subscribe.binding.binding.bindingId, rebound.taskBinding.binding.bindingId);
-  assert.notEqual(subscribe.binding.binding.bindingId, stale.binding.bindingId);
-  assert.equal(subscribe.afterSequence, -1);
+  assert.equal(client.calls.some(call => call.type === 'create-or-bind'), false);
+  assert.equal(hydrated.taskBinding.binding.bindingId, stale.binding.bindingId);
+  assert.equal(hydrated.detailsUrl.url, 'app:task/stale');
+  assert.equal(hydrated.rebind, undefined);
+  assert.equal(hydrated.status, 'completed');
+  assert.equal(hydrated.agentLoopCursor, 17);
+  assert.equal(subscribe.binding.binding.bindingId, stale.binding.bindingId);
+  assert.equal(subscribe.afterSequence, 17);
+  assert.equal(controller.isRunLocallyUnavailable('room-1', 'room-1-run-1'), false);
 
-  await controller.sendToRoom('room-1', 'room-1-run-1', 'user-after-reload', [{ kind: 'text', text: 'Continue' }]);
-  assert.equal(client.calls.filter(call => call.type === 'create-or-bind').length, 1);
+  await controller.sendToRoom(
+    'room-1', 'room-1-run-1', 'user-after-reload', [{ kind: 'text', text: 'Continue' }], 'runtime-1',
+  );
+  assert.equal(client.calls.filter(call => call.type === 'create-or-bind').length, 0);
   assert.equal(client.calls.find(call => call.type === 'send').binding.binding.bindingId,
-    rebound.taskBinding.binding.bindingId);
+    stale.binding.bindingId);
 });
 
-test('rebinds all hydrated Rooms before replay and serializes simultaneous registry projections', async () => {
+test('probes all hydrated Rooms without replaying or mutating registry projections', async () => {
   const owner = ownerDocumentsFixture();
   let transactionInFlight = false;
   let overlappingTransactions = 0;
@@ -684,14 +767,15 @@ test('rebinds all hydrated Rooms before replay and serializes simultaneous regis
   await controller.waitForProjectionDrain();
 
   assert.equal(overlappingTransactions, 0);
+  assert.equal(client.calls.filter(call => call.type === 'subscribe').length, 2);
+  assert.equal(client.calls.some(call => call.type === 'create-or-bind'), false);
   for (const roomId of ['room-hydrate-a', 'room-hydrate-b']) {
     const persisted = store.rooms.get(roomId);
-    assert.equal(persisted.items.length, 1);
-    assert.equal(persisted.items[0].body[0].text.fallback, 'Late reply');
-    assert.equal(persisted.runs[0].agentLoopCursor, 0);
-    assert.equal(persisted.runs[0].publicProjections.length, 1);
+    assert.equal(persisted.items.length, 0);
+    assert.equal(persisted.runs[0].agentLoopCursor, -1);
+    assert.equal(persisted.runs[0].publicProjections.length, 0);
   }
-  assert.equal(owner.snapshot().value.rooms.every(room => room.items.length === 1), true);
+  assert.equal(owner.snapshot().value.rooms.every(room => room.items.length === 0), true);
   controller.dispose();
   store.dispose();
 });
@@ -741,13 +825,13 @@ test('send enters running and exact turn completion returns the active run and u
       const result = await super.send(command);
       this.events.set(command.binding.binding.bindingId, [
         {
-          $schema: 'event', contract: 'cordisx.agent-loop-event/v2', schemaVersion: 2,
+          $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
           eventId: 'lifecycle-started', binding: command.binding.binding, sequence: 0,
           occurredAt: '2026-08-31T04:00:00.000Z', type: 'lifecycle',
           lifecycle: { phase: 'turn.started' }, causation: { operationId: command.commandId },
         },
         {
-          $schema: 'event', contract: 'cordisx.agent-loop-event/v2', schemaVersion: 2,
+          $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
           eventId: 'lifecycle-completed', binding: command.binding.binding, sequence: 1,
           occurredAt: '2026-08-31T04:00:01.000Z', type: 'lifecycle',
           lifecycle: { phase: 'turn.completed' }, causation: { operationId: command.commandId },
@@ -777,7 +861,7 @@ test('send enters running and exact turn completion returns the active run and u
   stopObserving();
 });
 
-test('reopens the owner document and atomically replaces a disposed runtime binding before registration', async () => {
+test('reopens the owner document and probes its durable binding before registration', async () => {
   const owner = ownerDocumentsFixture();
   const firstStore = await DurableChatroomRoomStore.openOwnerDocuments(owner.client);
   let room = roomWithRuns('room-1', ['leader']);
@@ -794,19 +878,18 @@ test('reopens the owner document and atomically replaces a disposed runtime bind
   await controller.hydrate();
 
   const persisted = owner.snapshot().value.rooms[0].runs[0];
-  assert.equal(client.calls[0].type, 'create-or-bind');
-  assert.deepEqual(client.calls[0].target, { mode: 'bind', task: stale.task });
-  assert.notEqual(persisted.taskBinding.binding.bindingId, stale.binding.bindingId);
+  assert.equal(client.calls[0].type, 'subscribe');
+  assert.equal(client.calls.some(call => call.type === 'create-or-bind'), false);
+  assert.equal(persisted.taskBinding.binding.bindingId, stale.binding.bindingId);
   assert.equal(persisted.taskBinding.task, stale.task);
-  assert.equal(persisted.detailsUrl.url, 'app:task/1');
-  assert.equal(persisted.rebind.state, 'accepted');
-  assert.equal(client.calls[1].type, 'subscribe');
-  assert.equal(client.calls[1].binding.binding.bindingId, persisted.taskBinding.binding.bindingId);
+  assert.equal(persisted.detailsUrl.url, 'app:task/disposed');
+  assert.equal(persisted.rebind, undefined);
+  assert.equal(client.calls[0].binding.binding.bindingId, persisted.taskBinding.binding.bindingId);
   controller.dispose();
   reloadedStore.dispose();
 });
 
-test('uses a new logical rebind cycle after an accepted reload even when provider identity is unchanged', async () => {
+test('repeated hydration probes preserve one durable binding without minting rebind cycles', async () => {
   let room = roomWithRuns('room-1', ['leader']);
   const stale = taskBinding(72, definitionFor('leader'));
   room = acceptRoomRunPresence(room, 'room-1-run-1', stale,
@@ -825,12 +908,13 @@ test('uses a new logical rebind cycle after an accepted reload even when provide
     () => '2026-08-31T03:00:00.000Z');
   await second.hydrate();
   const secondAccepted = store.rooms.get('room-1').runs[0];
-  assert.deepEqual(secondAccepted.taskBinding.binding, firstAccepted.taskBinding.binding,
-    'fixture intentionally returns the same provider binding identity');
-  assert.equal(firstAccepted.rebind.cycle, 1);
-  assert.equal(secondAccepted.rebind.cycle, 2);
-  assert.notEqual(secondAccepted.rebind.operationId, firstAccepted.rebind.operationId);
-  assert.notEqual(secondClient.calls[0].commandId, firstClient.calls[0].commandId);
+  assert.deepEqual(secondAccepted.taskBinding.binding, firstAccepted.taskBinding.binding);
+  assert.equal(firstAccepted.rebind, undefined);
+  assert.equal(secondAccepted.rebind, undefined);
+  assert.equal(firstClient.calls[0].type, 'subscribe');
+  assert.equal(secondClient.calls[0].type, 'subscribe');
+  assert.equal(firstClient.calls.some(call => call.type === 'create-or-bind'), false);
+  assert.equal(secondClient.calls.some(call => call.type === 'create-or-bind'), false);
   second.dispose();
 });
 
@@ -885,9 +969,10 @@ test('drains 64-event pull pages until hasMore is false for one exact binding cu
   const rooms = store.rooms;
   const client = new FakeAgentLoopClient();
   client.events.set(existing.binding.bindingId, Array.from({ length: 65 }, (_, sequence) => ({
-    $schema: 'event', contract: 'cordisx.agent-loop-event/v2', schemaVersion: 2,
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
     eventId: `event-${sequence}`, binding: existing.binding, sequence,
     occurredAt: '2026-08-30T00:00:00.000Z', type: 'message',
+    turn: acceptedTurnFor(existing),
     message: { messageId: `assistant-${sequence}`, role: 'assistant', purpose: 'conversation', content: [{ kind: 'text', text: `Reply ${sequence}` }] },
   })));
   const controller = new ChatroomAgentLoopController(client, CHATROOM_DEFAULT_AGENT_CONFIGURATION, store);
@@ -1164,7 +1249,12 @@ test('turns a dispose-during-CAS bridge failure into a stale no-op while preserv
     'room-live-cas', 'room-live-cas-run-1', 'user-healthy', [{ kind: 'text', text: 'Healthy retry' }],
   );
   const healthyDrain = liveController.waitForProjectionDrain();
-  liveClient.page.resolve(assistantPage(liveBinding, 0, 'Healthy reply'));
+  liveClient.page.resolve(assistantPage(
+    liveBinding,
+    0,
+    'Healthy reply',
+    liveClient.acceptedDeliveries.get(liveBinding.binding.bindingId),
+  ));
   await healthyDrain;
   assert.equal(liveStore.rooms.get('room-live-cas').items.some(item =>
     item.kind === 'message' && item.body[0]?.text?.fallback === 'Healthy reply'), true);
@@ -1176,6 +1266,9 @@ test('bounds ten thousand unobserved live projection failures to one consumable 
   const binding = taskBinding(99, definitionFor('leader'));
   room = acceptRoomRunPresence(room, 'room-failure-latch-run-1', binding,
     createStoredRoomRunDetailsUrl({ url: 'app:task/99', target: 'host' }));
+  room = prepareRoomAcknowledgement(room, CHATROOM_DEFAULT_AGENT_CONFIGURATION, {
+    userItemId: 'user-failure-latch', memberId: 'leader', runId: 'room-failure-latch-run-1',
+  }).room;
   const store = DurableChatroomRoomStore.memory([room]);
   store.compareAndSwap = async () => { throw new Error('stress projection failure'); };
   const controller = new ChatroomAgentLoopController(
@@ -1189,7 +1282,7 @@ test('bounds ten thousand unobserved live projection failures to one consumable 
       await controller.ensureSubscribed(room, 'room-failure-latch-run-1', binding);
       while (controller.projections.size > 0) await Promise.resolve();
     }
-    await Promise.resolve();
+    await new Promise(resolve => setImmediate(resolve));
     assert.equal(Array.isArray(controller.projectionFailure), false);
     assert.equal(controller.projectionFailure.generation, controller.controllerGeneration);
     assert.match(controller.projectionFailure.error.message, /stress projection failure/);
@@ -1198,7 +1291,7 @@ test('bounds ten thousand unobserved live projection failures to one consumable 
 
     await controller.ensureSubscribed(room, 'room-failure-latch-run-1', binding);
     while (controller.projections.size > 0) await Promise.resolve();
-    await Promise.resolve();
+    await new Promise(resolve => setImmediate(resolve));
     assert.notEqual(controller.projectionFailure, undefined);
     controller.dispose();
     assert.equal(controller.projectionFailure, undefined);
@@ -1211,7 +1304,7 @@ test('bounds ten thousand unobserved live projection failures to one consumable 
   }
 });
 
-test('reload source replacement restores Rooms and fences the disposed source late page', async () => {
+test('reload source replacement preserves Rooms and fences the disposed source late page', async () => {
   const owner = ownerDocumentsFixture();
   const firstStore = await DurableChatroomRoomStore.openOwnerDocuments(owner.client);
   let room = roomWithRuns('room-source-reload', ['leader']);
@@ -1243,8 +1336,9 @@ test('reload source replacement restores Rooms and fences the disposed source la
   await second.hydrate();
   const restored = reloadedStore.rooms.get('room-source-reload');
   const replacementBinding = restored.runs[0].taskBinding;
-  assert.equal(restored.runs[0].rebind.cycle, retiredRun.rebind.cycle + 1);
-  assert.notEqual(restored.runs[0].rebind.operationId, retiredRun.rebind.operationId);
+  assert.deepEqual(replacementBinding.binding, retiredBinding.binding);
+  assert.equal(restored.runs[0].rebind, undefined);
+  assert.equal(retiredRun.rebind, undefined);
   assert.equal(restored.id, 'room-source-reload');
 
   firstClient.page.resolve(assistantPage(retiredBinding, 0, 'Retired source reply'));
