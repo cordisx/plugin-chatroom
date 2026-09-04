@@ -14,6 +14,10 @@ test('Shell v8 composer submits every Chatroom delivery through target-scoped ad
   assert.match(source, /submitDeliveriesViaAdmissionV3\(/);
   assert.match(source, /ctx\.agentAdmissionOrigins/);
   assert.match(source, /ctx\.agentAdmissionReservations/);
+  assert.match(source, /Chatroom conversation command context is unavailable/);
+  assert.match(source, /composer submit is unavailable for the current Shell binding or generation/);
+  assert.match(source, /Chatroom composer submit resolved no deliveries/);
+  assert.match(source, /assertChatroomAdmissionDeliveriesAccepted\(outcomes\)/);
 
   const legacy = source.indexOf('if (admissionOrigin.status === \'legacy\')');
   const scoped = source.indexOf('await agentSession.submitDeliveriesViaAdmissionV3(');

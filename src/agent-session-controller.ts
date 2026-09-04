@@ -112,6 +112,24 @@ export interface ChatroomAgentAdmissionDeliveryOutcome {
   readonly outcome: ChatroomAgentSessionOutcome;
 }
 
+/**
+ * A composer command is complete only when every exact target accepts its
+ * target-scoped reservation. Callers must surface a non-accepted outcome;
+ * silently continuing would make a cleared draft look delivered.
+ */
+export function assertChatroomAdmissionDeliveriesAccepted(
+  outcomes: readonly ChatroomAgentAdmissionDeliveryOutcome[],
+): void {
+  if (outcomes.length === 0) {
+    throw new Error('Chatroom composer submit resolved no deliveries.');
+  }
+  const failed = outcomes.find(({ outcome }) => outcome.status !== 'accepted');
+  if (failed === undefined) return;
+  throw new Error(
+    `Chatroom admission delivery failed for ${failed.memberId}/${failed.runId}: ${failed.outcome.status}:${failed.outcome.code}.`,
+  );
+}
+
 type ChatroomApprovalCommandContext = Extract<
   AgentConversationShellCommandContext,
   { readonly scope: 'approval' }

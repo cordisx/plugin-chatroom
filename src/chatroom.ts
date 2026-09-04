@@ -25,7 +25,10 @@ import {
   parseChatroomAgentConfiguration,
   type ChatroomAgentConfiguration,
 } from './agent-definition.js';
-import { ChatroomAgentSessionController } from './agent-session-controller.js';
+import {
+  assertChatroomAdmissionDeliveriesAccepted,
+  ChatroomAgentSessionController,
+} from './agent-session-controller.js';
 import {
   ChatroomAgentSessionConversationSource,
   v3BindingFor,
@@ -356,7 +359,9 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   const product = ChatroomProductBase.attach(roomStore);
   const handleConversationCommand = async (context: CordisXCommandContext) => {
     const hostContext = conversationContext(context);
-    if (hostContext === undefined) return;
+    if (hostContext === undefined) {
+      throw new Error('Chatroom conversation command context is unavailable.');
+    }
     const intent = controller.handle(hostContext);
     if (intent === undefined && hostContext.scope === 'approval') {
       const roomId = controller.selectedRoomId(hostContext);
@@ -370,7 +375,13 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       }
       return;
     }
-    if (intent === undefined || intent.kind === 'target-error') return;
+    if (intent === undefined) {
+      if (hostContext.scope === 'composer-submit') {
+        throw new Error('Chatroom composer submit is unavailable for the current Shell binding or generation.');
+      }
+      return;
+    }
+    if (intent.kind === 'target-error') return;
     if (intent.kind === 'approval-decision') {
       return;
     }
@@ -382,6 +393,9 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     }
     let deliveryFailure: unknown;
     try {
+      if (intent.deliveries.length === 0) {
+        throw new Error('Chatroom composer submit resolved no deliveries.');
+      }
       const admissionOrigin = composerSubmissionOrigin(hostContext);
       if (admissionOrigin.status === 'invalid') {
         throw new Error('Shell v8 composer admission origin is invalid.');
@@ -394,7 +408,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
           intent.dispatchText,
         )));
       } else {
-        await agentSession.submitDeliveriesViaAdmissionV3(
+        const outcomes = await agentSession.submitDeliveriesViaAdmissionV3(
           intent.roomId,
           intent.deliveries,
           admissionOrigin.origin,
@@ -402,6 +416,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
           ctx.agentAdmissionOrigins,
           ctx.agentAdmissionReservations,
         );
+        assertChatroomAdmissionDeliveriesAccepted(outcomes);
       }
     } catch (error) {
       deliveryFailure = error;

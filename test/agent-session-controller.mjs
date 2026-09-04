@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { CHATROOM_DEFAULT_AGENT_CONFIGURATION } from '../dist/agent-definition.js';
-import { ChatroomAgentSessionController } from '../dist/agent-session-controller.js';
+import {
+  assertChatroomAdmissionDeliveriesAccepted,
+  ChatroomAgentSessionController,
+} from '../dist/agent-session-controller.js';
 import { ChatroomAgentSessionConversationSource } from '../dist/agent-session-conversation-source.js';
 import { CHATROOM_COMMAND_SUBMIT } from '../dist/conversation-model.js';
 import { ChatroomConversationController } from '../dist/conversation-source.js';
@@ -932,6 +935,45 @@ test('Shell v8 admission reuses the exact Lead authority before creating Reviewe
   assert.equal((await decision).outcome, 'rejected');
   await controller.dispose();
   store.dispose();
+});
+
+test('Shell v8 admission requires a nonempty all-accepted delivery result with no direct fallback', () => {
+  assert.throws(
+    () => assertChatroomAdmissionDeliveriesAccepted([]),
+    /composer submit resolved no deliveries/,
+  );
+  assert.throws(
+    () => assertChatroomAdmissionDeliveriesAccepted([
+      {
+        memberId: 'leader', runId: 'lead-run',
+        outcome: {
+          status: 'accepted', roomId: 'room', runId: 'lead-run', messageId: 'lead-message',
+          sessionId: 'cx-session.lead', disposition: 'retained',
+        },
+      },
+      {
+        memberId: 'reviewer', runId: 'review-run',
+        outcome: { status: 'denied', roomId: 'room', runId: 'review-run', code: 'target-denied' },
+      },
+    ]),
+    /admission delivery failed for reviewer\/review-run: denied:target-denied/,
+  );
+  assert.doesNotThrow(() => assertChatroomAdmissionDeliveriesAccepted([
+    {
+      memberId: 'leader', runId: 'lead-run',
+      outcome: {
+        status: 'accepted', roomId: 'room', runId: 'lead-run', messageId: 'lead-message',
+        sessionId: 'cx-session.lead', disposition: 'retained',
+      },
+    },
+    {
+      memberId: 'reviewer', runId: 'review-run',
+      outcome: {
+        status: 'accepted', roomId: 'room', runId: 'review-run', messageId: 'review-message',
+        sessionId: 'cx-session.reviewer', disposition: 'created',
+      },
+    },
+  ]));
 });
 
 test('Shell v8 admission stops before issue or reserve when the exact Reviewer resolver is not registered', async () => {
