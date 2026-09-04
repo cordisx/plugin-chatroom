@@ -142,6 +142,7 @@ export class ChatroomAgentSessionController {
   private readonly projectors = new Map<string, ChatroomAgentSessionProjector>();
   private readonly approvalAnswerers = new Map<string, ApprovalAnswererHandle>();
   private readonly acquisitions = new Map<string, Promise<RuntimeOwner | RuntimeAcquireFailure>>();
+  private readonly roomHydrations = new Map<string, Promise<void>>();
   private readonly roomMutations = new Map<string, Promise<void>>();
   private readonly localUnavailableRuns = new Map<string, string>();
   private readonly observedMessageIds = new Map<string, Set<MessageId>>();
@@ -150,6 +151,8 @@ export class ChatroomAgentSessionController {
   private readonly projectionListeners = new Set<(roomId: string) => void>();
   private readonly pendingApprovals = new Map<string, (outcome: ApprovalOutcome) => void>();
   private readonly delegatedSessionEvents = new Set<string>();
+  /** Stable process-local coordinates; SessionEvent remains the durable fact. */
+  private readonly presentationSequencesByEvent = new Map<string, number>();
   private presentationSequence: number;
 
   constructor(
@@ -212,24 +215,54 @@ export class ChatroomAgentSessionController {
     this.assertUsable();
     const generation = this.generation;
     for (const room of this.rooms.snapshot()) {
-      for (const run of room.runs) {
-        if (run.sessionId === undefined || !this.isCurrent(generation)) continue;
-        const session = await this.runtime.sessions.get(run.sessionId);
-        if (!this.isCurrent(generation)) return;
-        if (session === undefined) {
-          this.localUnavailableRuns.set(runKey(room.id, run.runId), 'session-unavailable');
-          continue;
-        }
-        const agent = await this.runtime.agents.get(run.sessionId);
-        if (!this.isCurrent(generation)) return;
-        if (agent !== undefined && (agent.id !== run.sessionId || agent.session.id !== run.sessionId)) {
-          throw new Error('Observed Agent changed the authoritative Session identity.');
-        }
-        await this.openSessionSubscription(room.id, run.runId, session, generation, {
-          ...(agent === undefined ? {} : { generation: agent.generation }),
-          ...(agent?.detail === undefined ? {} : { details: agent.detail }),
-        });
+      if (!this.isCurrent(generation)) return;
+      await this.hydrateRoom(room.id);
+    }
+  }
+
+  /**
+   * Rebuilds one mounted Room projection from its exact persisted SessionIds.
+   * Concurrent Shell refreshes share the same read-only replay operation.
+   */
+  async hydrateRoom(roomId: string): Promise<void> {
+    this.assertUsable();
+    const retained = this.roomHydrations.get(roomId);
+    if (retained !== undefined) return await retained;
+    const generation = this.generation;
+    const operation = this.hydrateRoomNow(roomId, generation);
+    this.roomHydrations.set(roomId, operation);
+    try {
+      await operation;
+    } finally {
+      if (this.roomHydrations.get(roomId) === operation) this.roomHydrations.delete(roomId);
+    }
+  }
+
+  private async hydrateRoomNow(roomId: string, generation: number): Promise<void> {
+    const room = this.rooms.get(roomId);
+    if (room === undefined) return;
+    for (const run of room.runs) {
+      if (run.sessionId === undefined || !this.isCurrent(generation)) continue;
+      const key = runKey(roomId, run.runId);
+      const active = this.subscriptions.get(key);
+      if (active?.sessionId === run.sessionId && this.projectors.has(key)) continue;
+      const session = await this.runtime.sessions.get(run.sessionId);
+      if (!this.isCurrent(generation)) return;
+      if (session === undefined) {
+        this.localUnavailableRuns.set(key, 'session-unavailable');
+        continue;
       }
+      const agent = await this.runtime.agents.get(run.sessionId);
+      if (!this.isCurrent(generation)) return;
+      if (agent !== undefined && (agent.id !== run.sessionId || agent.session.id !== run.sessionId)) {
+        throw new Error('Observed Agent changed the authoritative Session identity.');
+      }
+      const currentRun = this.rooms.get(roomId)?.runs.find(candidate => candidate.runId === run.runId);
+      if (currentRun?.sessionId !== session.id) continue;
+      await this.openSessionSubscription(roomId, run.runId, session, generation, {
+        ...(agent === undefined ? {} : { generation: agent.generation }),
+        ...(agent?.detail === undefined ? {} : { details: agent.detail }),
+      });
     }
   }
 
@@ -424,6 +457,7 @@ export class ChatroomAgentSessionController {
     const owners = [...this.owners.entries()];
     this.subscriptions.clear();
     this.projectors.clear();
+    this.roomHydrations.clear();
     this.approvalAnswerers.clear();
     this.owners.clear();
     this.localUnavailableRuns.clear();
@@ -433,6 +467,7 @@ export class ChatroomAgentSessionController {
     for (const resolve of this.pendingApprovals.values()) resolve('unavailable');
     this.pendingApprovals.clear();
     this.delegatedSessionEvents.clear();
+    this.presentationSequencesByEvent.clear();
     await Promise.allSettled([
       ...subscriptions.map(item => item.subscription.unsubscribe()),
       ...answerers.map(item => item.dispose()),
@@ -537,8 +572,9 @@ export class ChatroomAgentSessionController {
     const existing = this.subscriptions.get(key);
     if (existing?.sessionId === session.id && existing.sessionGeneration === session.generation) {
       const existingProjector = this.projectors.get(key);
-      if (existingProjector?.agentGeneration !== undefined || agentFacts.generation === undefined) {
-        existingProjector?.updateAgentFacts(agentFacts);
+      if (existingProjector !== undefined
+        && (existingProjector.agentGeneration !== undefined || agentFacts.generation === undefined)) {
+        existingProjector.updateAgentFacts(agentFacts);
         return;
       }
       this.subscriptions.delete(key);
@@ -553,7 +589,7 @@ export class ChatroomAgentSessionController {
       initialRoom,
       initialRun,
       session.id,
-      () => this.nextPresentationSequence(),
+      (eventSeq, kind) => this.presentationSequenceForEvent(session.id, eventSeq, kind),
       agentFacts,
     );
     this.projectors.set(key, projector);
@@ -605,6 +641,7 @@ export class ChatroomAgentSessionController {
       afterSeq: -1,
     };
     this.subscriptions.set(key, active);
+    this.localUnavailableRuns.delete(key);
     for (const page of pendingPages) await observePage(page);
     for (const listener of this.projectionListeners) listener(roomId);
     void result.subscription.closed.then(closed =>
@@ -803,6 +840,19 @@ export class ChatroomAgentSessionController {
       ...this.rooms.snapshot().map(room => room.timelineSequence),
     ) + 1;
     return this.presentationSequence;
+  }
+
+  private presentationSequenceForEvent(
+    sessionId: string,
+    eventSeq: number,
+    kind: 'message' | 'approval',
+  ): number {
+    const key = `${sessionId.length}:${sessionId}:${eventSeq}:${kind}`;
+    const retained = this.presentationSequencesByEvent.get(key);
+    if (retained !== undefined) return retained;
+    const sequence = this.nextPresentationSequence();
+    this.presentationSequencesByEvent.set(key, sequence);
+    return sequence;
   }
 
   private approvalKey(sessionId: string, agentGeneration: number, approvalId: string): string {

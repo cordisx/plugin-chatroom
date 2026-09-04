@@ -149,7 +149,10 @@ export class ChatroomAgentSessionProjector {
     private room: Room,
     private run: RoomRun,
     private readonly sessionId: SessionId,
-    private readonly nextPresentationSequence: () => number,
+    private readonly presentationSequenceFor: (
+      eventSeq: number,
+      kind: 'message' | 'approval',
+    ) => number,
     agentFacts: ChatroomSessionAgentFacts = {},
   ) {
     if (run.sessionId !== sessionId) throw new Error('Session projector requires the Room run SessionId.');
@@ -279,7 +282,7 @@ export class ChatroomAgentSessionProjector {
       // renders the human message before the introduction and reply.
       sequence: durableDisplay?.kind === 'message'
         ? durableDisplay.sequence
-        : this.nextPresentationSequence(),
+        : this.presentationSequenceFor(event.seq, 'message'),
       source: { kind: 'session-event', sessionId: this.sessionId, eventSeq: event.seq },
       author,
       semantic: { purpose: 'conversation' },
@@ -324,7 +327,7 @@ export class ChatroomAgentSessionProjector {
       kind: 'message',
       itemId: projectionItemId('message', this.sessionId, String(event.seq)),
       messageId: event.data.message.id,
-      sequence: this.nextPresentationSequence(),
+      sequence: this.presentationSequenceFor(event.seq, 'message'),
       source: { kind: 'session-event', sessionId: this.sessionId, eventSeq: event.seq },
       author,
       semantic,
@@ -347,7 +350,7 @@ export class ChatroomAgentSessionProjector {
     const item: PendingApprovalItem = {
       kind: 'approval',
       itemId: projectionItemId('approval', this.sessionId, event.data.id),
-      sequence: this.nextPresentationSequence(),
+      sequence: this.presentationSequenceFor(event.seq, 'approval'),
       participantId: member.participantId,
       memberId: member.memberId,
       runId: this.run.runId,
