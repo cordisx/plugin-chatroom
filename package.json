@@ -30,7 +30,7 @@
     "@deepseek-ai/schemastery": "3.18.1",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
-    "cordisx": "github:cordisx/cordisx#7bba77c74da04124414e2befd3ea51f9ec2b739f",
+    "cordisx": "github:cordisx/cordisx#6b32e765d6920f565b53b73e1fdda8d961e4b93b",
     "esbuild": "^0.28.2",
     "typescript": "^5.9.2"
   }

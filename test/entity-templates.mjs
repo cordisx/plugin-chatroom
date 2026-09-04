@@ -177,7 +177,7 @@ test('package pins the exact Protocol bootstrap-route and Host runtime releases 
   assert.equal(packageJson.devDependencies['@cordisx/protocol'],
     'github:cordisx/cordisx-protocol#be4905a7471e9829d2b834d9c3f17ac2404951f3');
   assert.equal(packageJson.devDependencies.cordisx,
-    'github:cordisx/cordisx#7bba77c74da04124414e2befd3ea51f9ec2b739f');
+    'github:cordisx/cordisx#6b32e765d6920f565b53b73e1fdda8d961e4b93b');
   assert.equal(packageManifest.entry, './dist/chatroom.js');
   assert.equal(packageManifest.compatibility.protocolSchemas.includes(
     'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-file.v1.schema.json'), true);
