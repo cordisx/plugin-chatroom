@@ -242,7 +242,7 @@ class FakeApprovals {
         agentGeneration: requester.agent.generation, definition: requester.definition,
       },
     };
-    const entry = { requester, resolver, closed: false };
+    const entry = { requester, resolver, registration, closed: false };
     this.requestResolvers.set(requester.agent.id, entry);
     return {
       status: 'registered',
@@ -252,6 +252,20 @@ class FakeApprovals {
         dispose: async () => { entry.closed = true; return { ...registration, status: 'closed', code: 'disposed' }; },
       },
     };
+  }
+
+  async routeDriverApproval(agent, reason = 'Reviewer needs permission to inspect the exact diff.') {
+    const entry = this.requestResolvers.get(agent.id);
+    assert.ok(entry, 'the exact requester must register an approval resolver');
+    return await entry.resolver({
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/approval-request-routing-question.v1.schema.json',
+      contract: 'cordisx.approval-request-routing-question/v1', schemaVersion: 1,
+      routingId: `routing-${agent.id}`,
+      registration: entry.registration,
+      requester: entry.registration.requester,
+      toolName: 'shell', callId: 'call-review',
+      reason: { kind: 'plain-text', text: reason },
+    }, new AbortController().signal);
   }
 
   async request(request) {
@@ -804,9 +818,17 @@ test('first explicit mutation creates once, persists only SessionId, and retains
   store.dispose();
 });
 
-test('Shell v8 admission acquires the exact owner, issues one target origin, then reserves without a direct Agent send', async () => {
-  const room = roomWithRun();
+test('Shell v8 admission reuses the exact Lead authority before creating Reviewer, then routes a v2 pending approval', async () => {
+  let room = createRoom({ id: 'room', title: 'Room' });
+  room = addRoomRun(room, {
+    runId: 'lead-run', memberId: 'leader', title: 'Lead', status: 'creating',
+  });
+  room = bindRoomRunSession(room, 'lead-run', 'cx-session.lead');
+  room = addRoomRun(room, {
+    runId: 'review-run', memberId: 'reviewer', title: 'Reviewer', status: 'creating',
+  });
   const member = room.memberships.find(candidate => candidate.memberId === 'reviewer');
+  const lead = room.memberships.find(candidate => candidate.memberId === 'leader');
   const harness = runtimeHarness({ room });
   const store = DurableChatroomRoomStore.memory([room]);
   const controller = new ChatroomAgentSessionController(
@@ -859,15 +881,77 @@ test('Shell v8 admission acquires the exact owner, issues one target origin, the
   assert.equal(result.status, 'accepted');
   assert.equal(result.messageId, 'host-v8-message');
   assert.equal(result.disposition, 'created');
+  assert.equal(harness.resumes.length, 1);
+  assert.equal(harness.resumes[0].sessionId, 'cx-session.lead');
+  assert.equal(harness.resumes[0].definitionSource, 'session-persisted');
+  assert.match(harness.resumes[0].mutationId, /^agent-resume\.4\.room\.8\.lead-run$/);
   assert.equal(harness.creates.length, 1);
   assert.deepEqual(issued, {
     origin,
     target: { participantId: member.participantId, memberId: member.memberId, runId: 'review-run' },
   });
-  assert.equal(reserved.handle, harness.handles[0].handle, 'reserve receives the acquired exact owner handle');
+  assert.equal(reserved.handle, harness.handles[1].handle, 'reserve receives the acquired exact Reviewer owner handle');
   assert.equal(reserved.origin.token, 'opaque-review-run');
   assert.deepEqual(reserved.message, { text: 'Review the exact v8 dispatch.' });
-  assert.deepEqual(harness.handles[0].calls.messages, [], 'v8 admission never falls through to Agent direct dispatch');
+  assert.deepEqual(harness.handles[1].calls.messages, [], 'v8 admission never falls through to Agent direct dispatch');
+
+  const reviewer = harness.handles[1].handle.agent;
+  const authority = harness.handles[0].handle.agent;
+  const routed = await harness.approvals.routeDriverApproval(reviewer);
+  assert.equal(routed.status, 'accepted');
+  assert.deepEqual(routed.authority, {
+    agentId: authority.id, sessionId: authority.session.id, agentGeneration: authority.generation,
+    definition: lead.definition,
+  });
+  const decision = harness.approvals.request({
+    requester: { agent: reviewer, definition: member.definition },
+    authority: { agent: authority, definition: lead.definition },
+    toolName: 'shell', callId: 'call-review',
+    reason: { kind: 'plain-text', text: 'Reviewer needs permission to inspect the exact diff.' },
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  const pending = controller.projectionForRoom('room').items.find(item => item.kind === 'approval');
+  assert.ok(pending);
+  assert.equal(pending.memberId, 'reviewer');
+  assert.equal(pending.authority.memberId, 'leader');
+  assert.equal(controller.answerApprovalItem('room', pending.itemId, 'rejected'), true);
+  assert.equal((await decision).outcome, 'rejected');
+  await controller.dispose();
+  store.dispose();
+});
+
+test('Shell v8 admission fails closed when Reviewer has no exact reports-to Lead run', async () => {
+  const room = roomWithRun();
+  const harness = runtimeHarness({ room });
+  const store = DurableChatroomRoomStore.memory([room]);
+  const controller = new ChatroomAgentSessionController(
+    { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+  let issues = 0;
+  let reserves = 0;
+  const result = await controller.submitDeliveriesViaAdmissionV3(
+    room.id, [{ memberId: 'reviewer', runId: 'review-run' }], {
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-command-origin.v1.schema.json',
+      contract: 'cordisx.agent-command-origin/v1', schemaVersion: 1,
+      originId: 'origin-v8-missing-lead', binding: { bindingId: 'binding-v8', ownerGeneration: 'owner-v8' },
+      generation: 'shell-v8', executionId: 'execution-v8', commandId: CHATROOM_COMMAND_SUBMIT,
+      scope: 'composer-submit',
+      room: { roomId: room.id, participantId: 'command-room', memberId: 'command-room', runId: 'command-run' },
+    },
+    'Review only if the exact Lead is live.',
+    { issue: async () => { issues += 1; throw new Error('must not issue without Lead'); } },
+    { reserve: async () => { reserves += 1; throw new Error('must not reserve without Lead'); } },
+  );
+
+  assert.deepEqual(result, [{
+    memberId: 'reviewer', runId: 'review-run',
+    outcome: { status: 'unavailable', roomId: room.id, runId: 'review-run', code: 'authority-run-unavailable' },
+  }]);
+  assert.equal(harness.creates.length, 0);
+  assert.equal(issues, 0);
+  assert.equal(reserves, 0);
   await controller.dispose();
   store.dispose();
 });
