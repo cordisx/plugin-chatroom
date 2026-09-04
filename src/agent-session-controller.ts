@@ -749,7 +749,11 @@ export class ChatroomAgentSessionController {
   ): Promise<RuntimeOwner | RuntimeAcquireFailure> {
     const key = runKey(roomId, runId);
     const retained = this.owners.get(key);
-    if (retained !== undefined) return { handle: retained.handle, disposition: 'retained' };
+    if (retained !== undefined) {
+      await this.ensureOwnerApprovalRegistrations(roomId, runId, retained.handle);
+      this.localUnavailableRuns.delete(key);
+      return { handle: retained.handle, disposition: 'retained' };
+    }
     const inFlight = this.acquisitions.get(key);
     if (inFlight !== undefined) return await inFlight;
     const operation = this.acquireOwner(roomId, runId);
@@ -809,9 +813,7 @@ export class ChatroomAgentSessionController {
         ...(result.handle.agent.detail === undefined ? {} : { details: result.handle.agent.detail }),
       });
       if (!this.isCurrent(generation)) throw new Error('Agent acquisition was replaced during Session subscription.');
-      await this.openApprovalAnswerer(roomId, runId, result.handle.agent);
-      await this.openApprovalAuthorityAnswerer(roomId, runId, result.handle.agent, member);
-      await this.openApprovalRequestResolver(roomId, runId, result.handle.agent, member);
+      await this.ensureOwnerApprovalRegistrations(roomId, runId, result.handle);
       if (!this.isCurrent(generation)) throw new Error('Agent acquisition was replaced during approval registration.');
     } catch (error) {
       this.owners.delete(key);
@@ -834,6 +836,19 @@ export class ChatroomAgentSessionController {
       throw error;
     }
     return { handle: result.handle, disposition: result.disposition };
+  }
+
+  private async ensureOwnerApprovalRegistrations(
+    roomId: string,
+    runId: string,
+    handle: AgentHandle,
+  ): Promise<void> {
+    const room = this.requireRoom(roomId);
+    const run = this.requireRun(room, runId);
+    const member = this.requireMember(room, run.memberId);
+    await this.openApprovalAnswerer(roomId, runId, handle.agent);
+    await this.openApprovalAuthorityAnswerer(roomId, runId, handle.agent, member);
+    await this.openApprovalRequestResolver(roomId, runId, handle.agent, member);
   }
 
   private async openSessionSubscription(
@@ -1083,7 +1098,19 @@ export class ChatroomAgentSessionController {
         liveAgentForRun: candidateRunId => this.owners.get(runKey(roomId, candidateRunId))?.handle.agent,
       }),
     );
-    if (registered.status === 'registered') this.approvalRequestResolvers.set(key, registered.handle);
+    if (registered.status !== 'registered') {
+      throw new Error(`Chatroom approval request resolver was not registered: ${registered.code}`);
+    }
+    this.approvalRequestResolvers.set(key, registered.handle);
+    void registered.handle.closed.then(closed => {
+      if (this.approvalRequestResolvers.get(key) !== registered.handle) return;
+      this.approvalRequestResolvers.delete(key);
+      this.localUnavailableRuns.set(key, closed.code);
+    }).catch(() => {
+      if (this.approvalRequestResolvers.get(key) !== registered.handle) return;
+      this.approvalRequestResolvers.delete(key);
+      this.localUnavailableRuns.set(key, 'request-resolver-unavailable');
+    });
   }
 
   private async detachRuntime(roomId: string, runId: string): Promise<void> {

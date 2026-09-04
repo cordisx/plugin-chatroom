@@ -12,7 +12,14 @@ const exactApprovalScope = {
   },
 };
 
-test('publishes v6 package and source manifests with two independent exact approval routes', () => {
+const authorityRequesterScope = {
+  authorityRequester: {
+    kind: 'approval-authority-requester-route',
+    requester: exactApprovalScope.sessionIds,
+  },
+};
+
+test('publishes v8 package and source manifests with correlated Lead authority route', () => {
   const packageManifest = JSON.parse(readFileSync(
     new URL('../cordisx-package.json', import.meta.url), 'utf8',
   ));
@@ -20,10 +27,10 @@ test('publishes v6 package and source manifests with two independent exact appro
     new URL(`../${packageManifest.runtimeManifest.path.slice(2)}`, import.meta.url), 'utf8',
   ));
   const staticCapabilities = runtimeManifest.capabilities;
-  assert.equal(packageManifest.schemaVersion, 6);
-  assert.equal(runtimeManifest.schemaVersion, 6);
+  assert.equal(packageManifest.schemaVersion, 8);
+  assert.equal(runtimeManifest.schemaVersion, 8);
   assert.equal(packageManifest.runtimeManifest.schema,
-    'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v6.schema.json');
+    'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v8.schema.json');
   assert.deepEqual(staticCapabilities.map(item => item.name), [
     'agents.create', 'agents.resume', 'agents.get', 'agents.message.submit',
     'agents.message.cancel', 'sessions.get', 'sessions.subscribe',
@@ -32,7 +39,7 @@ test('publishes v6 package and source manifests with two independent exact appro
   assert.equal(staticCapabilities.slice(0, 7).every(item => item.required === true), true);
   assert.deepEqual(staticCapabilities.slice(7), [
     { name: 'approvals.request', required: false, scope: exactApprovalScope },
-    { name: 'approvals.answer', required: false, scope: exactApprovalScope },
+    { name: 'approvals.answer', required: false, scope: authorityRequesterScope },
   ]);
   assert.equal(staticCapabilities.some(item => item.name.includes('*')), false);
   assert.equal(new Set(staticCapabilities.map(item => item.name)).size, staticCapabilities.length);

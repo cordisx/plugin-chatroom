@@ -1,6 +1,6 @@
 {
-  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-package.v6.schema.json",
-  "schemaVersion": 6,
+  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-package.v8.schema.json",
+  "schemaVersion": 8,
   "id": "chatroom",
   "version": "0.1.0",
   "entry": "./dist/chatroom.js",
@@ -13,15 +13,15 @@
   "compatibility": {
     "runtimeAbi": 1,
     "protocolSchemas": [
-      "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v6.schema.json",
+      "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v8.schema.json",
       "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-file.v1.schema.json"
     ]
   },
   "dependencies": [],
   "runtimeManifest": {
     "path": "./runtime-manifest.json",
-    "schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v6.schema.json",
-    "digest": "sha256:a502ec709887900ab7e3809a6dcdf77dcef21eb1df35c1ebef256254b8216035"
+    "schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v8.schema.json",
+    "digest": "sha256:49da1d03d3bda5bbdad148594212cec49f2dee1b644c710c2d041b1f900da618"
   },
   "entityTemplates": [
     {
