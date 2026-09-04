@@ -223,6 +223,13 @@ export class ChatroomAgentSessionProjector {
 
   get agentGeneration(): number | undefined { return this.agentFacts.generation; }
 
+  /**
+   * The controller may retain a completed SessionEvent projection briefly while
+   * an externally replaced permission lease is replayed.  It must never reuse
+   * that display cache for a different durable Session.
+   */
+  get projectedSessionId(): SessionId { return this.sessionId; }
+
   snapshotItems(): readonly ProjectedItem[] {
     return Object.freeze([...this.itemsByEventSeq.entries()]
       .sort(([left], [right]) => left - right)

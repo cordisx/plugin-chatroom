@@ -1292,10 +1292,18 @@ export class ChatroomAgentSessionController {
         return;
       }
       this.subscriptions.delete(key);
-      this.projectors.delete(key);
       await existing.subscription.unsubscribe();
     }
     else if (existing !== undefined) await existing.subscription.unsubscribe();
+    // A permission lease can be replaced while a terminal SessionEvent page is
+    // already projected.  Retain that exact, replayable Session projection
+    // until a replacement subscription has actually been accepted.  It is not
+    // a second ledger: it remains process-local and is discarded whenever the
+    // persisted Room run points at a different Session.
+    const retainedProjector = this.projectors.get(key);
+    if (retainedProjector !== undefined && retainedProjector.projectedSessionId !== session.id) {
+      this.projectors.delete(key);
+    }
     this.observedMessageIds.delete(session.id);
     const initialRoom = this.requireRoom(roomId);
     const initialRun = this.requireRun(initialRoom, runId);
@@ -1306,7 +1314,6 @@ export class ChatroomAgentSessionController {
       (eventSeq, kind) => this.presentationSequenceForEvent(session.id, eventSeq, kind),
       agentFacts,
     );
-    this.projectors.set(key, projector);
     let active: RuntimeSubscription | undefined;
     const pendingPages: SessionSubscriptionPage[] = [];
     let observationTail = Promise.resolve();
@@ -1338,12 +1345,10 @@ export class ChatroomAgentSessionController {
     };
     const result = await session.subscribe({ afterSeq: -1, pageSize: 256 }, observePage);
     if (!this.isCurrent(generation)) {
-      this.projectors.delete(key);
       if (result.status === 'subscribed') await result.subscription.unsubscribe();
       return;
     }
     if (result.status !== 'subscribed') {
-      this.projectors.delete(key);
       this.localUnavailableRuns.set(key, result.code);
       return;
     }
@@ -1354,6 +1359,10 @@ export class ChatroomAgentSessionController {
       phase: 'replay',
       afterSeq: -1,
     };
+    // Only a successfully established subscription may replace a retained
+    // display projector.  A transient replay denial must not publish a Room
+    // snapshot that silently drops already projected SessionEvent facts.
+    this.projectors.set(key, projector);
     this.subscriptions.set(key, active);
     this.localUnavailableRuns.delete(key);
     for (const page of pendingPages) await observePage(page);
@@ -1396,7 +1405,11 @@ export class ChatroomAgentSessionController {
       || closed.sessionGeneration !== active.sessionGeneration
       || closed.subscriptionGeneration !== active.subscription.subscriptionGeneration) return;
     this.subscriptions.delete(key);
-    this.projectors.delete(key);
+    // `permission-revoked` fences the live owner and its answerers, not the
+    // durable SessionEvent facts.  Keep the exact projector until a new
+    // read-only replay replaces it (or the Room run changes Session identity),
+    // so a V7 replacement cannot collapse to domain-only items mid-terminal.
+    if (closed.code !== 'permission-revoked') this.projectors.delete(key);
     if (closed.code === 'unsubscribed') return;
     // Permission decisions replace the issued lease, not the durable Session.
     // The next explicit action may resume that Session under refreshed grants.
