@@ -93,18 +93,25 @@ function domainSource(itemOverride) {
 
 function sessionProjection(itemOverride) {
   let listener;
+  let currentItems = itemOverride;
+  let currentRuns;
   return {
     async hydrateRoom() {},
     subscribeProjection(next) { listener = next; return () => { listener = undefined; }; },
     emit(roomId = 'room-one') { listener?.(roomId); },
+    replace({ activeRuns, items }) {
+      currentRuns = activeRuns;
+      currentItems = items;
+      listener?.('room-one');
+    },
     projectionForRoom() {
       return {
-        activeRuns: [{
+        activeRuns: currentRuns ?? [{
           participantId: 'reviewer', memberId: 'reviewer', runId: 'run-one',
           sessionId: 'session-one', lifecycle: { phase: 'running' },
           details: { kind: 'host', ref: 'detail-one' },
         }],
-        items: itemOverride ?? [{
+        items: currentItems ?? [{
           kind: 'message', itemId: 'session-message', messageId: 'assistant-one', sequence: 4,
           source: { kind: 'session-event', sessionId: 'session-one', eventSeq: 7 },
           author: agent, semantic: { purpose: 'conversation' },
@@ -117,7 +124,16 @@ function sessionProjection(itemOverride) {
   };
 }
 
-test('Shell v5 preserves domain product items while replacing execution facts with Session facts', async () => {
+const sessionMessage = ({ itemId, sessionId, eventSeq, sequence, timestamp, author, text }) => ({
+  kind: 'message', itemId, messageId: itemId, sequence,
+  source: { kind: 'session-event', sessionId, eventSeq },
+  author, semantic: { purpose: 'conversation' },
+  body: [{ kind: 'text', text: { key: itemId, fallback: text } }],
+  reactions: [], timestamp, deliveryState: 'delivered', runState: 'idle',
+  ariaLive: 'polite', actions: [],
+});
+
+test('Shell v6 preserves domain product items while replacing execution facts with Session facts', async () => {
   const source = new ChatroomAgentSessionConversationSource(binding, domainSource(), sessionProjection(), 'enter');
   const snapshot = await source.snapshot();
 
@@ -131,6 +147,94 @@ test('Shell v5 preserves domain product items while replacing execution facts wi
     kind: 'session-event', sessionId: 'session-one', eventSeq: 7,
   });
   assert.equal(snapshot.composer.shortcutPolicy, 'enter');
+  source.dispose();
+});
+
+test('a later Room run appends without replacing an earlier pending run projection', async () => {
+  const lead = {
+    participantId: 'lead', role: 'agent',
+    displayName: { namespace: 'chatroom', key: 'lead', fallback: 'Lead' },
+    agentIdentity: { provider: 'codex', model: 'gpt-5', role: 'lead' },
+  };
+  const runA = {
+    participantId: 'reviewer', memberId: 'reviewer', runId: 'run-a',
+    sessionId: 'session-a', lifecycle: { phase: 'waiting' },
+  };
+  const runB = {
+    participantId: 'lead', memberId: 'lead', runId: 'run-b',
+    sessionId: 'session-b', lifecycle: { phase: 'running' },
+  };
+  const user3 = sessionMessage({
+    itemId: 'user-3', sessionId: 'session-a', eventSeq: 1, sequence: 500,
+    timestamp: '2026-09-04T00:00:00.000Z', author: human, text: '3',
+  });
+  const reviewerIntro = sessionMessage({
+    itemId: 'reviewer-intro', sessionId: 'session-a', eventSeq: 4, sequence: 502,
+    timestamp: '2026-09-04T00:00:02.000Z', author: agent, text: 'Reviewer introduction',
+  });
+  const pending = {
+    kind: 'approval', itemId: 'approval-a', sequence: 503,
+    participantId: 'reviewer', memberId: 'reviewer', runId: 'run-a',
+    sessionId: 'session-a', agentGeneration: 7, approvalId: 'approval-a',
+    approvalKind: 'command', state: 'pending',
+    actions: [
+      { decision: 'approve', command: { id: 'chatroom.approval.approve' } },
+      { decision: 'deny', command: { id: 'chatroom.approval.deny' } },
+      { decision: 'cancel', command: { id: 'chatroom.approval.cancel' } },
+    ],
+  };
+  const delegation = {
+    kind: 'message', itemId: 'delegation-a', messageId: 'delegation-a', sequence: 20,
+    source: 'chatroom-acknowledgement', author: lead,
+    semantic: { purpose: 'chatroom-acknowledgement' },
+    body: [{ kind: 'text', text: { key: 'delegation', fallback: '已向 @Reviewer 下发任务：3。' } }],
+    reactions: [], timestamp: '2026-09-04T00:00:01.000Z', deliveryState: 'delivered',
+    runState: 'idle', ariaLive: 'polite', actions: [],
+  };
+  const projection = sessionProjection([user3, reviewerIntro, pending]);
+  projection.replace({ activeRuns: [runA], items: [user3, reviewerIntro, pending] });
+  const source = new ChatroomAgentSessionConversationSource(
+    binding, domainSource([delegation]), projection, 'enter',
+  );
+  const initial = await source.snapshot();
+  const stableA = initial.items.map(item => [item.itemId, item.sequence]);
+  assert.deepEqual(initial.items.map(item => item.itemId), [
+    'user-3', 'delegation-a', 'reviewer-intro', 'approval-a',
+  ]);
+
+  const user1 = sessionMessage({
+    itemId: 'user-1', sessionId: 'session-b', eventSeq: 1, sequence: 504,
+    timestamp: '2026-09-04T00:00:03.000Z', author: human, text: '1',
+  });
+  const leadReply = sessionMessage({
+    itemId: 'lead-reply', sessionId: 'session-b', eventSeq: 2, sequence: 505,
+    timestamp: '2026-09-04T00:00:04.000Z', author: lead, text: 'Lead reply',
+  });
+  projection.replace({
+    activeRuns: [runA, runB],
+    items: [user3, reviewerIntro, pending, user1, leadReply],
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  const appended = await source.snapshot();
+  assert.deepEqual(appended.items.slice(0, stableA.length).map(item => [item.itemId, item.sequence]), stableA);
+  assert.deepEqual(appended.items.map(item => item.itemId), [
+    'user-3', 'delegation-a', 'reviewer-intro', 'approval-a', 'user-1', 'lead-reply',
+  ]);
+
+  projection.replace({
+    activeRuns: [{ ...runA, lifecycle: { phase: 'active' } }, runB],
+    items: [
+      user3, reviewerIntro,
+      { ...pending, state: 'denied', actions: [] },
+      user1, leadReply,
+    ],
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  const terminal = await source.snapshot();
+  assert.deepEqual(terminal.items.map(item => item.itemId), appended.items.map(item => item.itemId));
+  assert.deepEqual(terminal.items.map(item => item.sequence), appended.items.map(item => item.sequence));
+  assert.equal(terminal.items.find(item => item.itemId === 'approval-a').state, 'denied');
+  assert.equal(terminal.items.find(item => item.itemId === 'lead-reply').body[0].text.fallback, 'Lead reply');
   source.dispose();
 });
 
@@ -205,7 +309,7 @@ test('merges persisted and new delegation acknowledgements into stable Session c
   replayedSource.dispose();
 });
 
-test('Shell v5 subscription close is first-terminal and unsubscribe is idempotent', async () => {
+test('Shell v6 subscription close is first-terminal and unsubscribe is idempotent', async () => {
   const source = new ChatroomAgentSessionConversationSource(binding, domainSource(), sessionProjection(), 'enter');
   const snapshot = await source.snapshot();
   const result = await source.subscribe(snapshot.snapshotSequence);
@@ -216,8 +320,8 @@ test('Shell v5 subscription close is first-terminal and unsubscribe is idempoten
   assert.deepEqual(second, first);
   assert.equal(await result.handle.closed, first);
   assert.equal(first.code, 'unsubscribed');
-  assert.equal(first.contract, 'cordisx.agent-conversation-shell-subscription-close/v5');
-  assert.equal(first.schemaVersion, 5);
+  assert.equal(first.contract, 'cordisx.agent-conversation-shell-subscription-close/v6');
+  assert.equal(first.schemaVersion, 6);
   source.dispose();
 });
 
@@ -254,7 +358,7 @@ test('snapshot-to-subscribe gap rebases absolute refreshes onto one contiguous l
   source.dispose();
 });
 
-test('committed shortcut changes replace every live Shell v5 snapshot without changing submit', async () => {
+test('committed shortcut changes replace every live Shell v6 snapshot without changing submit', async () => {
   const source = new ChatroomAgentSessionConversationSource(
     binding, domainSource(), sessionProjection(), 'enter',
   );

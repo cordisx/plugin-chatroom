@@ -10,6 +10,8 @@ test('keeps base Chatroom and Manager catalogs in independent namespaces', async
   assert.match(chatroom, /namespace: 'chatroom',[\s\S]*?'navigation\.title': '新建房间'/u);
   assert.match(chatroom, /'composer\.shortcut\.enter': 'Enter 发送'/u);
   assert.match(chatroom, /'composer\.shortcut\.mod-enter': 'Command\/Ctrl\+Enter 发送'/u);
+  assert.match(chatroom, /'agent\.approval\.unavailable': 'Approval unavailable'/u);
+  assert.match(chatroom, /'agent\.approval\.unavailable': '审批不可用'/u);
   assert.equal(
     (manager.match(/namespace: 'chatroom'/gu) ?? []).length,
     1,

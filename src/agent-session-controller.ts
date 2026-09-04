@@ -107,7 +107,7 @@ interface RuntimeSubscription {
 
 export interface ChatroomRoomSessionProjection {
   readonly activeRuns: readonly ReturnType<ChatroomAgentSessionProjector['activeRun']>[];
-  readonly items: readonly import('@cordisx/protocol/agent-conversation-shell/v4').AgentConversationItem[];
+  readonly items: readonly import('@cordisx/protocol/agent-conversation-shell/v6').AgentConversationItem[];
 }
 
 type RuntimeAcquireResult = EntityAgentAcquireResult | CordisXAgentSessionLegacyAcquireResultV1;
@@ -645,7 +645,7 @@ export class ChatroomAgentSessionController {
     for (const page of pendingPages) await observePage(page);
     for (const listener of this.projectionListeners) listener(roomId);
     void result.subscription.closed.then(closed =>
-      this.handleSessionSubscriptionClosed(key, active!, closed));
+      this.handleSessionSubscriptionClosed(roomId, key, active!, closed));
   }
 
   private validateSessionPage(active: RuntimeSubscription, page: SessionSubscriptionPage): void {
@@ -672,6 +672,7 @@ export class ChatroomAgentSessionController {
   }
 
   private async handleSessionSubscriptionClosed(
+    roomId: string,
     key: string,
     active: RuntimeSubscription,
     closed: SessionSubscriptionClosed,
@@ -695,6 +696,11 @@ export class ChatroomAgentSessionController {
       ...(answerer === undefined ? [] : [answerer.dispose()]),
       ...(owner === undefined ? [] : [this.disposeOwner(key, owner.handle)]),
     ]);
+    // An externally fenced Session invalidates the Room's full Shell
+    // projection. Notify after its answerer/owner have been settled so the
+    // source can reacquire the exact persisted Session and replay the durable
+    // asked/decided facts instead of waiting for an unrelated later message.
+    for (const listener of this.projectionListeners) listener(roomId);
   }
 
   private async openApprovalAnswerer(roomId: string, runId: string, agent: Agent): Promise<void> {

@@ -40,7 +40,7 @@ const page = (phase, events, replayThrough = events.at(-1)?.seq ?? -1) => ({
   replayThrough, phase, events,
 });
 
-test('projects exact SessionEvent message identity and explicit self-introduction causation into Shell v4', () => {
+test('projects exact SessionEvent message identity and explicit self-introduction causation into Shell v6', () => {
   let room = roomFixture();
   room = recordRoomSessionSelfIntroduction(room, 'review-run', {
     requestMessageId: 'intro-request',
@@ -178,14 +178,135 @@ test('projects approvals only with real Agent generation and updates from the ma
   assert.equal(pending.agentGeneration, 9);
   assert.equal(pending.approvalId, 'approval-one');
   assert.equal(pending.state, 'pending');
+  assert.equal(pending.participantId, 'reviewer');
+  assert.equal(pending.memberId, 'reviewer');
+  assert.equal(pending.runId, 'review-run');
+  assert.equal(pending.rationale.fallback, 'Needs permission');
+  assert.deepEqual(pending.actions.map(action => action.decision), ['approve', 'deny', 'cancel']);
 
   const decided = projector.project(page('live', [event(1, 'approval/decided', {
     id: 'approval-one', outcome: 'allowed-once',
   })], 0));
   assert.equal(decided.changes[0].kind, 'item-updated');
   assert.equal(decided.changes[0].item.state, 'approved');
+  assert.equal(decided.changes[0].item.agentGeneration, 9);
+  assert.deepEqual(decided.changes[0].item.actions, []);
   assert.equal(decided.changes[0].item.sequence, pending.sequence);
   assert.equal(decided.items.length, 1);
+});
+
+test('cold replay correlates durable asked and decided into one actionless terminal approval without inventing generation', () => {
+  const room = roomFixture();
+  let sequence = room.timelineSequence;
+  const projector = new ChatroomAgentSessionProjector(
+    room, room.runs[0], sessionId, () => ++sequence,
+  );
+  const projected = projector.project(page('replay', [
+    event(22, 'approval/asked', {
+      id: 'approval-cold', toolName: 'shell', reason: 'Needs durable permission',
+    }),
+    event(23, 'approval/decided', {
+      id: 'approval-cold', outcome: 'allowed-once',
+    }),
+  ], 34));
+
+  assert.equal(projected.changes.length, 1);
+  assert.equal(projected.changes[0].kind, 'item-appended');
+  assert.equal(projected.changes[0].eventSeq, 23);
+  const terminal = projected.items[0];
+  assert.equal(terminal.kind, 'approval');
+  assert.equal(terminal.state, 'approved');
+  assert.equal(terminal.sessionId, sessionId);
+  assert.equal(terminal.approvalId, 'approval-cold');
+  assert.equal('agentGeneration' in terminal, false);
+  assert.deepEqual(terminal.actions, []);
+  assert.equal(terminal.rationale.fallback, 'Needs durable permission');
+});
+
+test('cold replay projects unavailable as an actionless failed approval with a localized diagnostic', () => {
+  const room = roomFixture();
+  let sequence = room.timelineSequence;
+  const projector = new ChatroomAgentSessionProjector(
+    room, room.runs[0], sessionId, () => ++sequence,
+  );
+  const projected = projector.project(page('replay', [
+    event(4, 'approval/asked', { id: 'approval-failed', toolName: 'shell' }),
+    event(5, 'approval/decided', { id: 'approval-failed', outcome: 'unavailable' }),
+  ], 5));
+  const terminal = projected.items[0];
+  assert.equal(terminal.kind, 'approval');
+  assert.equal(terminal.state, 'failed');
+  assert.equal('agentGeneration' in terminal, false);
+  assert.deepEqual(terminal.actions, []);
+  assert.deepEqual(terminal.diagnostic, {
+    namespace: 'chatroom', key: 'agent.approval.unavailable', fallback: 'Approval unavailable',
+  });
+});
+
+test('cold replay maps rejected and cancelled outcomes to actionless terminal states', () => {
+  const room = roomFixture();
+  for (const [outcome, state] of [['rejected', 'denied'], ['cancelled', 'cancelled']]) {
+    let sequence = room.timelineSequence;
+    const projector = new ChatroomAgentSessionProjector(
+      room, room.runs[0], sessionId, () => ++sequence,
+    );
+    const projected = projector.project(page('replay', [
+      event(6, 'approval/asked', { id: `approval-${outcome}`, toolName: 'shell' }),
+      event(7, 'approval/decided', { id: `approval-${outcome}`, outcome }),
+    ], 7));
+    assert.equal(projected.items[0].state, state);
+    assert.deepEqual(projected.items[0].actions, []);
+    assert.equal('agentGeneration' in projected.items[0], false);
+  }
+});
+
+test('cold replay never turns asked-only, unpaired, duplicate, or out-of-order approval facts into a card', () => {
+  const room = roomFixture();
+  const createProjector = () => {
+    let sequence = room.timelineSequence;
+    return new ChatroomAgentSessionProjector(
+      room, room.runs[0], sessionId, () => ++sequence,
+    );
+  };
+
+  const askedOnly = createProjector().project(page('replay', [
+    event(8, 'approval/asked', { id: 'asked-only', toolName: 'shell' }),
+  ], 8));
+  assert.deepEqual(askedOnly.items, []);
+
+  const unpaired = createProjector().project(page('replay', [
+    event(9, 'approval/decided', { id: 'unpaired', outcome: 'allowed-once' }),
+  ], 9));
+  assert.deepEqual(unpaired.items, []);
+
+  const duplicateAsked = createProjector().project(page('replay', [
+    event(10, 'approval/asked', { id: 'duplicate-asked', toolName: 'shell' }),
+    event(11, 'approval/asked', { id: 'duplicate-asked', toolName: 'shell' }),
+    event(12, 'approval/decided', { id: 'duplicate-asked', outcome: 'allowed-once' }),
+  ], 12));
+  assert.deepEqual(duplicateAsked.items, []);
+
+  const duplicateDecided = createProjector().project(page('replay', [
+    event(13, 'approval/asked', { id: 'duplicate-decided', toolName: 'shell' }),
+    event(14, 'approval/decided', { id: 'duplicate-decided', outcome: 'allowed-once' }),
+    event(15, 'approval/decided', { id: 'duplicate-decided', outcome: 'allowed-once' }),
+  ], 15));
+  assert.deepEqual(duplicateDecided.items, []);
+  assert.equal(duplicateDecided.requiresSnapshotReplacement, true);
+
+  const outOfOrder = createProjector().project(page('replay', [
+    event(17, 'approval/decided', { id: 'out-of-order', outcome: 'allowed-once' }),
+    event(16, 'approval/asked', { id: 'out-of-order', toolName: 'shell' }),
+  ], 17));
+  assert.deepEqual(outOfOrder.items, []);
+
+  const foreign = createProjector();
+  assert.throws(() => foreign.project({
+    ...page('replay', [event(18, 'approval/asked', {
+      id: 'foreign-session', toolName: 'shell',
+    })], 18),
+    sessionId: 'session-foreign',
+  }), /foreign Session page/u);
 });
 
 test('hides a persisted delegation context envelope even without source event correlation', () => {
@@ -246,7 +367,7 @@ test('keeps lookalike delegation text visible unless the exact legacy envelope v
   assert.equal(projected.changes[0].item.body[0].text.fallback, lookalike);
 });
 
-test('never invents an Agent generation or self-introduction causation from missing facts', () => {
+test('never invents pending approval generation or self-introduction causation from missing facts', () => {
   const room = roomFixture();
   let sequence = room.timelineSequence;
   const projector = new ChatroomAgentSessionProjector(room, room.runs[0], sessionId, () => ++sequence);
