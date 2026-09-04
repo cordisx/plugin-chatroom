@@ -210,7 +210,10 @@ test('keeps B visible by exact admission identity while A stays pending, then re
     roomId: room.id, itemId: submitted.itemId,
     participantId: 'reviewer', memberId: 'reviewer', runId: 'review-run',
     sessionId, messageId: 'admission-message', owner: { pluginId: 'chatroom', generation: 7 },
+    appendAfterItemId: 'approval-a-opaque',
   });
+  assert.equal(linked.admissionMessageLinks[0].appendAfterItemId, 'approval-a-opaque',
+    'the owner document retains only an opaque projection ordering fence');
   const reconciled = projector.reconcileAdmissionLinks(linked, linked.runs[0]);
   assert.equal(reconciled.length, 1);
   assert.equal(reconciled[0].item.kind, 'message');

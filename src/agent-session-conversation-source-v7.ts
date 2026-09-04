@@ -173,6 +173,28 @@ function chronologicalRoomItems(items: readonly AgentConversationItem[]): readon
 }
 
 /**
+ * Applies durable, opaque Room admission append fences after the normal
+ * cross-source chronology is assembled. Moving only the newly admitted item
+ * leaves every already-published item in place; the same fence survives a
+ * reload/cold replay without relying on timestamps or message text.
+ */
+function applyAdmissionAppendAnchors(
+  items: readonly AgentConversationItem[],
+  anchors: readonly Readonly<{ itemId: string; appendAfterItemId: string }>[],
+): readonly AgentConversationItem[] {
+  const ordered = [...items];
+  for (const anchor of anchors) {
+    const itemIndex = ordered.findIndex(item => item.itemId === anchor.itemId);
+    const predecessorIndex = ordered.findIndex(item => item.itemId === anchor.appendAfterItemId);
+    if (itemIndex < 0 || predecessorIndex < 0 || itemIndex > predecessorIndex) continue;
+    const [item] = ordered.splice(itemIndex, 1);
+    const nextPredecessorIndex = ordered.findIndex(candidate => candidate.itemId === anchor.appendAfterItemId);
+    ordered.splice(nextPredecessorIndex + 1, 0, item);
+  }
+  return Object.freeze(ordered);
+}
+
+/**
  * Atomic Shell-v7 adapter around the accepted Chatroom domain source. Domain
  * state/copy stays unchanged; only execution facts are replaced by the
  * SessionEvent projector.
@@ -362,7 +384,10 @@ export class ChatroomAgentSessionConversationSourceV7 implements AgentConversati
     // Once their deterministic chronology is known, assign one Room-local
     // presentation coordinate from that order. This makes replay independent
     // of which source happened to reserve a process-local coordinate first.
-    const items = chronologicalRoomItems(mergedItems)
+    const items = applyAdmissionAppendAnchors(
+      chronologicalRoomItems(mergedItems),
+      projection.admissionAppendAnchors ?? [],
+    )
       .map((item, sequence) => item.sequence === sequence ? item : { ...item, sequence });
     // Projection and domain notifications may overlap while a Session lease
     // is being replaced. A refresh superseded during an await must never
