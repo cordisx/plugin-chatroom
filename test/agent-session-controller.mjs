@@ -209,6 +209,10 @@ class FakeApprovals {
   requestResolvers = new Map();
   facts = [];
 
+  constructor({ resolverRegistrationResult } = {}) {
+    this.resolverRegistrationResult = resolverRegistrationResult;
+  }
+
   async registerAnswerer(agent, answerer) {
     this.answerers.set(agent.id, { agent, answerer });
     return {
@@ -232,6 +236,8 @@ class FakeApprovals {
   }
 
   async registerRequestResolver(requester, resolver) {
+    const result = this.resolverRegistrationResult?.(requester);
+    if (result !== undefined) return result;
     const registration = {
       $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/approval-request-routing-registration.v1.schema.json',
       contract: 'cordisx.approval-request-routing-registration/v1', schemaVersion: 1,
@@ -242,14 +248,20 @@ class FakeApprovals {
         agentGeneration: requester.agent.generation, definition: requester.definition,
       },
     };
-    const entry = { requester, resolver, registration, closed: false };
+    let resolveClosed;
+    const closed = new Promise(resolve => { resolveClosed = resolve; });
+    const entry = { requester, resolver, registration, closedCode: undefined, resolveClosed };
     this.requestResolvers.set(requester.agent.id, entry);
     return {
       status: 'registered',
       handle: {
         registration,
-        closed: Promise.resolve({ ...registration, status: 'closed', code: 'disposed' }),
-        dispose: async () => { entry.closed = true; return { ...registration, status: 'closed', code: 'disposed' }; },
+        closed,
+        dispose: async () => {
+          entry.closedCode ??= 'disposed';
+          entry.resolveClosed({ ...registration, status: 'closed', code: entry.closedCode });
+          return { ...registration, status: 'closed', code: entry.closedCode };
+        },
       },
     };
   }
@@ -333,7 +345,9 @@ function roomWithRun(sessionId) {
   return sessionId === undefined ? room : bindRoomRunSession(room, 'review-run', sessionId);
 }
 
-function runtimeHarness({ room = roomWithRun(), createAdmissions = [], resumeAdmissions = [] } = {}) {
+function runtimeHarness({
+  room = roomWithRun(), createAdmissions = [], resumeAdmissions = [], resolverRegistrationResult,
+} = {}) {
   const sessions = new Map();
   for (const run of room.runs) {
     if (run.sessionId !== undefined) sessions.set(run.sessionId, new FakeSession(run.sessionId));
@@ -375,7 +389,7 @@ function runtimeHarness({ room = roomWithRun(), createAdmissions = [], resumeAdm
     },
     get: async id => handles.find(pair => pair.handle.agent.id === id)?.handle.agent,
   };
-  const approvals = new FakeApprovals();
+  const approvals = new FakeApprovals({ resolverRegistrationResult });
   return {
     sessions, creates, resumes, legacyAcquires, handles, sessionGets, agents, approvals,
     sessionRegistry: { get: async id => { sessionGets.push(id); return sessions.get(id); } },
@@ -920,6 +934,92 @@ test('Shell v8 admission reuses the exact Lead authority before creating Reviewe
   store.dispose();
 });
 
+test('Shell v8 admission stops before issue or reserve when the exact Reviewer resolver is not registered', async () => {
+  let room = createRoom({ id: 'room', title: 'Room' });
+  room = addRoomRun(room, { runId: 'lead-run', memberId: 'leader', title: 'Lead', status: 'creating' });
+  room = bindRoomRunSession(room, 'lead-run', 'cx-session.lead');
+  room = addRoomRun(room, { runId: 'review-run', memberId: 'reviewer', title: 'Reviewer', status: 'creating' });
+  const harness = runtimeHarness({
+    room,
+    resolverRegistrationResult: requester => requester.agent.id === 'cx-session.lead'
+      ? undefined
+      : { status: 'unavailable', code: 'host-unavailable' },
+  });
+  const store = DurableChatroomRoomStore.memory([room]);
+  const controller = new ChatroomAgentSessionController(
+    { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+  let issues = 0;
+  let reserves = 0;
+
+  await assert.rejects(controller.submitDeliveriesViaAdmissionV3(
+    room.id, [{ memberId: 'reviewer', runId: 'review-run' }], {
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-command-origin.v1.schema.json',
+      contract: 'cordisx.agent-command-origin/v1', schemaVersion: 1,
+      originId: 'origin-v8-resolver-refused', binding: { bindingId: 'binding-v8', ownerGeneration: 'owner-v8' },
+      generation: 'shell-v8', executionId: 'execution-v8', commandId: CHATROOM_COMMAND_SUBMIT,
+      scope: 'composer-submit',
+      room: { roomId: room.id, participantId: 'command-room', memberId: 'command-room', runId: 'command-run' },
+    },
+    'Do not submit without a registered Reviewer resolver.',
+    { issue: async () => { issues += 1; throw new Error('must not issue'); } },
+    { reserve: async () => { reserves += 1; throw new Error('must not reserve'); } },
+  ), /approval request resolver was not registered: host-unavailable/);
+
+  assert.equal(issues, 0);
+  assert.equal(reserves, 0);
+  assert.equal(harness.handles.length, 2);
+  await controller.dispose();
+  store.dispose();
+});
+
+test('Shell v8 admission stops before issue or reserve when the exact Reviewer resolver is denied or throws', async () => {
+  for (const [label, resolverRegistrationResult, expected] of [
+    ['denied', () => ({ status: 'denied', code: 'permission-denied' }), /approval request resolver was not registered: permission-denied/],
+    ['error', () => { throw new Error('resolver registration interrupted'); }, /resolver registration interrupted/],
+  ]) {
+    let room = createRoom({ id: `room-${label}`, title: 'Room' });
+    room = addRoomRun(room, { runId: 'lead-run', memberId: 'leader', title: 'Lead', status: 'creating' });
+    room = bindRoomRunSession(room, 'lead-run', 'cx-session.lead');
+    room = addRoomRun(room, { runId: 'review-run', memberId: 'reviewer', title: 'Reviewer', status: 'creating' });
+    const harness = runtimeHarness({
+      room,
+      resolverRegistrationResult: requester => requester.agent.id === 'cx-session.lead'
+        ? undefined
+        : resolverRegistrationResult(),
+    });
+    const store = DurableChatroomRoomStore.memory([room]);
+    const controller = new ChatroomAgentSessionController(
+      { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+      CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+      store,
+    );
+    let issues = 0;
+    let reserves = 0;
+
+    await assert.rejects(controller.submitDeliveriesViaAdmissionV3(
+      room.id, [{ memberId: 'reviewer', runId: 'review-run' }], {
+        $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-command-origin.v1.schema.json',
+        contract: 'cordisx.agent-command-origin/v1', schemaVersion: 1,
+        originId: `origin-v8-resolver-${label}`, binding: { bindingId: 'binding-v8', ownerGeneration: 'owner-v8' },
+        generation: 'shell-v8', executionId: 'execution-v8', commandId: CHATROOM_COMMAND_SUBMIT,
+        scope: 'composer-submit',
+        room: { roomId: room.id, participantId: 'command-room', memberId: 'command-room', runId: 'command-run' },
+      },
+      'Do not submit without a registered Reviewer resolver.',
+      { issue: async () => { issues += 1; throw new Error('must not issue'); } },
+      { reserve: async () => { reserves += 1; throw new Error('must not reserve'); } },
+    ), expected);
+
+    assert.equal(issues, 0, `${label} must not issue`);
+    assert.equal(reserves, 0, `${label} must not reserve`);
+    await controller.dispose();
+    store.dispose();
+  }
+});
+
 test('Shell v8 admission fails closed when Reviewer has no exact reports-to Lead run', async () => {
   const room = roomWithRun();
   const harness = runtimeHarness({ room });
@@ -1442,7 +1542,7 @@ test('dispose closes every Session subscription, answerer, and in-memory owner h
 
   assert.equal(session.unsubscribeCount, 1);
   assert.equal(harness.handles[0].calls.disposed, 1);
-  assert.equal(harness.approvals.requestResolvers.get(session.id).closed, true);
+  assert.equal(harness.approvals.requestResolvers.get(session.id).closedCode, 'disposed');
   assert.equal(controller.ownerHandleCount, 0);
   store.dispose();
 });

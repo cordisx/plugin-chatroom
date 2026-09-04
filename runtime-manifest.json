@@ -1,6 +1,6 @@
 {
-  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v6.schema.json",
-  "schemaVersion": 6,
+  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v8.schema.json",
+  "schemaVersion": 8,
   "id": "chatroom",
   "name": "Chatroom",
   "capabilities": [
@@ -26,10 +26,13 @@
       "name": "approvals.answer",
       "required": false,
       "scope": {
-        "sessionIds": {
-          "kind": "host-route-param",
-          "routeId": "room-session-detail",
-          "param": "sessionId"
+        "authorityRequester": {
+          "kind": "approval-authority-requester-route",
+          "requester": {
+            "kind": "host-route-param",
+            "routeId": "room-session-detail",
+            "param": "sessionId"
+          }
         }
       }
     }

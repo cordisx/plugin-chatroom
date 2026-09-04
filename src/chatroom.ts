@@ -2,7 +2,6 @@ import type { Context } from '@deepseek-ai/cordis';
 import { Config, ChatroomComposerSettings, configApplies } from './composer-settings.js';
 import {
   CORDISX_PAGE_SCHEMA_V3,
-  CORDISX_PLUGIN_MANIFEST_SCHEMA_V6,
   CORDISX_ROUTE_SCHEMA_V2,
   type CordisXCommandContext,
 } from 'cordisx/contracts';
@@ -12,7 +11,7 @@ import type {
 } from '@cordisx/protocol/agent-conversation-shell/v7';
 import type { AgentConversationShellBinding as AgentConversationShellBindingV8 } from '@cordisx/protocol/agent-conversation-shell/v8';
 import type { AgentCommandOrigin } from '@cordisx/protocol/agent-admission/v1';
-import type { PluginRuntimeManifestV6 } from '@cordisx/protocol/plugin-manifest/v6';
+import type { PluginRuntimeManifestV8 } from '@cordisx/protocol/plugin-manifest/v8';
 
 import {
   CHATROOM_COMMAND_APPROVAL_APPROVE,
@@ -107,8 +106,8 @@ const message = (key: keyof ChatroomMessages, fallback: string) => ({
 } as const);
 
 export const manifest = {
-  $schema: CORDISX_PLUGIN_MANIFEST_SCHEMA_V6,
-  schemaVersion: 6,
+  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v8.schema.json',
+  schemaVersion: 8,
   id: 'chatroom',
   name: 'Chatroom',
   capabilities: [
@@ -127,11 +126,16 @@ export const manifest = {
     {
       name: 'approvals.answer',
       required: false,
-      scope: { sessionIds: { kind: 'host-route-param', routeId: 'room-session-detail', param: 'sessionId' } },
+      scope: {
+        authorityRequester: {
+          kind: 'approval-authority-requester-route',
+          requester: { kind: 'host-route-param', routeId: 'room-session-detail', param: 'sessionId' },
+        },
+      },
     },
   ],
   services: [],
-} as const satisfies PluginRuntimeManifestV6;
+} as const satisfies PluginRuntimeManifestV8;
 
 export const inject = [
   'i18n', 'commands', 'pages', 'routes', 'slots', 'managerContent',
