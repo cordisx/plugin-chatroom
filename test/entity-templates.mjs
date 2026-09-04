@@ -13,12 +13,17 @@ import {
   CHATROOM_DEFAULT_QA,
   CHATROOM_DEFAULT_REVIEWER,
 } from '../dist/agent-definition.js';
+import { roomSessionDetailRoute } from '../dist/chatroom.js';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const packageManifest = JSON.parse(readFileSync(path.join(repositoryRoot, 'cordisx-package.json'), 'utf8'));
 const protocolEntry = new URL(import.meta.resolve('@cordisx/protocol/entities/v1'));
 const schemaNames = [
   'ui-common.v1.schema.json',
+  'channel-common.v1.schema.json',
+  'host-dom-common.v1.schema.json',
+  'platform-session.v1.schema.json',
+  'route.v2.schema.json',
   'session-common.v1.schema.json',
   'agent-loop-common.v1.schema.json',
   'agents-common.v1.schema.json',
@@ -30,6 +35,9 @@ const schemaNames = [
   'entity-file.v1.schema.json',
   'entity-template-declaration.v1.schema.json',
   'plugin-package.v5.schema.json',
+  'plugin-manifest.v5.schema.json',
+  'plugin-manifest.v6.schema.json',
+  'plugin-package.v6.schema.json',
 ];
 const ajv = new Ajv2020({ allErrors: true, strict: true, allowUnionTypes: true });
 addFormats(ajv);
@@ -112,8 +120,13 @@ const materializeTemplate = declaration => {
   };
 };
 
-test('package v5 declares five schema-valid entity templates with exact framed digests', () => {
-  validate('plugin-package.v5.schema.json', packageManifest);
+test('package v6 declares five schema-valid entity templates with exact framed digests', () => {
+  validate('plugin-package.v6.schema.json', packageManifest);
+  validate('route.v2.schema.json', roomSessionDetailRoute);
+  const runtimeManifest = JSON.parse(readFileSync(
+    path.join(repositoryRoot, packageManifest.runtimeManifest.path), 'utf8',
+  ));
+  validate('plugin-manifest.v6.schema.json', runtimeManifest);
   assert.equal(packageManifest.entityTemplates.length, 5);
   assert.deepEqual(packageManifest.entityTemplates.map(item => item.agentId), [
     'chatroom.generalist',
@@ -159,15 +172,17 @@ test('templates preserve every accepted definition field while revision becomes 
   }
 });
 
-test('package pins the exact Protocol entities release and runtime manifest bytes', () => {
+test('package pins the exact Protocol v6 and Host releases with exact runtime manifest bytes', () => {
   const packageJson = JSON.parse(readFileSync(path.join(repositoryRoot, 'package.json'), 'utf8'));
   assert.equal(packageJson.devDependencies['@cordisx/protocol'],
-    'github:cordisx/cordisx-protocol#348f29dcbd6d4ac213f11fbb5fd8edac0cf376d2');
+    'github:cordisx/cordisx-protocol#7b9b26b5ece11d148ee9dee139fabc455bce3d67');
   assert.equal(packageJson.devDependencies.cordisx,
-    'github:cordisx/cordisx#33de67a4d5ab8618f6da3b3860e6b5315f146d15');
+    'github:cordisx/cordisx#9368e925122c3dd854c0beca8884828dcf8d65b2');
   assert.equal(packageManifest.entry, './dist/chatroom.js');
   assert.equal(packageManifest.compatibility.protocolSchemas.includes(
     'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-file.v1.schema.json'), true);
+  assert.equal(packageManifest.compatibility.protocolSchemas.includes(
+    'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v6.schema.json'), true);
   const runtimeManifest = readFileSync(path.join(repositoryRoot, packageManifest.runtimeManifest.path), 'utf8');
   const digest = `sha256:${createHash('sha256').update(runtimeManifest).digest('hex')}`;
   assert.equal(digest, packageManifest.runtimeManifest.digest);
