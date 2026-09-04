@@ -14,6 +14,7 @@ import {
 } from './room-management.js';
 import { ChatroomRoomNavigationCollection } from './room-navigation.js';
 import { DurableChatroomRoomStore } from './room-store.js';
+import { ChatroomSidebarImageCache } from './sidebar-image-cache.js';
 
 export interface ChatroomRoomManagementRegistration {
   readonly id: ChatroomRoomManagementCommand;
@@ -25,14 +26,16 @@ export interface ChatroomRoomManagementRegistration {
  * It owns no page, route, DOM, or runtime simulation projection.
  */
 export class ChatroomProductBase {
+  readonly sidebarImages: ChatroomSidebarImageCache;
   readonly activeRooms: ChatroomRoomNavigationCollection;
   readonly archivedRooms: ChatroomRoomNavigationCollection;
   readonly managementCommands: readonly ChatroomRoomManagementRegistration[];
   private disposed = false;
 
   private constructor(readonly store: DurableChatroomRoomStore) {
-    this.activeRooms = new ChatroomRoomNavigationCollection(store.rooms, 'active');
-    this.archivedRooms = new ChatroomRoomNavigationCollection(store.rooms, 'archived');
+    this.sidebarImages = new ChatroomSidebarImageCache();
+    this.activeRooms = new ChatroomRoomNavigationCollection(store.rooms, 'active', this.sidebarImages);
+    this.archivedRooms = new ChatroomRoomNavigationCollection(store.rooms, 'archived', this.sidebarImages);
     this.managementCommands = Object.freeze(([
       CHATROOM_COMMAND_ROOM_PIN,
       CHATROOM_COMMAND_ROOM_RENAME,
@@ -56,6 +59,7 @@ export class ChatroomProductBase {
     this.disposed = true;
     this.activeRooms.dispose();
     this.archivedRooms.dispose();
+    this.sidebarImages.dispose();
     this.store.dispose();
   }
 }

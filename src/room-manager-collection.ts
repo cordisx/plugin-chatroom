@@ -1,4 +1,3 @@
-import { cloneAgentAvatarRef } from '@cordisx/protocol/agent-avatar/v1';
 import type {
   CordisXCommandContext,
   ManagerCollectionAction,
@@ -170,17 +169,8 @@ function publicRoomTitle(room: Room): string {
 }
 
 function roomLeadingVisual(room: Room): ManagerCollectionLeadingVisual {
-  const seen = new Set<string>();
-  const entries = [];
-  for (const participant of room.participants) {
-    if (participant.avatar === undefined || seen.has(participant.id)) continue;
-    seen.add(participant.id);
-    entries.push(Object.freeze({ id: participant.id, avatar: cloneAgentAvatarRef(participant.avatar) }));
-    if (entries.length === 16) break;
-  }
-  return entries.length === 0
-    ? Object.freeze({ kind: 'semantic-icon', icon: 'host:layers' })
-    : Object.freeze({ kind: 'avatar-stack', entries: Object.freeze(entries) });
+  void room;
+  return Object.freeze({ kind: 'semantic-icon', icon: 'host:layers' });
 }
 
 function renameAction(room: Room): ManagerCollectionAction {
@@ -203,7 +193,7 @@ function renameAction(room: Room): ManagerCollectionAction {
       initialValue,
       minLength: 1,
       maxLength: CHATROOM_ROOM_TITLE_MAX_CODE_POINTS,
-      trim: 'both',
+      trim: 'both' as const,
     },
     feedback: feedback(
       'manager.feedback.renamed', 'Chat renamed',

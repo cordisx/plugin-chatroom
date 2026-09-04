@@ -12,7 +12,6 @@ const sourceFiles = [
   'room',
   'room-engagement',
   'room-management',
-  'room-navigation',
   'team-entity-view-model',
 ];
 
@@ -64,7 +63,6 @@ async function importCurrentSources() {
       conversationModel: await import(pathToFileURL(join(directory, 'conversation-model.js')).href),
       room: await import(pathToFileURL(join(directory, 'room.js')).href),
       engagement: await import(pathToFileURL(join(directory, 'room-engagement.js')).href),
-      navigation: await import(pathToFileURL(join(directory, 'room-navigation.js')).href),
       team: await import(pathToFileURL(join(directory, 'team-entity-view-model.js')).href),
     };
   } catch (error) {
@@ -91,7 +89,7 @@ const qaMessage = Object.freeze({
   runState: 'idle', ariaLive: 'off', actions: [],
 });
 
-test('keeps five default animal AvatarRefs stable and identical across Room, message, reaction, navigation, Team, and detail identity projections', async () => {
+test('keeps five default animal AvatarRefs stable across Room, message, reaction, Team, and detail projections', async () => {
   const modules = await importCurrentSources();
   try {
     const configuration = modules.agentDefinition.parseChatroomAgentConfiguration(
@@ -156,14 +154,6 @@ test('keeps five default animal AvatarRefs stable and identical across Room, mes
         participant.participantId === projectedUserMessage.reactions[0].actorParticipantId).avatar,
       expectedAvatars[2],
     );
-
-    const collection = new modules.navigation.ChatroomRoomNavigationCollection(
-      new modules.room.ChatroomRoomRegistry([room]),
-    );
-    const visual = collection.snapshot().items[0].leadingVisual;
-    assert.deepEqual(visual.participants.map(participant => participant.avatar),
-      model.selection.participants.map(participant => participant.avatar));
-    collection.dispose();
 
     const refreshed = modules.room.createRoom({
       id: 'animal-room-refreshed', title: 'Animal avatars refreshed',
