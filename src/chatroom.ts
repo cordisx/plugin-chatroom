@@ -401,6 +401,9 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
         throw new Error('Chatroom composer submit resolved no deliveries.');
       }
       const admissionOrigin = composerSubmissionOrigin(hostContext);
+      if (admissionOrigin.status === 'legacy' && controller.requiresAdmissionOrigin(hostContext)) {
+        throw new Error('Shell v8 composer admission origin is required.');
+      }
       if (admissionOrigin.status === 'invalid') {
         throw new Error('Shell v8 composer admission origin is invalid.');
       }
@@ -451,8 +454,11 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     unsubscribeSettings = composerSettings.subscribe(policy => source.setComposerShortcutPolicy(policy));
     return source;
   });
-  const createV7ConversationSource = (binding: AgentConversationShellBinding) => {
-    const domain = controller.createSource(v3BindingFor(binding));
+  const createV7ConversationSource = (
+    binding: AgentConversationShellBinding,
+    admissionOriginRequired = false,
+  ) => {
+    const domain = controller.createSource(v3BindingFor(binding), { admissionOriginRequired });
     let unsubscribeSettings = () => {};
     const source = new ChatroomAgentSessionConversationSourceV7(
       binding,
@@ -469,7 +475,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   // path above without changing v6/v7 behavior.
   ctx.agentConversationShell.registerSourceV7(createV7ConversationSource);
   const conversation = ctx.agentConversationShell.registerSourceV8((binding: AgentConversationShellBindingV8) =>
-    createV7ConversationSource(binding));
+    createV7ConversationSource(binding, true));
   const playgroundBridge = ctx.reflect.get(
     'playgroundRoomSimulationBridge', false,
   ) as PlaygroundRoomSimulationBridgeService | undefined;
