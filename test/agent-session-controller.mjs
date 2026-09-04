@@ -835,6 +835,121 @@ test('first explicit mutation creates once, persists only SessionId, and retains
   store.dispose();
 });
 
+test('Shell v9 bootstrap target is issued before first exact Agent acquisition and reservation submit', async () => {
+  let room = createRoom({ id: 'room-bootstrap', title: 'Bootstrap Room' });
+  room = addRoomRun(room, {
+    runId: 'lead-bootstrap', memberId: 'leader', title: 'Lead', status: 'creating',
+  });
+  const member = room.memberships.find(candidate => candidate.memberId === 'leader');
+  const harness = runtimeHarness({ room });
+  const store = DurableChatroomRoomStore.memory([room]);
+  const controller = new ChatroomAgentSessionController(
+    { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+  const order = [];
+  const origin = {
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-bootstrap-command-origin.v1.schema.json',
+    contract: 'cordisx.agent-bootstrap-command-origin/v1', schemaVersion: 1,
+    originId: 'origin-v9', binding: { bindingId: 'binding-v9', ownerGeneration: 'owner-v9' },
+    generation: 'shell-v9', executionId: 'execution-v9', commandId: CHATROOM_COMMAND_SUBMIT,
+    scope: 'composer-submit',
+  };
+  const targets = {
+    issue: async request => {
+      order.push('issue');
+      assert.equal(harness.creates.length, 0, 'bootstrap target binds before acquire/create');
+      assert.deepEqual(request, {
+        origin,
+        target: { participantId: member.participantId, memberId: member.memberId, runId: 'lead-bootstrap' },
+      });
+      return {
+        status: 'issued',
+        origin: {
+          $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-admission-bootstrap-target-origin.v4.schema.json',
+          contract: 'cordisx.agent-admission-bootstrap-target-origin/v4', schemaVersion: 4,
+          token: 'bootstrap-lead',
+        },
+      };
+    },
+  };
+  const reservations = {
+    reserve: async request => {
+      order.push('reserve');
+      assert.equal(harness.creates.length, 1, 'reserve receives the exact newly acquired Agent handle');
+      assert.equal(request.handle, harness.handles[0].handle);
+      assert.equal(request.origin.token, 'bootstrap-lead');
+      assert.deepEqual(request.message, { text: 'Start the first Room task.' });
+      return {
+        status: 'reserved',
+        reservation: {
+          reservationId: 'bootstrap-reservation-lead',
+          submit: async () => {
+            order.push('submit');
+            return admission('host-v9-message');
+          },
+          revoke: async () => {},
+        },
+      };
+    },
+  };
+
+  const outcomes = await controller.submitDeliveriesViaAdmissionV4(
+    room.id, [{ memberId: 'leader', runId: 'lead-bootstrap' }], origin,
+    'Start the first Room task.', targets, reservations,
+  );
+
+  assert.deepEqual(order, ['issue', 'reserve', 'submit']);
+  assert.deepEqual(outcomes, [{
+    memberId: 'leader', runId: 'lead-bootstrap',
+    outcome: {
+      status: 'accepted', roomId: room.id, runId: 'lead-bootstrap', messageId: 'host-v9-message',
+      sessionId: 'session-created-1', disposition: 'created',
+    },
+  }]);
+  assert.deepEqual(harness.handles[0].calls.messages, [], 'bootstrap admission never falls through to an Agent driver');
+  await controller.dispose();
+  store.dispose();
+});
+
+test('Shell v9 bootstrap denial fails the freshly persisted run closed before acquire or reserve', async () => {
+  let room = createRoom({ id: 'room-bootstrap-denied', title: 'Bootstrap Room' });
+  room = addRoomRun(room, {
+    runId: 'lead-bootstrap-denied', memberId: 'leader', title: 'Lead', status: 'creating',
+  });
+  const harness = runtimeHarness({ room });
+  const store = DurableChatroomRoomStore.memory([room]);
+  const controller = new ChatroomAgentSessionController(
+    { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+  let reserves = 0;
+  const outcomes = await controller.submitDeliveriesViaAdmissionV4(
+    room.id, [{ memberId: 'leader', runId: 'lead-bootstrap-denied' }], {
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-bootstrap-command-origin.v1.schema.json',
+      contract: 'cordisx.agent-bootstrap-command-origin/v1', schemaVersion: 1,
+      originId: 'origin-v9-denied', binding: { bindingId: 'binding-v9', ownerGeneration: 'owner-v9' },
+      generation: 'shell-v9', executionId: 'execution-v9', commandId: CHATROOM_COMMAND_SUBMIT,
+      scope: 'composer-submit',
+    },
+    'Do not acquire without a bootstrap target.',
+    { issue: async () => ({ status: 'denied', code: 'target-denied' }) },
+    { reserve: async () => { reserves += 1; throw new Error('must not reserve'); } },
+  );
+
+  assert.deepEqual(outcomes, [{
+    memberId: 'leader', runId: 'lead-bootstrap-denied',
+    outcome: { status: 'denied', roomId: room.id, runId: 'lead-bootstrap-denied', code: 'target-denied' },
+  }]);
+  assert.equal(harness.creates.length, 0);
+  assert.equal(reserves, 0);
+  assert.equal(store.document(room.id)?.room.runs.find(run => run.runId === 'lead-bootstrap-denied')?.status, 'failed');
+  await controller.dispose();
+  store.dispose();
+});
+
 test('Shell v8 admission reuses the exact Lead authority before creating Reviewer, then routes a v2 pending approval', async () => {
   let room = createRoom({ id: 'room', title: 'Room' });
   room = addRoomRun(room, {
