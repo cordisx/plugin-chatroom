@@ -457,6 +457,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
         const outcomes = await agentSession.submitDeliveriesViaAdmissionV6(
           intent.roomId,
           intent.deliveries,
+          intent.userItemId,
           admissionOrigin.origin,
           intent.dispatchText,
           ctx.agentAdmissionBootstrapRouteDeclarations,

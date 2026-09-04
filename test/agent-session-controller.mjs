@@ -951,7 +951,19 @@ test('Shell v9 bootstrap denial fails the freshly persisted run closed before ac
 });
 
 test('Shell v9 route declaration binds the exact persisted Room before first Agent acquisition and reservation submit', async () => {
-  let room = createRoom({ id: 'room-bootstrap-route', title: 'Bootstrap Route Room' });
+  const userItem = {
+    kind: 'message', itemId: 'route-user-item', messageId: 'route-user-message', sequence: 1,
+    source: 'agent-loop',
+    author: { participantId: 'user', role: 'human', displayName: { key: 'user', fallback: 'You' } },
+    semantic: { purpose: 'conversation' },
+    body: [{ kind: 'text', text: { key: 'message', fallback: 'Start the first Room task.' } }],
+    reactions: [], timestamp: '2026-09-04T00:00:00.000Z', deliveryState: 'pending',
+    runState: 'idle', ariaLive: 'off', actions: [],
+  };
+  let room = createRoom({
+    id: 'room-bootstrap-route', title: 'Bootstrap Route Room', timelineSequence: 1,
+    participants: [{ id: 'user', name: 'You', kind: 'human' }], items: [userItem],
+  });
   room = addRoomRun(room, {
     runId: 'lead-bootstrap-route', memberId: 'leader', title: 'Lead', status: 'creating',
   });
@@ -1017,7 +1029,7 @@ test('Shell v9 route declaration binds the exact persisted Room before first Age
   };
 
   const outcomes = await controller.submitDeliveriesViaAdmissionV6(
-    room.id, [{ memberId: 'leader', runId: 'lead-bootstrap-route' }], origin,
+    room.id, [{ memberId: 'leader', runId: 'lead-bootstrap-route' }], userItem.itemId, origin,
     'Start the first Room task.', declarations, reservations,
   );
 
@@ -1030,8 +1042,126 @@ test('Shell v9 route declaration binds the exact persisted Room before first Age
     },
   }]);
   assert.deepEqual(harness.handles[0].calls.messages, [], 'route admission never falls through to an Agent driver');
+  assert.deepEqual(store.rooms.get(room.id).admissionMessageLinks, [{
+    roomId: room.id, itemId: userItem.itemId,
+    participantId: member.participantId, memberId: member.memberId, runId: 'lead-bootstrap-route',
+    sessionId: 'session-created-1', messageId: 'host-v9-route-message', owner,
+  }]);
   await controller.dispose();
   store.dispose();
+});
+
+test('Shell v9 retains distinct N-target admission links and projects one stable Room item across cold replay', async () => {
+  for (const memberIds of [['leader'], ['leader', 'reviewer'], ['leader', 'reviewer', 'integrator']]) {
+    const label = `n${memberIds.length}`;
+    const userItem = {
+      kind: 'message', itemId: `user-item-${label}`, messageId: `user-message-${label}`, sequence: 1,
+      source: 'agent-loop',
+      author: { participantId: 'user', role: 'human', displayName: { key: 'user', fallback: 'You' } },
+      semantic: { purpose: 'conversation' },
+      body: [{ kind: 'text', text: { key: 'message', fallback: `Room ${label}` } }],
+      reactions: [], timestamp: '2026-09-04T00:00:00.000Z', deliveryState: 'pending',
+      runState: 'idle', ariaLive: 'off', actions: [],
+    };
+    let room = createRoom({
+      id: `room-${label}`, title: `Room ${label}`, timelineSequence: 1,
+      participants: [{ id: 'user', name: 'You', kind: 'human' }], items: [userItem],
+    });
+    for (const memberId of memberIds) {
+      room = addRoomRun(room, {
+        runId: `${memberId}-run-${label}`, memberId, title: memberId, status: 'creating',
+      });
+    }
+    const harness = runtimeHarness({ room });
+    const store = DurableChatroomRoomStore.memory([room]);
+    const controller = new ChatroomAgentSessionController(
+      { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+      CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+      store,
+    );
+    const origin = {
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-bootstrap-command-origin.v1.schema.json',
+      contract: 'cordisx.agent-bootstrap-command-origin/v1', schemaVersion: 1,
+      originId: `origin-${label}`, binding: { bindingId: `binding-${label}`, ownerGeneration: `owner-${label}` },
+      generation: `shell-${label}`, executionId: `execution-${label}`, commandId: CHATROOM_COMMAND_SUBMIT,
+      scope: 'composer-submit',
+    };
+    const declarations = {
+      declare: async request => ({
+        status: 'declared',
+        continuation: {
+          $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-admission-bootstrap-route-continuation.v6.schema.json',
+          contract: 'cordisx.agent-admission-bootstrap-route-continuation/v6', schemaVersion: 6,
+          token: `continuation-${request.target.runId}`,
+        },
+      }),
+    };
+    const reservations = {
+      reserve: async request => {
+        const runId = request.continuation.token.slice('continuation-'.length);
+        const messageId = `admission-${runId}`;
+        return {
+          status: 'reserved',
+          reservation: {
+            reservationId: `reservation-${runId}`,
+            submit: async () => {
+              await request.handle.agent.session.emitLive([
+                sessionEvent(request.handle.agent.session.id, 0, 'turn/start', { turn: 1 }),
+                messageEvent(request.handle.agent.session.id, 1, {
+                  id: messageId, role: 'user', content: [{ type: 'text', text: `Host ${runId}` }],
+                  source: { kind: 'plugin', pluginId: owner.pluginId, generation: owner.generation, form: 'relay' },
+                }),
+              ]);
+              return admission(messageId);
+            },
+            revoke: async () => {},
+          },
+        };
+      },
+    };
+    const deliveries = memberIds.map(memberId => ({ memberId, runId: `${memberId}-run-${label}` }));
+    const outcomes = await controller.submitDeliveriesViaAdmissionV6(
+      room.id, deliveries, userItem.itemId, origin, `Room ${label}`, declarations, reservations,
+    );
+    assertChatroomAdmissionDeliveriesAccepted(outcomes);
+    const persisted = store.rooms.get(room.id);
+    const links = persisted.admissionMessageLinks ?? [];
+    assert.equal(links.length, memberIds.length, `${label} records every exact target`);
+    assert.equal(new Set(links.map(link => `${link.sessionId}/${link.messageId}`)).size, memberIds.length);
+    assert.ok(links.every(link => link.itemId === userItem.itemId
+      && link.owner.pluginId === owner.pluginId && link.owner.generation === owner.generation));
+    const projected = controller.projectionForRoom(room.id);
+    assert.equal(projected.items.length, 1, `${label} never duplicates the single Room user item`);
+    assert.ok(links.some(link => link.messageId === projected.items[0].messageId));
+
+    await controller.dispose();
+    const coldHarness = runtimeHarness({ room: persisted });
+    for (const link of links) {
+      coldHarness.sessions.get(link.sessionId).replay = [
+        sessionEvent(link.sessionId, 0, 'turn/start', { turn: 1 }),
+        messageEvent(link.sessionId, 1, {
+          id: link.messageId, role: 'user', content: [{ type: 'text', text: `Host ${link.runId}` }],
+          source: { kind: 'plugin', pluginId: link.owner.pluginId, generation: link.owner.generation, form: 'relay' },
+        }),
+      ];
+    }
+    const coldStore = DurableChatroomRoomStore.memory([persisted]);
+    const cold = new ChatroomAgentSessionController(
+      { agents: coldHarness.agents, sessions: coldHarness.sessionRegistry, approvals: coldHarness.approvals },
+      CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+      coldStore,
+    );
+    await cold.hydrateRoom(room.id);
+    const replayed = cold.projectionForRoom(room.id);
+    assert.equal(replayed.items.length, 1, `${label} cold replay preserves the one public item`);
+    assert.deepEqual(
+      replayed.items.map(item => [item.itemId, item.messageId, item.sequence]),
+      projected.items.map(item => [item.itemId, item.messageId, item.sequence]),
+    );
+    await cold.dispose();
+    coldStore.dispose();
+    store.dispose();
+  }
 });
 
 test('Shell v9 route declaration denial fails the persisted run closed before acquire or reserve', async () => {
@@ -1048,7 +1178,7 @@ test('Shell v9 route declaration denial fails the persisted run closed before ac
   );
   let reserves = 0;
   const outcomes = await controller.submitDeliveriesViaAdmissionV6(
-    room.id, [{ memberId: 'leader', runId: 'lead-bootstrap-route-denied' }], {
+    room.id, [{ memberId: 'leader', runId: 'lead-bootstrap-route-denied' }], 'route-user-item', {
       $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-bootstrap-command-origin.v1.schema.json',
       contract: 'cordisx.agent-bootstrap-command-origin/v1', schemaVersion: 1,
       originId: 'origin-v9-route-denied', binding: { bindingId: 'binding-v9-route', ownerGeneration: 'owner-v9-route' },

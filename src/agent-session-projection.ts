@@ -23,7 +23,13 @@ import {
   CHATROOM_COMMAND_APPROVAL_CANCEL,
   CHATROOM_COMMAND_APPROVAL_DENY,
 } from './conversation-model.js';
-import { createChatroomOpaqueId, type Room, type RoomRun } from './room.js';
+import {
+  createChatroomOpaqueId,
+  roomAdmissionMessageLinkFor,
+  type RoomAdmissionMessageLink,
+  type Room,
+  type RoomRun,
+} from './room.js';
 import {
   projectChatroomApprovalBubble,
   type ChatroomApprovalBubbleEvent,
@@ -154,6 +160,8 @@ const approvalState = (outcome: ApprovalOutcome): 'approved' | 'denied' | 'cance
 export class ChatroomAgentSessionProjector {
   private readonly events = new Map<number, SessionEvent>();
   private readonly itemsByEventSeq = new Map<number, ProjectedItem>();
+  /** Facts removed by a Host snapshot replacement must never be resurrected by a later link join. */
+  private readonly surfaceReplacedEventSeqs = new Set<number>();
   private readonly approvalAsked = new Map<string, ApprovalAskedFact>();
   private readonly liveApprovalQuestions = new Map<string, ApprovalQuestionV2>();
   private readonly approvalDecided = new Set<string>();
@@ -184,6 +192,27 @@ export class ChatroomAgentSessionProjector {
     this.run = run;
   }
 
+  /**
+   * Re-evaluates only previously buffered user/message facts after a Room
+   * admission link commits. A reservation submit may append the SessionEvent
+   * before its public result reaches Chatroom; retaining the authoritative
+   * event and joining it later avoids a text/current-agent inference or a
+   * second message ledger.
+   */
+  reconcileAdmissionLinks(room: Room, run: RoomRun): readonly ChatroomSessionProjectionChange[] {
+    this.updateDomain(room, run);
+    const changes: ChatroomSessionProjectionChange[] = [];
+    for (const [eventSeq, event] of [...this.events.entries()].sort(([left], [right]) => left - right)) {
+      if (event.type !== 'user/message'
+        || eventSeq < 1
+        || this.surfaceReplacedEventSeqs.has(eventSeq)
+        || this.itemsByEventSeq.has(eventSeq)) continue;
+      const change = this.projectUserMessage(event);
+      if (change !== undefined) changes.push(change);
+    }
+    return Object.freeze(changes);
+  }
+
   updateAgentFacts(agentFacts: ChatroomSessionAgentFacts): void {
     if (this.agentFacts.generation !== undefined && agentFacts.generation !== undefined
       && this.agentFacts.generation !== agentFacts.generation) {
@@ -205,6 +234,14 @@ export class ChatroomAgentSessionProjector {
     return item?.kind === 'approval' ? item : undefined;
   }
 
+  /** Exact admission/v6 link for one already-projected SessionEvent item. */
+  admissionMessageLinkForItem(item: ProjectedItem): RoomAdmissionMessageLink | undefined {
+    if (item.kind !== 'message' || item.source.kind !== 'session-event') return undefined;
+    const event = this.events.get(item.source.eventSeq);
+    if (event?.type !== 'user/message' || event.data.id !== item.messageId) return undefined;
+    return this.admissionMessageLinkFor(event.data);
+  }
+
   updateLiveApprovalQuestion(question: ApprovalQuestionV2): void {
     if (question.requester.sessionId !== this.sessionId || this.invalidApprovals.has(question.id)) return;
     this.liveApprovalQuestions.set(question.id, question);
@@ -219,6 +256,9 @@ export class ChatroomAgentSessionProjector {
     for (const event of page.events) {
       this.events.set(event.seq, event);
       if (typeof event.surfaceOp === 'object') {
+        for (let seq = event.surfaceOp.start; seq <= event.surfaceOp.end; seq += 1) {
+          this.surfaceReplacedEventSeqs.add(seq);
+        }
         for (const [seq] of this.itemsByEventSeq) {
           if (seq >= event.surfaceOp.start && seq <= event.surfaceOp.end) {
             this.itemsByEventSeq.delete(seq);
@@ -258,6 +298,7 @@ export class ChatroomAgentSessionProjector {
   }
 
   private projectEvent(event: SessionEvent): ChatroomSessionProjectionChange | undefined {
+    if (this.surfaceReplacedEventSeqs.has(event.seq)) return undefined;
     if (event.type === 'turn/start') {
       this.lifecycle = 'running';
       return undefined;
@@ -285,18 +326,26 @@ export class ChatroomAgentSessionProjector {
     event: Extract<SessionEvent, { readonly type: 'user/message' }>,
   ): ChatroomSessionProjectionChange | undefined {
     const message = event.data;
-    if (message.source.kind === 'plugin'
-      && message.source.correlation?.namespace !== 'chatroom.room-message') return undefined;
     const correlation = message.source.kind === 'plugin' ? message.source.correlation : undefined;
-    const durableDisplay = correlation?.namespace === 'chatroom.room-message'
-      ? this.room.items.find(item => item.kind === 'message'
-        && item.itemId === correlation.id
-        && item.author.role === 'human'
-        && item.semantic.purpose === 'conversation')
+    const roomMessageCorrelation = correlation?.namespace === 'chatroom.room-message'
+      ? correlation
       : undefined;
+    const admissionLink = this.admissionMessageLinkFor(message);
+    if (message.source.kind === 'plugin'
+      && roomMessageCorrelation === undefined && admissionLink === undefined) return undefined;
+    const durableDisplayId = roomMessageCorrelation?.id ?? admissionLink?.itemId;
+    const durableDisplay = durableDisplayId === undefined
+      ? undefined
+      : this.room.items.find(item => item.kind === 'message'
+        && item.itemId === durableDisplayId
+        && item.author.role === 'human'
+        && item.semantic.purpose === 'conversation');
+    if (admissionLink !== undefined && durableDisplay?.kind !== 'message') return undefined;
     // The Session fact retains the parsed Agent payload. Chatroom's durable
-    // Room message owns presentation, including explicit routing mentions.
-    const body = durableDisplay?.kind === 'message'
+    // Room message owns only its display association. In the admission/v6
+    // path, text remains authoritative SessionEvent content; the Room link
+    // never permits a content-only or current-Agent inference.
+    const body = admissionLink === undefined && durableDisplay?.kind === 'message'
       ? durableDisplay.body
       : bodyFor(message.content);
     const author = this.humanParticipant();
@@ -325,6 +374,22 @@ export class ChatroomAgentSessionProjector {
       ariaLive: 'off',
       actions: [],
     });
+  }
+
+  private admissionMessageLinkFor(message: UserMessage): RoomAdmissionMessageLink | undefined {
+    if (message.source.kind !== 'plugin') return undefined;
+    const member = this.member();
+    const candidate = roomAdmissionMessageLinkFor(this.room, this.sessionId, message.id);
+    if (candidate === undefined
+      || candidate.roomId !== this.room.id
+      || candidate.participantId !== member.participantId
+      || candidate.memberId !== this.run.memberId
+      || candidate.runId !== this.run.runId
+      || candidate.sessionId !== this.sessionId
+      || candidate.messageId !== message.id
+      || candidate.owner.pluginId !== message.source.pluginId
+      || candidate.owner.generation !== message.source.generation) return undefined;
+    return candidate;
   }
 
   private projectAssistantMessage(
