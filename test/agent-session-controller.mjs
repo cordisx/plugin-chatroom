@@ -7,6 +7,7 @@ import {
   ChatroomAgentSessionController,
 } from '../dist/agent-session-controller.js';
 import { ChatroomAgentSessionConversationSource } from '../dist/agent-session-conversation-source.js';
+import { ChatroomAgentSessionConversationSourceV7 } from '../dist/agent-session-conversation-source-v7.js';
 import { CHATROOM_COMMAND_SUBMIT } from '../dist/conversation-model.js';
 import { ChatroomConversationController } from '../dist/conversation-source.js';
 import {
@@ -14,6 +15,7 @@ import {
   bindRoomRun,
   bindRoomRunSession,
   createRoom,
+  recordRoomAdmissionMessageLink,
   recordRoomSessionSelfIntroduction,
 } from '../dist/room.js';
 import { DurableChatroomRoomStore } from '../dist/room-store.js';
@@ -547,8 +549,11 @@ test('Room source remount and process reload rebuild approval and success solely
 
   await session.close('permission-revoked');
   await new Promise(resolve => setImmediate(resolve));
-  assert.deepEqual(controller.projectionForRoom('room').items, [],
-    'route replacement closes and removes only the process-local projector');
+  assert.deepEqual(
+    controller.projectionForRoom('room').items.map(item => item.itemId),
+    visible.slice(1).map(([itemId]) => itemId),
+    'permission replacement retains exact SessionEvent display facts until durable replay replaces them',
+  );
 
   const secondSource = mount();
   const [second, concurrent] = await Promise.all([secondSource.snapshot(), secondSource.snapshot()]);
@@ -756,6 +761,220 @@ test('a concurrent second run and permission replacement never publish a Room sn
   coldSource.dispose();
   await coldController.dispose();
   domain.dispose();
+  store.dispose();
+});
+
+test('a terminal V7 rejection retains the complete Room projection while its permission-revoked replay is temporarily unavailable', async () => {
+  const reviewerSessionId = 'cx-session.reviewer-terminal';
+  const leadSessionId = 'cx-session.lead-terminal';
+  const aTimestamp = new Date(1_001).toISOString();
+  const delegationTimestamp = new Date(1_002).toISOString();
+  const bTimestamp = new Date(1_003).toISOString();
+  let room = roomWithRun(reviewerSessionId);
+  room = addRoomRun(room, {
+    runId: 'lead-run', memberId: 'leader', title: 'Lead', status: 'creating',
+  });
+  room = bindRoomRunSession(room, 'lead-run', leadSessionId);
+  const reviewer = room.memberships.find(member => member.memberId === 'reviewer');
+  const lead = room.memberships.find(member => member.memberId === 'leader');
+  const human = { id: 'user', name: 'You' };
+  assert.ok(reviewer);
+  assert.ok(lead);
+  const a = {
+    kind: 'message', itemId: 'room-a', messageId: 'room-a-message', sequence: 1,
+    source: 'agent-loop',
+    author: {
+      participantId: human.id, role: 'human',
+      displayName: { namespace: 'chatroom', key: 'participant.name', fallback: human.name },
+    },
+    semantic: { purpose: 'conversation' },
+    body: [{ kind: 'text', text: { namespace: 'chatroom', key: 'message', fallback: '3' } }],
+    reactions: [], timestamp: aTimestamp, deliveryState: 'pending', runState: 'idle', ariaLive: 'off', actions: [],
+  };
+  const delegation = {
+    kind: 'message', itemId: 'lead-delegation-terminal', messageId: 'lead-delegation-terminal', sequence: 2,
+    source: 'chatroom-acknowledgement',
+    author: {
+      participantId: lead.participantId, role: 'agent',
+      displayName: { namespace: 'chatroom', key: 'participant.name', fallback: lead.label },
+      agentIdentity: lead.definition,
+    },
+    semantic: { purpose: 'chatroom-acknowledgement' },
+    body: [{ kind: 'text', text: { namespace: 'chatroom', key: 'delegation', fallback: 'Delegated to Reviewer.' } }],
+    reactions: [], timestamp: delegationTimestamp, deliveryState: 'delivered', runState: 'idle', ariaLive: 'polite', actions: [],
+  };
+  const b = {
+    kind: 'message', itemId: 'room-b', messageId: 'room-b-message', sequence: 3,
+    source: 'agent-loop',
+    author: {
+      participantId: human.id, role: 'human',
+      displayName: { namespace: 'chatroom', key: 'participant.name', fallback: human.name },
+    },
+    semantic: { purpose: 'conversation' },
+    body: [{ kind: 'text', text: { namespace: 'chatroom', key: 'message', fallback: '1' } }],
+    reactions: [], timestamp: bTimestamp, deliveryState: 'pending', runState: 'idle', ariaLive: 'off', actions: [],
+  };
+  room = createRoom({
+    ...room,
+    participants: [
+      { id: 'user', name: 'You', kind: 'human' },
+      { id: lead.participantId, name: lead.label, kind: 'agent' },
+      { id: reviewer.participantId, name: reviewer.label, kind: 'agent' },
+    ],
+    items: [a, delegation, b], timelineSequence: 3,
+  });
+
+  const reviewerReplay = [
+    sessionEvent(reviewerSessionId, 0, 'turn/start', { turn: 1 }),
+    sessionEvent(reviewerSessionId, 1, 'user/message', {
+      id: 'message-a', role: 'user', content: [{ type: 'text', text: '3' }],
+      source: {
+        kind: 'plugin', pluginId: 'chatroom', generation: 7, form: 'relay',
+        correlation: { namespace: 'chatroom.room-message', id: a.itemId },
+      },
+    }),
+    sessionEvent(reviewerSessionId, 2, 'assistant/message', {
+      turn: 1, step: 1,
+      message: {
+        id: 'reviewer-introduction', role: 'assistant',
+        content: [{ type: 'text', text: 'Reviewer introduction' }],
+        source: { kind: 'model', provider: 'provider', model: 'model' },
+      },
+    }, { sourceEventSeqs: [1] }),
+  ];
+  const harness = runtimeHarness({ room });
+  const reviewerSession = harness.sessions.get(reviewerSessionId);
+  const leadSession = harness.sessions.get(leadSessionId);
+  reviewerSession.replay = reviewerReplay;
+  const store = DurableChatroomRoomStore.memory([room]);
+  const controller = new ChatroomAgentSessionController(
+    { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+
+  const decision = controller.requestApproval(
+    'room', 'review-run', 'shell', 'Reviewer needs permission to inspect the protected result.', 'call-reject',
+  );
+  await new Promise(resolve => setImmediate(resolve));
+  const pending = controller.projectionForRoom('room').items.find(item => item.kind === 'approval');
+  assert.ok(pending);
+  assert.equal(pending.state, 'pending');
+
+  const linkedRoom = recordRoomAdmissionMessageLink(store.rooms.get('room'), {
+    roomId: 'room', itemId: b.itemId,
+    participantId: lead.participantId, memberId: lead.memberId, runId: 'lead-run',
+    sessionId: leadSessionId, messageId: 'message-b', owner,
+    appendAfterItemId: pending.itemId,
+  });
+  await store.upsert(linkedRoom);
+  const leadBEvents = [
+    sessionEvent(leadSessionId, 0, 'turn/start', { turn: 1 }),
+    sessionEvent(leadSessionId, 1, 'user/message', {
+      id: 'message-b', role: 'user', content: [{ type: 'text', text: '1' }],
+      source: { kind: 'plugin', pluginId: owner.pluginId, generation: owner.generation, form: 'relay' },
+    }),
+  ];
+  await leadSession.emitLive(leadBEvents);
+  leadSession.replay.push(...leadBEvents);
+
+  const binding = {
+    bindingId: 'binding-terminal-reject', shell: 'agent-desktop', ownerGeneration: 'owner-terminal-reject',
+    routeSelection: { scope: 'room-or-new', selectedRoomParam: 'room' },
+  };
+  const domain = new ChatroomConversationController(store.rooms);
+  const source = new ChatroomAgentSessionConversationSourceV7(
+    binding, domain.createSource(binding), controller, 'enter',
+  );
+  const before = await source.snapshot();
+  const beforeIds = before.items.map(item => item.itemId);
+  assert.equal(beforeIds.length, 5);
+  assert.equal(beforeIds[1], delegation.itemId);
+  assert.equal(beforeIds[3], pending.itemId);
+
+  assert.equal(controller.answerApprovalItem('room', pending.itemId, 'rejected'), true);
+  assert.equal((await decision).decision.outcome, 'rejected');
+  const rejectionResult = sessionEvent(reviewerSessionId, 6, 'assistant/message', {
+    turn: 1, step: 2,
+    message: {
+      id: 'reviewer-rejection-result', role: 'assistant',
+      content: [{ type: 'text', text: 'Approval request rejected.' }],
+      source: { kind: 'model', provider: 'provider', model: 'model' },
+    },
+  });
+  await reviewerSession.emitLive([rejectionResult]);
+  const approvalEvents = [
+    sessionEvent(reviewerSessionId, 3, 'approval/authority-bound', {
+      approvalId: 'approval-v2-1', requester: reviewer.definition, authority: lead.definition,
+      reason: { kind: 'plain-text', text: 'Reviewer needs permission to inspect the protected result.' },
+    }, { ignorable: true }),
+    sessionEvent(reviewerSessionId, 4, 'approval/asked', {
+      id: 'approval-v2-1', toolName: 'shell', callId: 'call-reject',
+      reason: 'Reviewer needs permission to inspect the protected result.',
+    }),
+    sessionEvent(reviewerSessionId, 5, 'approval/decided', { id: 'approval-v2-1', outcome: 'rejected' }),
+    rejectionResult,
+  ];
+  reviewerSession.replay.push(...approvalEvents);
+  const terminal = await source.snapshot();
+  const rejectionItem = terminal.items.find(item => item.kind === 'message'
+    && item.messageId === 'reviewer-rejection-result');
+  assert.ok(rejectionItem);
+  const expectedIds = [
+    beforeIds[0],
+    delegation.itemId,
+    beforeIds[2],
+    pending.itemId,
+    beforeIds[4],
+    rejectionItem.itemId,
+  ];
+  assert.deepEqual(terminal.items.map(item => item.itemId), expectedIds);
+  const terminalApproval = terminal.items.find(item => item.itemId === pending.itemId);
+  assert.equal(terminalApproval.state, 'denied');
+  assert.deepEqual(terminalApproval.actions, []);
+
+  const originalGet = harness.sessionRegistry.get;
+  harness.sessionRegistry.get = async id => id === reviewerSessionId ? undefined : await originalGet(id);
+  await reviewerSession.close('permission-revoked');
+  await new Promise(resolve => setImmediate(resolve));
+  const afterFence = await source.snapshot();
+  assert.deepEqual(afterFence.items.map(item => item.itemId), expectedIds,
+    'a temporary replay gap cannot replace the terminal Room snapshot with domain-only facts');
+  assert.equal(afterFence.items.find(item => item.itemId === pending.itemId).state, 'denied');
+  assert.deepEqual(afterFence.items.map(item => item.sequence), terminal.items.map(item => item.sequence));
+
+  source.dispose();
+  const remounted = new ChatroomAgentSessionConversationSourceV7(
+    binding, domain.createSource(binding), controller, 'enter',
+  );
+  const roundTrip = await remounted.snapshot();
+  assert.deepEqual(roundTrip.items.map(item => item.itemId), expectedIds,
+    'Room/Task remount retains the exact cached terminal SessionEvent projection until replay is available');
+  remounted.dispose();
+  await controller.dispose();
+  domain.dispose();
+
+  const coldHarness = runtimeHarness({ room: store.rooms.get('room') });
+  coldHarness.sessions.get(reviewerSessionId).replay = reviewerSession.replay;
+  coldHarness.sessions.get(leadSessionId).replay = leadSession.replay;
+  const coldController = new ChatroomAgentSessionController(
+    { agents: coldHarness.agents, sessions: coldHarness.sessionRegistry, approvals: coldHarness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+  const coldDomain = new ChatroomConversationController(store.rooms);
+  const coldSource = new ChatroomAgentSessionConversationSourceV7(
+    binding, coldDomain.createSource(binding), coldController, 'enter',
+  );
+  const cold = await coldSource.snapshot();
+  assert.deepEqual(cold.items.map(item => item.itemId), expectedIds,
+    'cold replay rebuilds the same terminal item ids and append fence without a second ledger');
+  assert.deepEqual(cold.items.map(item => item.sequence), terminal.items.map(item => item.sequence));
+  assert.equal(cold.items.find(item => item.itemId === pending.itemId).state, 'denied');
+
+  coldSource.dispose();
+  await coldController.dispose();
+  coldDomain.dispose();
   store.dispose();
 });
 
