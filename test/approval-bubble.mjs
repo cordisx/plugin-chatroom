@@ -6,6 +6,7 @@ import {
   prepareChatroomApprovalRequest,
   projectChatroomApprovalBubble,
   requestChatroomApproval,
+  routeChatroomDriverApproval,
 } from '../dist/approval-bubble.js';
 import {
   addRoomRun,
@@ -80,6 +81,24 @@ const authorityEvents = room => {
       reason: 'Reviewer needs permission to inspect the exact diff.',
     }),
   ];
+};
+
+const routingQuestion = room => {
+  const requester = liveQuestion(room).requester;
+  const registration = {
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/approval-request-routing-registration.v1.schema.json',
+    contract: 'cordisx.approval-request-routing-registration/v1', schemaVersion: 1,
+    registrationId: 'routing-registration-reviewer',
+    owner: { pluginId: 'chatroom', installationId: 'chatroom-installation', profileId: 'profile-one', pluginGeneration: 'generation-one' },
+    requester,
+  };
+  return {
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/approval-request-routing-question.v1.schema.json',
+    contract: 'cordisx.approval-request-routing-question/v1', schemaVersion: 1,
+    routingId: 'routing-reviewer-one', registration, requester,
+    toolName: 'shell', callId: 'call-review',
+    reason: { kind: 'plain-text', text: 'Reviewer needs permission to inspect the exact diff.' },
+  };
 };
 
 test('prepares an approval/v2 request from exact Reviewer and reportsTo Lead live bindings', () => {
@@ -167,6 +186,51 @@ test('calls approval/v2 once with exact targets and fences the returned requeste
   assert.deepEqual(mismatched, {
     status: 'unavailable', code: 'decision-correlation-invalid',
   });
+});
+
+test('routes a pre-persistence driver approval from exact Reviewer registration to exact live Lead', () => {
+  const room = approvalRoom();
+  const reviewer = fakeAgent('session-reviewer', 7);
+  const lead = fakeAgent('session-lead', 11);
+  const question = routingQuestion(room);
+  const result = routeChatroomDriverApproval({
+    room,
+    question,
+    liveAgentForRun: runId => runId === 'reviewer-run' ? reviewer : runId === 'lead-run' ? lead : undefined,
+  });
+
+  assert.equal(result.status, 'accepted');
+  assert.equal(result.routingId, question.routingId);
+  assert.equal(result.registration, question.registration);
+  assert.deepEqual(result.requester, question.requester);
+  assert.deepEqual(result.authority, {
+    agentId: 'session-lead', sessionId: 'session-lead', agentGeneration: 11,
+    definition: identities(room).lead,
+  });
+  assert.deepEqual(question.reason, {
+    kind: 'plain-text', text: 'Reviewer needs permission to inspect the exact diff.',
+  });
+});
+
+test('driver approval routing fails closed for stale requester registration or absent live Lead', () => {
+  const room = approvalRoom();
+  const reviewer = fakeAgent('session-reviewer', 7);
+  const lead = fakeAgent('session-lead', 11);
+  const question = routingQuestion(room);
+  const route = (candidate, liveAgentForRun = runId => runId === 'reviewer-run' ? reviewer : runId === 'lead-run' ? lead : undefined) =>
+    routeChatroomDriverApproval({ room, question: candidate, liveAgentForRun });
+
+  assert.equal(route({
+    ...question,
+    registration: {
+      ...question.registration,
+      requester: { ...question.registration.requester, agentGeneration: 6 },
+    },
+  }).code, 'mapping-unavailable');
+  assert.equal(route(question, runId => runId === 'reviewer-run' ? reviewer : undefined).code,
+    'authority-unavailable');
+  assert.equal(route(question, runId => runId === 'reviewer-run' ? reviewer : fakeAgent('foreign-session', 11)).code,
+    'authority-unavailable');
 });
 
 test('request preparation fails closed for missing hierarchy, non-exact identity, or non-exact live Agent', () => {

@@ -206,6 +206,7 @@ function fakeHandle(session, admissions = []) {
 class FakeApprovals {
   answerers = new Map();
   authorityAnswerers = new Map();
+  requestResolvers = new Map();
   facts = [];
 
   async registerAnswerer(agent, answerer) {
@@ -227,6 +228,29 @@ class FakeApprovals {
         definition: authority.definition,
       },
       dispose: async () => ({ status: 'closed', code: 'disposed' }),
+    };
+  }
+
+  async registerRequestResolver(requester, resolver) {
+    const registration = {
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/approval-request-routing-registration.v1.schema.json',
+      contract: 'cordisx.approval-request-routing-registration/v1', schemaVersion: 1,
+      registrationId: `routing-${requester.agent.id}`,
+      owner: { pluginId: 'chatroom', installationId: 'test', profileId: 'test', pluginGeneration: 'generation' },
+      requester: {
+        agentId: requester.agent.id, sessionId: requester.agent.session.id,
+        agentGeneration: requester.agent.generation, definition: requester.definition,
+      },
+    };
+    const entry = { requester, resolver, closed: false };
+    this.requestResolvers.set(requester.agent.id, entry);
+    return {
+      status: 'registered',
+      handle: {
+        registration,
+        closed: Promise.resolve({ ...registration, status: 'closed', code: 'disposed' }),
+        dispose: async () => { entry.closed = true; return { ...registration, status: 'closed', code: 'disposed' }; },
+      },
     };
   }
 
@@ -1266,6 +1290,7 @@ test('dispose closes every Session subscription, answerer, and in-memory owner h
 
   assert.equal(session.unsubscribeCount, 1);
   assert.equal(harness.handles[0].calls.disposed, 1);
+  assert.equal(harness.approvals.requestResolvers.get(session.id).closed, true);
   assert.equal(controller.ownerHandleCount, 0);
   store.dispose();
 });

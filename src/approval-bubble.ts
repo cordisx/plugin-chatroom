@@ -8,6 +8,10 @@ import type {
   ApprovalRequest,
   ApprovalService,
 } from '@cordisx/protocol/approval/v2';
+import type {
+  ApprovalRequestRoutingQuestion,
+  ApprovalRequestRoutingResult,
+} from '@cordisx/protocol/approval/v3';
 import type { AgentConversationApprovalItem } from '@cordisx/protocol/agent-conversation-shell/v7';
 import type { SessionEvent, SessionId } from '@cordisx/protocol/sessions/v1';
 
@@ -227,6 +231,113 @@ const bindingMatches = (
   && Number.isSafeInteger(binding.agentGeneration)
   && binding.agentGeneration > 0
   && sameIdentity(binding.definition, definition);
+
+const bindingMatchesAgent = (binding: ApprovalAgentBinding, agent: Agent): boolean =>
+  binding.agentId === agent.id
+  && binding.sessionId === agent.session.id
+  && binding.agentGeneration === agent.generation;
+
+const routingResult = (
+  question: ApprovalRequestRoutingQuestion,
+  result:
+    | {
+      readonly status: 'accepted';
+      readonly code: 'routed';
+      readonly requester: ApprovalAgentBinding;
+      readonly authority: ApprovalAgentBinding;
+    }
+    | {
+      readonly status: 'unavailable';
+      readonly code: 'mapping-unavailable' | 'authority-unavailable';
+    },
+): ApprovalRequestRoutingResult => result.status === 'accepted'
+  ? Object.freeze({
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/approval-request-routing-result.v1.schema.json',
+    contract: 'cordisx.approval-request-routing-result/v1',
+    schemaVersion: 1,
+    routingId: question.routingId,
+    registration: question.registration,
+    status: result.status,
+    code: result.code,
+    requester: result.requester,
+    authority: result.authority,
+  })
+  : Object.freeze({
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/approval-request-routing-result.v1.schema.json',
+    contract: 'cordisx.approval-request-routing-result/v1',
+    schemaVersion: 1,
+    routingId: question.routingId,
+    registration: question.registration,
+    status: result.status,
+    code: result.code,
+  });
+
+export interface ChatroomDriverApprovalRouteInput {
+  readonly room: Room;
+  readonly question: ApprovalRequestRoutingQuestion;
+  /** Process-local owner lookup by exact Room run id; never by label or agent name. */
+  readonly liveAgentForRun: (runId: string) => Agent | undefined;
+}
+
+/**
+ * Resolves a Host driver approval before persistence. The exact requester
+ * registration selects one Room run; only that member's direct reportsTo edge
+ * may select the live authority. The resolver never appends SessionEvent.
+ */
+export function routeChatroomDriverApproval(
+  input: ChatroomDriverApprovalRouteInput,
+): ApprovalRequestRoutingResult {
+  const question = input.question;
+  if (question.registration.requester.agentId !== question.requester.agentId
+    || question.registration.requester.sessionId !== question.requester.sessionId
+    || question.registration.requester.agentGeneration !== question.requester.agentGeneration
+    || !sameIdentity(question.registration.requester.definition, question.requester.definition)) {
+    return routingResult(question, { status: 'unavailable', code: 'mapping-unavailable' });
+  }
+  const requesterRuns = input.room.runs.filter(run => run.sessionId === question.requester.sessionId);
+  if (requesterRuns.length !== 1) {
+    return routingResult(question, { status: 'unavailable', code: 'mapping-unavailable' });
+  }
+  const requesterRun = requesterRuns[0];
+  const requesterMember = input.room.memberships.find(member => member.memberId === requesterRun.memberId);
+  const requesterAgent = input.liveAgentForRun(requesterRun.runId);
+  if (requesterMember === undefined
+    || requesterAgent === undefined
+    || !exactIdentity(requesterMember.definition)
+    || !sameIdentity(question.requester.definition, requesterMember.definition)
+    || !bindingMatches(question.requester, requesterMember.definition)
+    || !bindingMatchesAgent(question.requester, requesterAgent)
+    || !exactLiveAgent(requesterAgent, requesterRun)) {
+    return routingResult(question, { status: 'unavailable', code: 'mapping-unavailable' });
+  }
+
+  const authorityMemberId = approvalAuthorityMemberIds(input.room, requesterMember.memberId)[0];
+  const authorityMember = authorityMemberId === undefined
+    ? undefined
+    : input.room.memberships.find(member => member.memberId === authorityMemberId);
+  if (authorityMember === undefined || !exactIdentity(authorityMember.definition)) {
+    return routingResult(question, { status: 'unavailable', code: 'authority-unavailable' });
+  }
+  const authorityRuns = input.room.runs.filter(run => run.memberId === authorityMember.memberId);
+  const preferred = authorityMember.preferredRunId === undefined
+    ? authorityRuns.length === 1 ? authorityRuns[0] : undefined
+    : authorityRuns.find(run => run.runId === authorityMember.preferredRunId);
+  const authorityAgent = preferred === undefined ? undefined : input.liveAgentForRun(preferred.runId);
+  if (preferred === undefined || authorityAgent === undefined || !exactLiveAgent(authorityAgent, preferred)) {
+    return routingResult(question, { status: 'unavailable', code: 'authority-unavailable' });
+  }
+  return routingResult(question, {
+    status: 'accepted',
+    code: 'routed',
+    requester: question.requester,
+    authority: Object.freeze({
+      agentId: authorityAgent.id,
+      sessionId: authorityAgent.session.id,
+      agentGeneration: authorityAgent.generation,
+      definition: authorityMember.definition,
+    }),
+  });
+}
 
 const approvalState = (
   outcome: ApprovalDecidedEvent['data']['outcome'],
