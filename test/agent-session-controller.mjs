@@ -976,6 +976,56 @@ test('Shell v8 admission requires a nonempty all-accepted delivery result with n
   ]));
 });
 
+test('Shell v8 acquisition failure persists the creating run as failed before issue or reserve', async () => {
+  let room = createRoom({ id: 'room', title: 'Room' });
+  room = addRoomRun(room, { runId: 'lead-run', memberId: 'leader', title: 'Lead', status: 'creating' });
+  const harness = runtimeHarness({ room });
+  const store = DurableChatroomRoomStore.memory([room]);
+  const controller = new ChatroomAgentSessionController(
+    {
+      agents: {
+        ...harness.agents,
+        create: async () => ({ status: 'unavailable', code: 'permission-denied' }),
+      },
+      sessions: harness.sessionRegistry,
+      approvals: harness.approvals,
+    },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+  let issues = 0;
+  let reserves = 0;
+  const origin = {
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-command-origin.v1.schema.json',
+    contract: 'cordisx.agent-command-origin/v1', schemaVersion: 1,
+    originId: 'origin-v8-acquire-failure', binding: { bindingId: 'binding-v8', ownerGeneration: 'owner-v8' },
+    generation: 'shell-v8', executionId: 'execution-v8', commandId: CHATROOM_COMMAND_SUBMIT,
+    scope: 'composer-submit',
+    room: { roomId: room.id, participantId: 'command-room', memberId: 'command-room', runId: 'command-run' },
+  };
+  const outcomes = await controller.submitDeliveriesViaAdmissionV3(
+    room.id, [{ memberId: 'leader', runId: 'lead-run' }], origin, '3',
+    { issue: async () => { issues += 1; throw new Error('must not issue'); } },
+    { reserve: async () => { reserves += 1; throw new Error('must not reserve'); } },
+  );
+
+  assert.deepEqual(outcomes, [{
+    memberId: 'leader', runId: 'lead-run',
+    outcome: { status: 'unavailable', roomId: 'room', runId: 'lead-run', code: 'permission-denied' },
+  }]);
+  const persisted = store.document('room')?.room.runs.find(run => run.runId === 'lead-run');
+  assert.equal(persisted?.sessionId, undefined);
+  assert.equal(persisted?.status, 'failed');
+  assert.deepEqual(persisted?.presence.failure, {
+    code: 'permission-denied', retryable: true,
+    diagnostic: 'Agent admission could not acquire the exact Room run: permission-denied.',
+  });
+  assert.equal(issues, 0);
+  assert.equal(reserves, 0);
+  await controller.dispose();
+  store.dispose();
+});
+
 test('Shell v8 admission stops before issue or reserve when the exact Reviewer resolver is not registered', async () => {
   let room = createRoom({ id: 'room', title: 'Room' });
   room = addRoomRun(room, { runId: 'lead-run', memberId: 'leader', title: 'Lead', status: 'creating' });
