@@ -138,6 +138,10 @@ interface RuntimeOwner {
   readonly disposition: 'created' | 'resumed' | 'replayed' | 'retained';
 }
 
+type ApprovalAuthorityWarmup =
+  | { readonly status: 'not-required' | 'ready' }
+  | { readonly status: 'unavailable'; readonly code: string };
+
 interface RuntimeSubscription {
   readonly sessionId: string;
   readonly sessionGeneration: number;
@@ -507,6 +511,15 @@ export class ChatroomAgentSessionController {
       throw new Error('Chatroom admission delivery does not match the exact Room run member.');
     }
     const member = this.requireMember(room, run.memberId);
+    // Driver approvals are routed by the Host before it writes their v2
+    // authority-bound/asked facts. Bring up only the requester's direct
+    // reports-to authority first, so its exact owner and answerer exist when
+    // the newly admitted target asks. This never selects by label or falls
+    // back to another manager.
+    const authority = await this.ensureDirectApprovalAuthorityOwner(roomId, delivery.runId);
+    if (authority.status === 'unavailable') {
+      return { status: 'unavailable', roomId, runId: delivery.runId, code: authority.code };
+    }
     const acquired = await this.ensureOwner(roomId, delivery.runId);
     if (!('handle' in acquired)) {
       return { status: acquired.status, roomId, runId: delivery.runId, code: acquireErrorCode(acquired) };
@@ -530,6 +543,46 @@ export class ChatroomAgentSessionController {
       sessionId: acquired.handle.agent.session.id,
       disposition: acquired.disposition,
     };
+  }
+
+  private async ensureDirectApprovalAuthorityOwner(
+    roomId: string,
+    requesterRunId: string,
+  ): Promise<ApprovalAuthorityWarmup> {
+    const room = this.requireRoom(roomId);
+    const requesterRun = this.requireRun(room, requesterRunId);
+    const requesterMember = this.requireMember(room, requesterRun.memberId);
+    const authorityMemberId = requesterMember.reportsToMemberId;
+    if (authorityMemberId === undefined) return { status: 'not-required' };
+    const authorityMember = this.requireMember(room, authorityMemberId);
+    const authorityRuns = room.runs.filter(run => run.memberId === authorityMember.memberId);
+    const authorityRun = authorityMember.preferredRunId === undefined
+      ? authorityRuns.length === 1 ? authorityRuns[0] : undefined
+      : authorityRuns.find(run => run.runId === authorityMember.preferredRunId);
+    if (authorityRun === undefined) return { status: 'unavailable', code: 'authority-run-unavailable' };
+
+    const acquired = await this.ensureOwner(roomId, authorityRun.runId);
+    if (!('handle' in acquired)) return { status: 'unavailable', code: acquireErrorCode(acquired) };
+
+    // Re-read after acquisition: the Room run, member definition, Session,
+    // and registered answerer must still be the exact direct authority.
+    const current = this.requireRoom(roomId);
+    const currentRun = this.requireRun(current, authorityRun.runId);
+    const currentMember = this.requireMember(current, authorityMember.memberId);
+    const answerer = this.approvalAuthorityAnswerers.get(runKey(roomId, authorityRun.runId));
+    if (currentRun.memberId !== authorityMember.memberId
+      || currentRun.sessionId !== acquired.handle.agent.session.id
+      || currentMember.definition.agentId !== authorityMember.definition.agentId
+      || currentMember.definition.revision !== authorityMember.definition.revision
+      || answerer === undefined
+      || answerer.authority.agentId !== acquired.handle.agent.id
+      || answerer.authority.sessionId !== acquired.handle.agent.session.id
+      || answerer.authority.agentGeneration !== acquired.handle.agent.generation
+      || answerer.authority.definition.agentId !== authorityMember.definition.agentId
+      || answerer.authority.definition.revision !== authorityMember.definition.revision) {
+      return { status: 'unavailable', code: 'authority-agent-unavailable' };
+    }
+    return { status: 'ready' };
   }
 
   /** Chatroom owns the introduction copy and correlation; Protocol owns no business prompt. */
