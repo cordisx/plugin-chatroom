@@ -311,6 +311,8 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
     const domain = await this.domain.snapshot();
     const roomId = domain.selection.kind === 'room' ? domain.selection.roomId : undefined;
     this.roomId = roomId;
+    if (roomId !== undefined) await this.sessions.hydrateRoom(roomId);
+    if (this.disposed) return;
     const projection = roomId === undefined
       ? { activeRuns: [], items: [] }
       : this.sessions.projectionForRoom(roomId);

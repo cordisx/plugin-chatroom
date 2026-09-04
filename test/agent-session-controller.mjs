@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { CHATROOM_DEFAULT_AGENT_CONFIGURATION } from '../dist/agent-definition.js';
 import { ChatroomAgentSessionController } from '../dist/agent-session-controller.js';
+import { ChatroomAgentSessionConversationSource } from '../dist/agent-session-conversation-source.js';
 import { CHATROOM_COMMAND_SUBMIT } from '../dist/conversation-model.js';
 import { ChatroomConversationController } from '../dist/conversation-source.js';
 import {
@@ -58,6 +59,12 @@ const messageEvent = (sessionId, seq, message, sourceEventSeqs) => ({
   sessionId, seq, time: 1_000 + seq, type: message.role === 'assistant' ? 'assistant/message' : 'user/message',
   data: message.role === 'assistant' ? { turn: 1, step: 1, message } : message,
   ...(sourceEventSeqs === undefined ? {} : { sourceEventSeqs }),
+});
+
+const sessionEvent = (sessionId, seq, type, data, extra = {}) => ({
+  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/session-event.v1.schema.json',
+  contract: 'cordisx.session-event/v1', schemaVersion: 1,
+  sessionId, seq, time: 1_000 + seq, type, data, ...extra,
 });
 
 class FakeSession {
@@ -241,6 +248,7 @@ function runtimeHarness({ room = roomWithRun(), createAdmissions = [], resumeAdm
   const resumes = [];
   const legacyAcquires = [];
   const handles = [];
+  const sessionGets = [];
   const agents = {
     create: async options => {
       creates.push(options);
@@ -275,8 +283,8 @@ function runtimeHarness({ room = roomWithRun(), createAdmissions = [], resumeAdm
   };
   const approvals = new FakeApprovals();
   return {
-    sessions, creates, resumes, legacyAcquires, handles, agents, approvals,
-    sessionRegistry: { get: async id => sessions.get(id) },
+    sessions, creates, resumes, legacyAcquires, handles, sessionGets, agents, approvals,
+    sessionRegistry: { get: async id => { sessionGets.push(id); return sessions.get(id); } },
   };
 }
 
@@ -324,6 +332,190 @@ test('observer hydration replays then streams live with zero Room transactions o
     ['replay', 0], ['live', 1],
   ]);
   await controller.dispose();
+  store.dispose();
+});
+
+test('Room source remount and process reload rebuild approval and success solely from durable SessionEvent replay', async () => {
+  const sessionId = 'cx-session.reviewer-durable';
+  const acknowledgement = {
+    kind: 'message', itemId: 'delegation-ack', messageId: 'delegation-ack-message', sequence: 20,
+    source: 'chatroom-acknowledgement',
+    author: {
+      participantId: 'leader', role: 'agent',
+      displayName: { namespace: 'chatroom', key: 'lead', fallback: 'Lead' },
+      agentIdentity: roomWithRun(sessionId).memberships.find(member => member.memberId === 'leader').definition,
+    },
+    semantic: { purpose: 'chatroom-acknowledgement' },
+    body: [{ kind: 'text', text: {
+      namespace: 'chatroom', key: 'delegation', fallback: '已向 @Reviewer 下发任务：验证审批恢复。',
+    } }],
+    reactions: [], timestamp: new Date(1_021).toISOString(),
+    deliveryState: 'delivered', runState: 'idle', ariaLive: 'polite', actions: [],
+  };
+  const room = createRoom({
+    ...roomWithRun(sessionId),
+    participants: [
+      { id: 'leader', name: 'Lead', kind: 'agent' },
+      { id: 'reviewer', name: 'Reviewer', kind: 'agent' },
+    ],
+    items: [acknowledgement],
+    timelineSequence: acknowledgement.sequence,
+  });
+  const replay = Array.from({ length: 35 }, (_, seq) => sessionEvent(
+    sessionId, seq, 'step/start', { turn: 1, step: seq + 1 },
+  ));
+  replay[20] = sessionEvent(sessionId, 20, 'user/message', {
+    id: 'reviewer-task', role: 'user', content: [{ type: 'text', text: '验证审批恢复。' }],
+    source: {
+      kind: 'plugin', pluginId: 'chatroom', generation: 7, form: 'relay',
+      correlation: { namespace: 'chatroom.agent-delegation', id: 'delegation-ack' },
+    },
+  });
+  replay[22] = sessionEvent(sessionId, 22, 'approval/asked', {
+    id: 'approval-reviewer', toolName: 'shell', reason: 'Reviewer needs permission',
+  });
+  replay[23] = sessionEvent(sessionId, 23, 'approval/decided', {
+    id: 'approval-reviewer', outcome: 'allowed-once',
+  });
+  replay[31] = sessionEvent(sessionId, 31, 'assistant/message', {
+    turn: 1, step: 31,
+    message: {
+      id: 'reviewer-success', role: 'assistant',
+      content: [{ type: 'text', text: 'Reviewer success' }],
+      source: { kind: 'model', provider: 'provider', model: 'model' },
+    },
+  }, { sourceEventSeqs: [20] });
+  replay[34] = sessionEvent(sessionId, 34, 'turn/end', {
+    turn: 1, reason: { kind: 'completed' },
+  });
+
+  const harness = runtimeHarness({ room });
+  const session = harness.sessions.get(sessionId);
+  session.replay = replay;
+  harness.handles.push(fakeHandle(session));
+  const store = DurableChatroomRoomStore.memory([room]);
+  const durableBefore = JSON.stringify(store.rooms.get('room'));
+  const binding = {
+    bindingId: 'binding-hydration', shell: 'agent-desktop', ownerGeneration: 'owner-hydration',
+    routeSelection: { scope: 'room-or-new', selectedRoomParam: 'room' },
+  };
+  const domain = new ChatroomConversationController([room]);
+  const controller = new ChatroomAgentSessionController(
+    { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+  const mount = () => new ChatroomAgentSessionConversationSource(
+    binding, domain.createSource(binding), controller, 'enter',
+  );
+
+  const firstSource = mount();
+  const first = await firstSource.snapshot();
+  const visible = first.items.map(item => [item.itemId, item.sequence]);
+  const approval = first.items.find(item => item.kind === 'approval');
+  const success = first.items.find(item => item.kind === 'message' && item.messageId === 'reviewer-success');
+  assert.equal(approval.state, 'approved');
+  assert.equal(approval.approvalId, 'approval-reviewer');
+  assert.equal(success.body[0].text.fallback, 'Reviewer success');
+  assert.deepEqual(success.source, { kind: 'session-event', sessionId, eventSeq: 31 });
+  assert.deepEqual(first.items.map(item => item.itemId), [
+    'delegation-ack', approval.itemId, success.itemId,
+  ]);
+  assert.equal(first.selection.activeRuns[0].lifecycle.phase, 'active');
+  assert.equal(harness.creates.length, 0);
+  assert.equal(harness.resumes.length, 0);
+  assert.equal(controller.ownerHandleCount, 0,
+    'Shell hydration never claims Agent mutation ownership');
+  assert.equal(JSON.stringify(store.rooms.get('room')), durableBefore,
+    'observer projection never writes replay facts to the Room document');
+  firstSource.dispose();
+
+  await session.close('permission-revoked');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(controller.projectionForRoom('room').items, [],
+    'route replacement closes and removes only the process-local projector');
+
+  const secondSource = mount();
+  const [second, concurrent] = await Promise.all([secondSource.snapshot(), secondSource.snapshot()]);
+  assert.deepEqual(second.items.map(item => [item.itemId, item.sequence]), visible);
+  assert.deepEqual(concurrent.items.map(item => [item.itemId, item.sequence]), visible);
+  assert.equal(session.observers.length, 2,
+    'concurrent remount reads share one replay subscription');
+  assert.deepEqual(harness.sessionGets, [sessionId, sessionId],
+    'each mount resolves only the exact persisted RoomRun SessionId');
+  assert.equal(new Set(second.items.map(item => item.itemId)).size, second.items.length);
+  assert.equal(JSON.stringify(store.rooms.get('room')), durableBefore);
+
+  const liveSuccess = sessionEvent(sessionId, 35, 'assistant/message', {
+    turn: 2, step: 1,
+    message: {
+      id: 'reviewer-live-success', role: 'assistant',
+      content: [{ type: 'text', text: 'Reviewer live success after remount' }],
+      source: { kind: 'model', provider: 'provider', model: 'model' },
+    },
+  }, { sourceEventSeqs: [20] });
+  await session.emitLive([liveSuccess]);
+  session.replay.push(liveSuccess);
+  await new Promise(resolve => setImmediate(resolve));
+  const afterLive = await secondSource.snapshot();
+  assert.equal(afterLive.items.filter(item => item.kind === 'message'
+    && item.messageId === 'reviewer-live-success').length, 1,
+    'the reopened replay subscription continues into live without duplicate projection');
+  const durableReplayVisible = afterLive.items.map(item => [item.itemId, item.sequence]);
+  secondSource.dispose();
+  await controller.dispose();
+
+  const reloadedController = new ChatroomAgentSessionController(
+    { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+  const reloadedSource = new ChatroomAgentSessionConversationSource(
+    binding, domain.createSource(binding), reloadedController, 'enter',
+  );
+  const reloaded = await reloadedSource.snapshot();
+  assert.deepEqual(reloaded.items.map(item => [item.itemId, item.sequence]), durableReplayVisible,
+    'fresh process replay retains exact item identities and presentation coordinates');
+  assert.equal(new Set(reloaded.items.map(item => item.itemId)).size, reloaded.items.length);
+  assert.equal(JSON.stringify(store.rooms.get('room')), durableBefore);
+
+  reloadedSource.dispose();
+  await reloadedController.dispose();
+  domain.dispose();
+  store.dispose();
+});
+
+test('dispose fences an in-flight Room replay demand before subscription publication', async () => {
+  const room = roomWithRun('session-delayed-hydration');
+  const session = new FakeSession('session-delayed-hydration', [
+    userEvent('session-delayed-hydration', 0, 'delayed-message', 'Delayed'),
+  ]);
+  let release;
+  const pendingSession = new Promise(resolve => { release = resolve; });
+  const harness = runtimeHarness({ room });
+  const store = DurableChatroomRoomStore.memory([room]);
+  const controller = new ChatroomAgentSessionController(
+    {
+      agents: harness.agents,
+      sessions: { get: async id => {
+        assert.equal(id, 'session-delayed-hydration');
+        return await pendingSession;
+      } },
+      approvals: harness.approvals,
+    },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+
+  const hydration = controller.hydrateRoom('room');
+  await Promise.resolve();
+  const disposing = controller.dispose();
+  release(session);
+  await Promise.all([hydration, disposing]);
+
+  assert.equal(session.observers.length, 0);
+  assert.deepEqual(controller.projectionForRoom('room').items, []);
+  assert.equal(JSON.stringify(store.rooms.get('room')), JSON.stringify(room));
   store.dispose();
 });
 

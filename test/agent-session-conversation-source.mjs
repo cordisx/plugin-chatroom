@@ -94,6 +94,7 @@ function domainSource(itemOverride) {
 function sessionProjection(itemOverride) {
   let listener;
   return {
+    async hydrateRoom() {},
     subscribeProjection(next) { listener = next; return () => { listener = undefined; }; },
     emit(roomId = 'room-one') { listener?.(roomId); },
     projectionForRoom() {
