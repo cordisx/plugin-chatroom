@@ -148,6 +148,7 @@ export const inject = [
   'i18n', 'commands', 'pages', 'routes', 'slots', 'managerContent',
   'agentConversationShell', 'agents', 'sessions', 'approvals', 'agentAdmissionOrigins',
   'agentAdmissionReservations', 'agentAdmissionBootstrapTargets', 'agentAdmissionBootstrapReservations',
+  'agentAdmissionBootstrapRouteDeclarations', 'agentAdmissionBootstrapRouteReservations',
   'entities', 'documents',
   'settings',
 ];
@@ -453,13 +454,13 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
         );
         assertChatroomAdmissionDeliveriesAccepted(outcomes);
       } else if (admissionMode === 'v9') {
-        const outcomes = await agentSession.submitDeliveriesViaAdmissionV4(
+        const outcomes = await agentSession.submitDeliveriesViaAdmissionV6(
           intent.roomId,
           intent.deliveries,
           admissionOrigin.origin,
           intent.dispatchText,
-          ctx.agentAdmissionBootstrapTargets,
-          ctx.agentAdmissionBootstrapReservations,
+          ctx.agentAdmissionBootstrapRouteDeclarations,
+          ctx.agentAdmissionBootstrapRouteReservations,
         );
         assertChatroomAdmissionDeliveriesAccepted(outcomes);
       } else {

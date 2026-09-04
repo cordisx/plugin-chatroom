@@ -2,26 +2,38 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-test('Shell v6-v9 composer registrations retain legacy paths and add bootstrap target admission', async () => {
+test('Shell v6-v9 composer registrations retain legacy paths and add bootstrap route admission', async () => {
   const source = await readFile(new URL('../src/chatroom.ts', import.meta.url), 'utf8');
+  const controller = await readFile(new URL('../src/agent-session-controller.ts', import.meta.url), 'utf8');
 
   assert.match(source, /agent-conversation-shell\/v8/);
   assert.match(source, /agent-conversation-shell\/v9/);
   assert.match(source, /agent-admission\/v4/);
+  assert.match(controller, /agent-admission\/v6/);
+  assert.match(controller, /AgentAdmissionBootstrapRouteTarget/);
+  assert.match(controller, /route: \{ routeId: 'room', param: 'roomId', roomId: room\.id \}/);
   assert.match(source, /agentAdmissionOrigins/);
   assert.match(source, /agentAdmissionReservations/);
   assert.match(source, /agentAdmissionBootstrapTargets/);
   assert.match(source, /agentAdmissionBootstrapReservations/);
+  assert.match(source, /agentAdmissionBootstrapRouteDeclarations/);
+  assert.match(source, /agentAdmissionBootstrapRouteReservations/);
   assert.match(source, /registerSourceV6/);
   assert.match(source, /registerSourceV7/);
   assert.match(source, /registerSourceV8/);
   assert.match(source, /registerSourceV9/);
   assert.match(source, /submitDeliveriesViaAdmissionV3\(/);
-  assert.match(source, /submitDeliveriesViaAdmissionV4\(/);
+  assert.match(controller, /submitDeliveriesViaAdmissionV4\(/);
+  assert.match(source, /submitDeliveriesViaAdmissionV6\(/);
   assert.match(source, /ctx\.agentAdmissionOrigins/);
   assert.match(source, /ctx\.agentAdmissionReservations/);
-  assert.match(source, /ctx\.agentAdmissionBootstrapTargets/);
-  assert.match(source, /ctx\.agentAdmissionBootstrapReservations/);
+  assert.match(controller, /agent-admission\/v4/);
+  assert.doesNotMatch(source, /ctx\.agentAdmissionBootstrapTargets/);
+  assert.doesNotMatch(source, /ctx\.agentAdmissionBootstrapReservations/);
+  assert.match(source, /ctx\.agentAdmissionBootstrapRouteDeclarations/);
+  assert.match(source, /ctx\.agentAdmissionBootstrapRouteReservations/);
+  assert.doesNotMatch(source, /agentAdmissionBootstrapRouteClaim/);
+  assert.doesNotMatch(controller, /AgentAdmissionBootstrapRouteClaim/);
   assert.match(source, /Chatroom conversation command context is unavailable/);
   assert.match(source, /composer submit is unavailable for the current Shell binding or generation/);
   assert.match(source, /Chatroom composer submit resolved no deliveries/);
