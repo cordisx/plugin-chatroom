@@ -15,18 +15,19 @@ import type {
   AgentConversationShellSubscriptionClosed,
   AgentConversationShellSubscribeRuntimeResult,
   AgentConversationShellUpdate,
-} from '@cordisx/protocol/agent-conversation-shell/v6';
+} from '@cordisx/protocol/agent-conversation-shell/v7';
 
 import type { ChatroomAgentSessionController } from './agent-session-controller.js';
+import type { ProjectedItem } from './agent-session-projection.js';
 import type { ChatroomComposerShortcutPolicy } from './composer-settings.js';
 
 const closeEnvelope = (
   subscription: AgentConversationShellSubscription,
   code: AgentConversationShellSubscriptionClosed['code'],
 ): AgentConversationShellSubscriptionClosed => Object.freeze({
-  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-conversation-shell-subscription-close.v6.schema.json',
-  contract: 'cordisx.agent-conversation-shell-subscription-close/v6',
-  schemaVersion: 6,
+  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-conversation-shell-subscription-close.v7.schema.json',
+  contract: 'cordisx.agent-conversation-shell-subscription-close/v7',
+  schemaVersion: 7,
   subscriptionId: subscription.subscriptionId,
   binding: subscription.binding,
   generation: subscription.generation,
@@ -34,7 +35,7 @@ const closeEnvelope = (
   code,
 });
 
-class V6Stream {
+class V7Stream {
   private cursor: number;
   private terminal?: AgentConversationShellSubscriptionClosed;
   private readonly updates: AgentConversationShellUpdate[] = [];
@@ -145,6 +146,9 @@ const stableItemOrder = (left: AgentConversationItem, right: AgentConversationIt
   return left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0;
 };
 
+const isV7ProjectionItem = (item: ProjectedItem): item is AgentConversationItem =>
+  item.kind !== 'approval' || 'requester' in item;
+
 const itemTime = (item: AgentConversationItem): number | undefined => {
   if (item.kind !== 'message') return undefined;
   const value = Date.parse(item.timestamp);
@@ -169,11 +173,11 @@ function chronologicalRoomItems(items: readonly AgentConversationItem[]): readon
 }
 
 /**
- * Atomic Shell-v6 adapter around the accepted Chatroom domain source. Domain
+ * Atomic Shell-v7 adapter around the accepted Chatroom domain source. Domain
  * state/copy stays unchanged; only execution facts are replaced by the
  * SessionEvent projector.
  */
-export class ChatroomAgentSessionConversationSource implements AgentConversationShellSource {
+export class ChatroomAgentSessionConversationSourceV7 implements AgentConversationShellSource {
   private disposed = false;
   private sequence = 500;
   private subscriptions = 0;
@@ -181,7 +185,7 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
   private roomId?: string;
   private refreshRevision = 0;
   private refreshTail: Promise<void> = Promise.resolve();
-  private readonly streams = new Set<V6Stream>();
+  private readonly streams = new Set<V7Stream>();
   private readonly ready: Promise<void>;
   private unsubscribeDomain?: () => void;
   private readonly unsubscribeProjection: () => void;
@@ -202,7 +206,7 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
   async snapshot(): Promise<AgentConversationShellSnapshot> {
     await this.ready;
     await this.refreshTail;
-    if (this.snapshotValue === undefined) throw new Error('Chatroom Shell v6 source is unavailable.');
+    if (this.snapshotValue === undefined) throw new Error('Chatroom Shell v7 source is unavailable.');
     return this.snapshotValue;
   }
 
@@ -218,8 +222,8 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
       afterSequence,
       snapshotSequence: snapshot.snapshotSequence,
     };
-    let stream!: V6Stream;
-    stream = new V6Stream(subscription, () => this.streams.delete(stream));
+    let stream!: V7Stream;
+    stream = new V7Stream(subscription, () => this.streams.delete(stream));
     this.streams.add(stream);
     return {
       result: { type: 'subscribe', status: 'accepted', code: 'allowed', subscription },
@@ -326,7 +330,7 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
     if (this.disposed) return;
     const projection = roomId === undefined
       ? { activeRuns: [], items: [] }
-      : this.sessions.projectionForRoomV6(roomId);
+      : this.sessions.projectionForRoom(roomId);
     const sessionByRun = new Map(projection.activeRuns.map(run => [run.runId, run.sessionId]));
     const participants = domain.selection.kind === 'room'
       ? domain.selection.participants.map(value => participant(value))
@@ -352,7 +356,7 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
         const mapped = domainItem(item, sessionByRun);
         return mapped === undefined ? [] : [mapped];
       }),
-      ...projection.items,
+      ...projection.items.filter(isV7ProjectionItem),
     ];
     // Domain and SessionEvent source coordinates are intentionally unrelated.
     // Once their deterministic chronology is known, assign one Room-local

@@ -100,3 +100,71 @@ test('fails closed when a Session is not bound to exactly one Room run', async (
   });
   owner.dispose();
 });
+
+test('Agent Session scenario approval uses the exact structured Reviewer reason and returns the v7 card correlation', async () => {
+  const reviewerRoom = {
+    ...room,
+    runs: [
+      { runId: 'run-lead', memberId: 'lead', sessionId: 'session-lead', presence: { state: 'ready' } },
+      { runId: 'run-reviewer', memberId: 'reviewer', sessionId: 'session-reviewer', presence: { state: 'ready' } },
+    ],
+  };
+  const listeners = new Set();
+  let projected = [];
+  let request;
+  const agentSession = {
+    rooms: { snapshot: () => [reviewerRoom], subscribe: () => () => {} },
+    subscribeProjection: listener => { listeners.add(listener); return () => listeners.delete(listener); },
+    projectionForRoom: () => ({ activeRuns: [], items: projected }),
+    requestApproval: async (...args) => {
+      request = args;
+      projected = [{
+        kind: 'approval', itemId: 'approval-card', sequence: 9,
+        participantId: 'participant-reviewer', memberId: 'reviewer', runId: 'run-reviewer',
+        sessionId: 'session-reviewer', approvalId: 'approval-v2', approvalKind: 'command',
+        requester: { agentId: 'reviewer-agent', revision: 'reviewer-r1' },
+        authority: {
+          participantId: 'participant-lead', memberId: 'lead',
+          identity: { agentId: 'lead-agent', revision: 'lead-r1' },
+        },
+        reason: { kind: 'plain-text', text: args[3] },
+        state: 'pending', agentGeneration: 2,
+        authorityBinding: {
+          agentId: 'session-lead', sessionId: 'session-lead', agentGeneration: 3,
+          definition: { agentId: 'lead-agent', revision: 'lead-r1' },
+        },
+        actions: [
+          { decision: 'approve', command: { id: 'chatroom.approval.approve' } },
+          { decision: 'reject', command: { id: 'chatroom.approval.deny' } },
+        ],
+      }];
+      for (const listener of listeners) listener('room-one');
+      return await new Promise(() => {});
+    },
+  };
+  const owner = new ChatroomAgentSessionRoomSimulationOwner(
+    'owner-one',
+    {
+      inspectPlaygroundSource: () => ({
+        status: 'available', room: reviewerRoom, run: reviewerRoom.runs[1], member: memberships[1],
+      }),
+    },
+    agentSession,
+  );
+  const binding = (await owner.resolveSession('session-reviewer')).value;
+  const result = await owner.emitAgentApprovalRequest(binding, 'scenario-code3', {
+    reason: 'Reviewer needs approval to validate the protected release output.',
+  });
+
+  assert.deepEqual(request, [
+    'room-one', 'run-reviewer', 'playground.room-simulation.agent-approval',
+    'Reviewer needs approval to validate the protected release output.', 'scenario-code3',
+  ]);
+  assert.equal(result.status, 'available');
+  assert.equal(result.value.phase, 'pending');
+  assert.equal(result.value.roomEntryId, 'approval-card');
+  assert.equal(result.value.approvalId, 'approval-v2');
+  assert.equal(result.value.detail.requesterMemberId, 'reviewer');
+  assert.equal(result.value.detail.authorityMemberId, 'lead');
+  owner.dispose();
+});

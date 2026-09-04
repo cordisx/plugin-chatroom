@@ -13,11 +13,19 @@ import {
   type CordisXAgentSessionLegacyAcquireResultV1,
 } from 'cordisx/contracts';
 import type {
-  ApprovalAnswererHandle,
+  ApprovalAnswererHandle as ApprovalAnswererHandleV1,
   ApprovalOutcome,
-  ApprovalQuestion,
-  ApprovalService,
+  ApprovalQuestion as ApprovalQuestionV1,
+  ApprovalService as ApprovalServiceV1,
 } from '@cordisx/protocol/approval/v1';
+import type {
+  ApprovalAuthorityAnswererHandle,
+  ApprovalQuestion as ApprovalQuestionV2,
+  ApprovalService as ApprovalServiceV2,
+} from '@cordisx/protocol/approval/v2';
+import type {
+  AgentConversationShellCommandContext,
+} from '@cordisx/protocol/agent-conversation-shell/v7';
 import type {
   AgentCancelCause,
   MessageId,
@@ -34,6 +42,7 @@ import {
   ChatroomAgentSessionProjector,
   type ChatroomSessionAgentFacts,
   type ChatroomSessionProjectionPage,
+  type ProjectedItem,
 } from './agent-session-projection.js';
 import { ChatroomRoomStoreError, type DurableChatroomRoomStore } from './room-store.js';
 import {
@@ -47,11 +56,12 @@ import {
   type RoomRun,
 } from './room.js';
 import { resolveExplicitRoomAgentDispatch } from './room-target.js';
+import { requestChatroomApproval, type ChatroomApprovalRequestExecution } from './approval-bubble.js';
 
 export interface ChatroomAgentRuntimeContext {
   readonly agents: CordisXAgentRegistryV1;
   readonly sessions: SessionRegistry;
-  readonly approvals: ApprovalService;
+  readonly approvals: ApprovalServiceV1 & ApprovalServiceV2;
 }
 
 export interface ChatroomSessionObservation {
@@ -67,7 +77,7 @@ export interface ChatroomApprovalContext {
   readonly member: RoomMembership;
   /** Ordered nearest manager first. Empty means the request fails closed. */
   readonly authorityMemberIds: readonly string[];
-  readonly question: ApprovalQuestion;
+  readonly question: ApprovalQuestionV1;
 }
 
 export type ChatroomApprovalPolicy = (
@@ -75,6 +85,10 @@ export type ChatroomApprovalPolicy = (
 ) => ApprovalOutcome | Promise<ApprovalOutcome>;
 
 export type ChatroomAgentSendMode = 'send' | 'followup' | 'steer' | 'inject';
+type ChatroomApprovalCommandContext = Extract<
+  AgentConversationShellCommandContext,
+  { readonly scope: 'approval' }
+>;
 
 export type ChatroomAgentSessionOutcome =
   | {
@@ -106,6 +120,11 @@ interface RuntimeSubscription {
 }
 
 export interface ChatroomRoomSessionProjection {
+  readonly activeRuns: readonly ReturnType<ChatroomAgentSessionProjector['activeRun']>[];
+  readonly items: readonly ProjectedItem[];
+}
+
+export interface ChatroomRoomSessionProjectionV6 {
   readonly activeRuns: readonly ReturnType<ChatroomAgentSessionProjector['activeRun']>[];
   readonly items: readonly import('@cordisx/protocol/agent-conversation-shell/v6').AgentConversationItem[];
 }
@@ -140,7 +159,8 @@ export class ChatroomAgentSessionController {
   private readonly owners = new Map<string, RuntimeOwner>();
   private readonly subscriptions = new Map<string, RuntimeSubscription>();
   private readonly projectors = new Map<string, ChatroomAgentSessionProjector>();
-  private readonly approvalAnswerers = new Map<string, ApprovalAnswererHandle>();
+  private readonly approvalAnswerers = new Map<string, ApprovalAnswererHandleV1>();
+  private readonly approvalAuthorityAnswerers = new Map<string, ApprovalAuthorityAnswererHandle>();
   private readonly acquisitions = new Map<string, Promise<RuntimeOwner | RuntimeAcquireFailure>>();
   private readonly roomHydrations = new Map<string, Promise<void>>();
   private readonly roomMutations = new Map<string, Promise<void>>();
@@ -150,6 +170,10 @@ export class ChatroomAgentSessionController {
   private readonly admittedMessageIds = new Set<MessageId>();
   private readonly projectionListeners = new Set<(roomId: string) => void>();
   private readonly pendingApprovals = new Map<string, (outcome: ApprovalOutcome) => void>();
+  private readonly pendingAuthorityApprovals = new Map<string, {
+    readonly question: ApprovalQuestionV2;
+    readonly resolve: (outcome: ApprovalOutcome) => void;
+  }>();
   private readonly delegatedSessionEvents = new Set<string>();
   /** Stable process-local coordinates; SessionEvent remains the durable fact. */
   private readonly presentationSequencesByEvent = new Map<string, number>();
@@ -189,12 +213,35 @@ export class ChatroomAgentSessionController {
     });
   }
 
+  projectionForRoomV6(roomId: string): ChatroomRoomSessionProjectionV6 {
+    const projection = this.projectionForRoom(roomId);
+    return Object.freeze({
+      activeRuns: projection.activeRuns,
+      items: Object.freeze(projection.items.flatMap(item => item.kind === 'approval' && 'requester' in item
+        ? []
+        : [item])),
+    });
+  }
+
   answerApprovalItem(roomId: string, itemId: string, outcome: ApprovalOutcome): boolean {
     const room = this.rooms.get(roomId);
     if (room === undefined) return false;
     for (const run of room.runs) {
       const item = this.projectors.get(runKey(roomId, run.runId))?.approvalItem(itemId);
       if (item === undefined || item.state !== 'pending') continue;
+      if ('authorityBinding' in item) {
+        if (outcome !== 'allowed-once' && outcome !== 'rejected') return false;
+        const key = this.authorityApprovalKey(item.sessionId, item.approvalId);
+        const pending = this.pendingAuthorityApprovals.get(key);
+        if (pending === undefined
+          || pending.question.requester.agentGeneration !== item.agentGeneration
+          || pending.question.authority.agentId !== item.authorityBinding.agentId
+          || pending.question.authority.sessionId !== item.authorityBinding.sessionId
+          || pending.question.authority.agentGeneration !== item.authorityBinding.agentGeneration) return false;
+        this.pendingAuthorityApprovals.delete(key);
+        pending.resolve(outcome);
+        return true;
+      }
       const resolve = this.pendingApprovals.get(this.approvalKey(
         item.sessionId, item.agentGeneration, item.approvalId,
       ));
@@ -204,6 +251,75 @@ export class ChatroomAgentSessionController {
       return true;
     }
     return false;
+  }
+
+  answerApprovalCommand(roomId: string, context: ChatroomApprovalCommandContext): boolean {
+    const outcome = context.approval.decision === 'approve' ? 'allowed-once' : 'rejected';
+    const room = this.rooms.get(roomId);
+    if (room === undefined) return false;
+    for (const run of room.runs) {
+      const item = this.projectors.get(runKey(roomId, run.runId))?.approvalItem(context.itemId);
+      if (item === undefined || item.state !== 'pending' || !('authorityBinding' in item)) continue;
+      if (item.sessionId !== context.approval.sessionId
+        || item.approvalId !== context.approval.approvalId
+        || item.requester.agentId !== context.approval.requester.agentId
+        || item.requester.revision !== context.approval.requester.revision
+        || item.authorityBinding.agentId !== context.approval.authority.agentId
+        || item.authorityBinding.sessionId !== context.approval.authority.sessionId
+        || item.authorityBinding.agentGeneration !== context.approval.authority.agentGeneration
+        || item.authorityBinding.definition.agentId !== context.approval.authority.definition.agentId
+        || item.authorityBinding.definition.revision !== context.approval.authority.definition.revision) return false;
+      return this.answerApprovalItem(roomId, context.itemId, outcome);
+    }
+    return false;
+  }
+
+  /**
+   * Starts one requester-authored approval against its exact reports-to Agent.
+   * The returned promise settles only after the Host-owned authority answerer
+   * decides or either live binding is fenced.
+   */
+  async requestApproval(
+    roomId: string,
+    requesterRunId: string,
+    toolName: string,
+    reason: string,
+    callId?: string,
+    signal?: AbortSignal,
+  ): Promise<ChatroomApprovalRequestExecution> {
+    this.assertUsable();
+    let room = this.requireRoom(roomId);
+    const requesterRun = this.requireRun(room, requesterRunId);
+    const requesterMember = this.requireMember(room, requesterRun.memberId);
+    const authorityMemberId = approvalAuthorityMemberIds(room, requesterMember.memberId)[0];
+    if (authorityMemberId === undefined) {
+      return { status: 'unavailable', code: 'authority-member-unavailable' };
+    }
+    const authorityMember = this.requireMember(room, authorityMemberId);
+    const authorityRuns = room.runs.filter(run => run.memberId === authorityMember.memberId);
+    const authorityRun = authorityMember.preferredRunId === undefined
+      ? authorityRuns.length === 1 ? authorityRuns[0] : undefined
+      : authorityRuns.find(run => run.runId === authorityMember.preferredRunId);
+    if (authorityRun === undefined) {
+      return { status: 'unavailable', code: 'authority-run-unavailable' };
+    }
+    const [requester, authority] = await Promise.all([
+      this.ensureOwner(roomId, requesterRunId),
+      this.ensureOwner(roomId, authorityRun.runId),
+    ]);
+    if (!('handle' in requester)) return { status: 'unavailable', code: 'requester-agent-mismatch' };
+    if (!('handle' in authority)) return { status: 'unavailable', code: 'authority-agent-unavailable' };
+    room = this.requireRoom(roomId);
+    return await requestChatroomApproval(this.runtime.approvals, {
+      room,
+      requesterRunId,
+      requesterAgent: requester.handle.agent,
+      liveAgentForRun: runId => this.owners.get(runKey(roomId, runId))?.handle.agent,
+      toolName,
+      ...(callId === undefined ? {} : { callId }),
+      reason,
+      ...(signal === undefined ? {} : { signal }),
+    });
   }
 
   isRunLocallyUnavailable(roomId: string, runId: string): boolean {
@@ -454,11 +570,13 @@ export class ChatroomAgentSessionController {
     this.generation += 1;
     const subscriptions = [...this.subscriptions.values()];
     const answerers = [...this.approvalAnswerers.values()];
+    const authorityAnswerers = [...this.approvalAuthorityAnswerers.values()];
     const owners = [...this.owners.entries()];
     this.subscriptions.clear();
     this.projectors.clear();
     this.roomHydrations.clear();
     this.approvalAnswerers.clear();
+    this.approvalAuthorityAnswerers.clear();
     this.owners.clear();
     this.localUnavailableRuns.clear();
     this.observedMessageIds.clear();
@@ -466,11 +584,14 @@ export class ChatroomAgentSessionController {
     this.projectionListeners.clear();
     for (const resolve of this.pendingApprovals.values()) resolve('unavailable');
     this.pendingApprovals.clear();
+    for (const pending of this.pendingAuthorityApprovals.values()) pending.resolve('unavailable');
+    this.pendingAuthorityApprovals.clear();
     this.delegatedSessionEvents.clear();
     this.presentationSequencesByEvent.clear();
     await Promise.allSettled([
       ...subscriptions.map(item => item.subscription.unsubscribe()),
       ...answerers.map(item => item.dispose()),
+      ...authorityAnswerers.map(item => item.dispose()),
       ...owners.map(([key, item]) => this.disposeOwner(key, item.handle)),
     ]);
   }
@@ -542,17 +663,21 @@ export class ChatroomAgentSessionController {
       });
       if (!this.isCurrent(generation)) throw new Error('Agent acquisition was replaced during Session subscription.');
       await this.openApprovalAnswerer(roomId, runId, result.handle.agent);
+      await this.openApprovalAuthorityAnswerer(roomId, runId, result.handle.agent, member);
       if (!this.isCurrent(generation)) throw new Error('Agent acquisition was replaced during approval registration.');
     } catch (error) {
       this.owners.delete(key);
       const subscription = this.subscriptions.get(key);
       const answerer = this.approvalAnswerers.get(key);
+      const authorityAnswerer = this.approvalAuthorityAnswerers.get(key);
       this.subscriptions.delete(key);
       this.projectors.delete(key);
       this.approvalAnswerers.delete(key);
+      this.approvalAuthorityAnswerers.delete(key);
       await Promise.allSettled([
         ...(subscription === undefined ? [] : [subscription.subscription.unsubscribe()]),
         ...(answerer === undefined ? [] : [answerer.dispose()]),
+        ...(authorityAnswerer === undefined ? [] : [authorityAnswerer.dispose()]),
         this.disposeOwner(key, result.handle),
       ]);
       throw error;
@@ -691,9 +816,12 @@ export class ChatroomAgentSessionController {
     this.owners.delete(key);
     this.settleSessionApprovals(active.sessionId);
     const answerer = this.approvalAnswerers.get(key);
+    const authorityAnswerer = this.approvalAuthorityAnswerers.get(key);
     this.approvalAnswerers.delete(key);
+    this.approvalAuthorityAnswerers.delete(key);
     await Promise.allSettled([
       ...(answerer === undefined ? [] : [answerer.dispose()]),
+      ...(authorityAnswerer === undefined ? [] : [authorityAnswerer.dispose()]),
       ...(owner === undefined ? [] : [this.disposeOwner(key, owner.handle)]),
     ]);
     // An externally fenced Session invalidates the Room's full Shell
@@ -727,20 +855,69 @@ export class ChatroomAgentSessionController {
     this.approvalAnswerers.set(key, answerer);
   }
 
+  private async openApprovalAuthorityAnswerer(
+    roomId: string,
+    runId: string,
+    agent: Agent,
+    member: RoomMembership,
+  ): Promise<void> {
+    const key = runKey(roomId, runId);
+    const existing = this.approvalAuthorityAnswerers.get(key);
+    if (existing !== undefined
+      && existing.authority.agentId === agent.id
+      && existing.authority.agentGeneration === agent.generation
+      && existing.authority.definition.agentId === member.definition.agentId
+      && existing.authority.definition.revision === member.definition.revision) return;
+    if (existing !== undefined) await existing.dispose();
+    const answerer = await this.runtime.approvals.registerAuthorityAnswerer(
+      { agent, definition: member.definition },
+      async question => {
+        const room = this.requireRoom(roomId);
+        const authorityRun = this.requireRun(room, runId);
+        const authorityMember = this.requireMember(room, authorityRun.memberId);
+        const requesterRuns = room.runs.filter(candidate => candidate.sessionId === question.requester.sessionId);
+        if (requesterRuns.length !== 1
+          || question.authority.agentId !== agent.id
+          || question.authority.sessionId !== agent.session.id
+          || question.authority.agentGeneration !== agent.generation
+          || question.authority.definition.agentId !== authorityMember.definition.agentId
+          || question.authority.definition.revision !== authorityMember.definition.revision) return 'unavailable';
+        const requesterRun = requesterRuns[0];
+        const requesterMember = this.requireMember(room, requesterRun.memberId);
+        if (requesterMember.definition.agentId !== question.requester.definition.agentId
+          || requesterMember.definition.revision !== question.requester.definition.revision
+          || approvalAuthorityMemberIds(room, requesterMember.memberId)[0] !== authorityMember.memberId) {
+          return 'unavailable';
+        }
+        const pendingKey = this.authorityApprovalKey(question.requester.sessionId, question.id);
+        if (this.pendingAuthorityApprovals.has(pendingKey)) return 'unavailable';
+        this.projectors.get(runKey(roomId, requesterRun.runId))?.updateLiveApprovalQuestion(question);
+        for (const listener of this.projectionListeners) listener(roomId);
+        return await new Promise<ApprovalOutcome>(resolve => {
+          this.pendingAuthorityApprovals.set(pendingKey, { question, resolve });
+        });
+      },
+    );
+    this.approvalAuthorityAnswerers.set(key, answerer);
+  }
+
   private async detachRuntime(roomId: string, runId: string): Promise<void> {
     const key = runKey(roomId, runId);
     const owner = this.owners.get(key);
     this.owners.delete(key);
     const subscription = this.subscriptions.get(key);
     const answerer = this.approvalAnswerers.get(key);
+    const authorityAnswerer = this.approvalAuthorityAnswerers.get(key);
     this.subscriptions.delete(key);
     this.projectors.delete(key);
     this.approvalAnswerers.delete(key);
+    this.approvalAuthorityAnswerers.delete(key);
     this.localUnavailableRuns.set(key, 'agent-replaced');
     if (owner !== undefined) this.settleSessionApprovals(owner.handle.agent.session.id);
     await Promise.allSettled([
       ...(subscription === undefined ? [] : [subscription.subscription.unsubscribe()]),
       ...(answerer === undefined ? [] : [answerer.dispose()]),
+      ...(authorityAnswerer === undefined ? [] : [authorityAnswerer.dispose()]),
       ...(owner === undefined ? [] : [this.disposeOwner(key, owner.handle)]),
     ]);
   }
@@ -865,12 +1042,22 @@ export class ChatroomAgentSessionController {
     return `${sessionId.length}:${sessionId}:${agentGeneration}:${approvalId.length}:${approvalId}`;
   }
 
+  private authorityApprovalKey(sessionId: string, approvalId: string): string {
+    return `${sessionId.length}:${sessionId}:${approvalId.length}:${approvalId}`;
+  }
+
   private settleSessionApprovals(sessionId: string): void {
     const prefix = `${sessionId.length}:${sessionId}:`;
     for (const [key, resolve] of this.pendingApprovals) {
       if (!key.startsWith(prefix)) continue;
       this.pendingApprovals.delete(key);
       resolve('unavailable');
+    }
+    const authorityPrefix = `${sessionId.length}:${sessionId}:`;
+    for (const [key, pending] of this.pendingAuthorityApprovals) {
+      if (!key.startsWith(authorityPrefix)) continue;
+      this.pendingAuthorityApprovals.delete(key);
+      pending.resolve('unavailable');
     }
   }
 

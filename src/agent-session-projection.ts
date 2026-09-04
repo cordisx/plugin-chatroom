@@ -1,10 +1,13 @@
 import type {
   AgentConversationActiveRunDescriptor,
-  AgentConversationApprovalItem,
   AgentConversationItem,
   AgentConversationMessageItem,
   AgentConversationParticipant,
+} from '@cordisx/protocol/agent-conversation-shell/v7';
+import type {
+  AgentConversationApprovalItem as AgentConversationApprovalItemV6,
 } from '@cordisx/protocol/agent-conversation-shell/v6';
+import type { ApprovalQuestion as ApprovalQuestionV2 } from '@cordisx/protocol/approval/v2';
 import type { AgentDetailReference } from '@cordisx/protocol/agents/v1';
 import type {
   ApprovalOutcome,
@@ -21,11 +24,15 @@ import {
   CHATROOM_COMMAND_APPROVAL_DENY,
 } from './conversation-model.js';
 import { createChatroomOpaqueId, type Room, type RoomRun } from './room.js';
+import {
+  projectChatroomApprovalBubble,
+  type ChatroomApprovalBubbleEvent,
+} from './approval-bubble.js';
 
 export interface ChatroomSessionProjectionChange {
   readonly kind: 'item-appended' | 'item-updated';
   readonly eventSeq: number;
-  readonly item: AgentConversationItem;
+  readonly item: ProjectedItem;
 }
 
 export interface ChatroomSessionProjectionPage {
@@ -35,7 +42,7 @@ export interface ChatroomSessionProjectionPage {
   readonly changes: readonly ChatroomSessionProjectionChange[];
   /** A surface replacement removed an earlier projection; the Shell source must replace its snapshot. */
   readonly requiresSnapshotReplacement: boolean;
-  readonly items: readonly AgentConversationItem[];
+  readonly items: readonly ProjectedItem[];
 }
 
 export interface ChatroomSessionAgentFacts {
@@ -43,13 +50,15 @@ export interface ChatroomSessionAgentFacts {
   readonly details?: AgentDetailReference;
 }
 
-type ProjectedItem = AgentConversationMessageItem | AgentConversationApprovalItem;
-type PendingApprovalItem = Extract<AgentConversationApprovalItem, { readonly state: 'pending' }>;
+export type ProjectedItem = AgentConversationMessageItem
+  | AgentConversationApprovalItemV6
+  | Extract<AgentConversationItem, { readonly kind: 'approval' }>;
+type PendingApprovalItem = Extract<AgentConversationApprovalItemV6, { readonly state: 'pending' }>;
 type ApprovalAskedFact = {
   readonly eventSeq: number;
   readonly sequence: number;
   readonly approvalId: string;
-  readonly rationale?: AgentConversationApprovalItem['rationale'];
+  readonly rationale?: AgentConversationApprovalItemV6['rationale'];
   readonly agentGeneration?: number;
 };
 
@@ -146,6 +155,7 @@ export class ChatroomAgentSessionProjector {
   private readonly events = new Map<number, SessionEvent>();
   private readonly itemsByEventSeq = new Map<number, ProjectedItem>();
   private readonly approvalAsked = new Map<string, ApprovalAskedFact>();
+  private readonly liveApprovalQuestions = new Map<string, ApprovalQuestionV2>();
   private readonly approvalDecided = new Set<string>();
   private readonly invalidApprovals = new Set<string>();
   private approvalSnapshotInvalidated = false;
@@ -184,15 +194,21 @@ export class ChatroomAgentSessionProjector {
 
   get agentGeneration(): number | undefined { return this.agentFacts.generation; }
 
-  snapshotItems(): readonly AgentConversationItem[] {
+  snapshotItems(): readonly ProjectedItem[] {
     return Object.freeze([...this.itemsByEventSeq.entries()]
       .sort(([left], [right]) => left - right)
       .map(([, item]) => item));
   }
 
-  approvalItem(itemId: string): AgentConversationApprovalItem | undefined {
+  approvalItem(itemId: string): Extract<ProjectedItem, { readonly kind: 'approval' }> | undefined {
     const item = this.snapshotItems().find(candidate => candidate.itemId === itemId);
     return item?.kind === 'approval' ? item : undefined;
+  }
+
+  updateLiveApprovalQuestion(question: ApprovalQuestionV2): void {
+    if (question.requester.sessionId !== this.sessionId || this.invalidApprovals.has(question.id)) return;
+    this.liveApprovalQuestions.set(question.id, question);
+    this.projectAuthorityApproval(question.id);
   }
 
   project(page: SessionSubscriptionPage): ChatroomSessionProjectionPage {
@@ -256,6 +272,10 @@ export class ChatroomAgentSessionProjector {
     // the authoritative Session seq merely to make an item renderable.
     if (event.type === 'user/message') return event.seq < 1 ? undefined : this.projectUserMessage(event);
     if (event.type === 'assistant/message') return event.seq < 1 ? undefined : this.projectAssistantMessage(event);
+    if (event.type === 'approval/authority-bound') {
+      this.projectAuthorityApproval(event.data.approvalId);
+      return undefined;
+    }
     if (event.type === 'approval/asked') return this.projectApprovalAsked(event);
     if (event.type === 'approval/decided') return this.projectApprovalDecided(event);
     return undefined;
@@ -372,6 +392,8 @@ export class ChatroomAgentSessionProjector {
       }),
     };
     this.approvalAsked.set(event.data.id, asked);
+    const authorityProjection = this.projectAuthorityApproval(event.data.id);
+    if (authorityProjection !== undefined) return authorityProjection;
     // A persisted asked-only fact cannot be made actionable after the live
     // Agent generation and answerer have gone away. Keep it solely for exact
     // durable asked -> decided correlation.
@@ -412,6 +434,11 @@ export class ChatroomAgentSessionProjector {
     }
     this.approvalDecided.add(event.data.id);
     this.lifecycle = 'running';
+    const authorityProjection = this.projectAuthorityApproval(event.data.id);
+    if (authorityProjection !== undefined) {
+      this.liveApprovalQuestions.delete(event.data.id);
+      return authorityProjection;
+    }
     const state = approvalState(event.data.outcome);
     const member = this.member();
     const common = {
@@ -427,7 +454,7 @@ export class ChatroomAgentSessionProjector {
       approvalKind: 'command' as const,
       ...(asked.rationale === undefined ? {} : { rationale: asked.rationale }),
     } as const;
-    const item: AgentConversationApprovalItem = state === 'failed'
+    const item: AgentConversationApprovalItemV6 = state === 'failed'
       ? {
         ...common,
         state,
@@ -440,11 +467,40 @@ export class ChatroomAgentSessionProjector {
     return { kind, eventSeq: event.seq, item };
   }
 
+  private projectAuthorityApproval(approvalId: string): ChatroomSessionProjectionChange | undefined {
+    const asked = this.approvalAsked.get(approvalId);
+    if (asked === undefined) return undefined;
+    const events = [...this.events.values()].filter((event): event is ChatroomApprovalBubbleEvent =>
+      event.type === 'approval/authority-bound'
+      || event.type === 'approval/asked'
+      || event.type === 'approval/decided');
+    const projection = projectChatroomApprovalBubble({
+      room: this.room,
+      sessionId: this.sessionId,
+      approvalId,
+      events,
+      ...(this.liveApprovalQuestions.get(approvalId) === undefined
+        ? {}
+        : { liveQuestion: this.liveApprovalQuestions.get(approvalId)! }),
+      sequence: asked.sequence,
+    });
+    if (projection.status === 'legacy' || projection.status === 'waiting') return undefined;
+    if (projection.status === 'invalid') {
+      this.invalidateApproval(approvalId);
+      return undefined;
+    }
+    const kind = this.itemsByEventSeq.has(asked.eventSeq) ? 'item-updated' : 'item-appended';
+    this.itemsByEventSeq.set(asked.eventSeq, projection.item);
+    if (projection.item.state === 'pending') this.lifecycle = 'waiting';
+    return { kind, eventSeq: asked.eventSeq, item: projection.item };
+  }
+
   private invalidateApproval(approvalId: string): void {
     const asked = this.approvalAsked.get(approvalId);
     this.invalidApprovals.add(approvalId);
     this.approvalAsked.delete(approvalId);
     this.approvalDecided.delete(approvalId);
+    this.liveApprovalQuestions.delete(approvalId);
     if (asked !== undefined && this.itemsByEventSeq.delete(asked.eventSeq)) {
       this.approvalSnapshotInvalidated = true;
     }

@@ -1391,8 +1391,58 @@ export class ChatroomAgentSessionRoomSimulationOwner implements PlaygroundRoomSi
     return unavailable(this.ownerGeneration, 'unsupported', 'Direct Agent reply injection is unavailable for Agent Sessions.');
   }
 
-  async emitAgentApprovalRequest() {
-    return unavailable(this.ownerGeneration, 'unsupported', 'Synthetic approval injection is unavailable for Agent Sessions.');
+  async emitAgentApprovalRequest(
+    binding: PlaygroundRoomSimulationBinding,
+    operationId: string,
+    payload: PlaygroundRoomSimulationAgentApprovalRequest,
+  ) {
+    const inspection = this.inspectInternal(binding);
+    if (inspection.status === 'unavailable') return inspection;
+    const reason = boundedText(payload.reason, 4_096);
+    if (!OPERATION_ID_PATTERN.test(operationId) || reason === undefined) {
+      return unavailable(this.ownerGeneration, 'invalid-request', 'The Agent approval request is invalid.');
+    }
+    const prior = new Set(this.agentSession.projectionForRoom(binding.roomId).items
+      .filter(item => item.kind === 'approval' && item.runId === binding.runId)
+      .map(item => item.itemId));
+    const decision = this.agentSession.requestApproval(
+      binding.roomId,
+      binding.runId,
+      'playground.room-simulation.agent-approval',
+      reason,
+      operationId,
+    );
+    void decision.catch(() => undefined);
+    const item = await this.waitForApproval(binding.roomId, binding.runId, prior);
+    if (item === undefined) {
+      const settled = await Promise.race([
+        decision,
+        new Promise<undefined>(resolve => setTimeout(resolve, 0)),
+      ]);
+      return unavailable(
+        this.ownerGeneration,
+        settled?.status === 'unavailable' ? settled.code : 'approval-not-projected',
+        'The exact Reviewer approval request could not be projected.',
+      );
+    }
+    return available(this.ownerGeneration, Object.freeze({
+      operationId,
+      phase: item.state === 'pending' ? 'pending' as const : 'completed' as const,
+      binding,
+      roomEntryId: item.itemId,
+      approvalId: item.approvalId,
+      runId: item.runId,
+      ...(item.state === 'pending' ? {} : {
+        terminal: item.state === 'approved' ? 'completed' as const : item.state,
+      }),
+      detail: Object.freeze({
+        direction: 'agent-to-room',
+        requestOperationId: operationId,
+        projectionState: 'session-event',
+        requesterMemberId: item.memberId,
+        authorityMemberId: 'authority' in item ? item.authority.memberId : undefined,
+      }),
+    }));
   }
 
   async requestPermission() {
@@ -1451,6 +1501,35 @@ export class ChatroomAgentSessionRoomSimulationOwner implements PlaygroundRoomSi
         inspection.code,
         `The Chatroom Room source is unavailable (${inspection.code}).`,
       );
+  }
+
+  private async waitForApproval(
+    roomId: string,
+    runId: string,
+    prior: ReadonlySet<string>,
+  ) {
+    const current = () => this.agentSession.projectionForRoom(roomId).items.find(
+      (item): item is Extract<typeof item, { readonly kind: 'approval' }> =>
+        item.kind === 'approval' && item.runId === runId && !prior.has(item.itemId),
+    );
+    const retained = current();
+    if (retained !== undefined) return retained;
+    return await new Promise<ReturnType<typeof current>>(resolve => {
+      let settled = false;
+      const finish = (value: ReturnType<typeof current>) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        unsubscribe();
+        resolve(value);
+      };
+      const unsubscribe = this.agentSession.subscribeProjection(changedRoomId => {
+        if (changedRoomId !== roomId) return;
+        const item = current();
+        if (item !== undefined) finish(item);
+      });
+      const timer = setTimeout(() => finish(undefined), PROJECTION_WAIT_MS);
+    });
   }
 }
 
