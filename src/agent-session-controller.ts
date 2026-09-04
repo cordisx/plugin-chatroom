@@ -31,6 +31,10 @@ import type {
   AgentConversationShellCommandContext,
 } from '@cordisx/protocol/agent-conversation-shell/v7';
 import type {
+  AgentAdmissionReservationService,
+  AgentCommandOrigin,
+} from '@cordisx/protocol/agent-admission/v2';
+import type {
   AgentCancelCause,
   MessageId,
   Session,
@@ -65,6 +69,7 @@ import {
   routeChatroomDriverApproval,
   type ChatroomApprovalRequestExecution,
 } from './approval-bubble.js';
+import { submitChatroomAgentAdmissionV2 } from './agent-admission-v2.js';
 
 export interface ChatroomAgentRuntimeContext {
   readonly agents: CordisXAgentRegistryV1;
@@ -444,6 +449,49 @@ export class ChatroomAgentSessionController {
     }
     return {
       status: 'accepted', roomId, runId, messageId,
+      sessionId: acquired.handle.agent.session.id,
+      disposition: acquired.disposition,
+    };
+  }
+
+  /**
+   * Shell v8 pre-submit path. The caller supplies only public contracts: the
+   * Host-generated origin capability and the public reservation service. No
+   * Host Context shape is assumed here, and this path deliberately never
+   * falls through to Chatroom's legacy Agent driver methods.
+   */
+  async submitToRoomViaAdmissionV2(
+    roomId: string,
+    runId: string,
+    origin: AgentCommandOrigin,
+    text: string,
+    reservations: AgentAdmissionReservationService,
+  ): Promise<ChatroomAgentSessionOutcome> {
+    this.assertUsable();
+    if (text.trim() === '') throw new Error('Room message must not be empty.');
+    const acquired = await this.ensureOwner(roomId, runId);
+    if (!('handle' in acquired)) {
+      return { status: acquired.status, roomId, runId, code: acquireErrorCode(acquired) };
+    }
+    const room = this.requireRoom(roomId);
+    const run = this.requireRun(room, runId);
+    const member = this.requireMember(room, run.memberId);
+    const result = await submitChatroomAgentAdmissionV2(reservations, {
+      handle: acquired.handle,
+      origin,
+      target: {
+        roomId,
+        participantId: member.participantId,
+        memberId: member.memberId,
+        runId,
+      },
+      message: { text },
+    });
+    if (result.status === 'denied') {
+      return { status: 'denied', roomId, runId, code: result.code };
+    }
+    return {
+      status: 'accepted', roomId, runId, messageId: result.admission.messageId,
       sessionId: acquired.handle.agent.session.id,
       disposition: acquired.disposition,
     };

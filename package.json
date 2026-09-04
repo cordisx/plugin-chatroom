@@ -25,7 +25,7 @@
     "node": ">=22.19"
   },
   "devDependencies": {
-    "@cordisx/protocol": "github:cordisx/cordisx-protocol#e5f374e20a0169ef8f264e9c1878fc70ae0b5363",
+    "@cordisx/protocol": "github:cordisx/cordisx-protocol#1e5bd131e0cc940fc09497e6a8a8c083d4c3045f",
     "@deepseek-ai/cordis": "4.0.1",
     "@deepseek-ai/schemastery": "3.18.1",
     "ajv": "^8.17.1",
