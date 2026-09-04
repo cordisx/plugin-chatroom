@@ -304,6 +304,22 @@ test('creates and projects a Room only from the first Host-generated composer su
   assert.deepEqual(room.runs.map(run => [run.memberId, run.status]), [['leader', 'creating']]);
 });
 
+test('a mismatched composer binding or generation writes no Room item or delivery intent', async () => {
+  const controller = new ChatroomConversationController();
+  const source = controller.createSource(binding);
+  const before = await source.snapshot();
+  const intent = controller.handle({
+    binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration },
+    generation: 'stale-generation', scope: 'composer-submit',
+    command: { id: CHATROOM_COMMAND_SUBMIT }, submitPayload: 'Must retain draft',
+  });
+  assert.equal(intent, undefined);
+  assert.equal(controller.rooms.snapshot().length, 0);
+  const after = await source.snapshot();
+  assert.deepEqual(after.items, before.items);
+  assert.deepEqual(controller.takePendingIntents(), []);
+});
+
 test('restores Room, run, and message id watermarks from the hydrated registry', () => {
   let hydrated = createRoom({
     id: 'room-9', title: 'Hydrated',
