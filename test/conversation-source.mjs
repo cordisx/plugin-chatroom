@@ -359,12 +359,15 @@ test('a mismatched composer binding or generation writes no Room item or deliver
   assert.deepEqual(controller.takePendingIntents(), []);
 });
 
-test('marks only the v8 source binding as requiring a composer admission origin', () => {
+test('marks the exact v8/v9 source binding as requiring its composer admission origin', () => {
   const controller = new ChatroomConversationController();
-  controller.createSource(binding, { admissionOriginRequired: true });
+  controller.createSource(binding, { admissionMode: 'v8' });
   assert.equal(controller.requiresAdmissionOrigin({
     binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration }, generation: 'owner-1',
   }), true);
+  assert.equal(controller.composerAdmissionMode({
+    binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration }, generation: 'owner-1',
+  }), 'v8');
   assert.equal(controller.requiresAdmissionOrigin({
     binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration }, generation: 'stale',
   }), false);
@@ -373,6 +376,18 @@ test('marks only the v8 source binding as requiring a composer admission origin'
   assert.equal(legacy.requiresAdmissionOrigin({
     binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration }, generation: 'owner-1',
   }), false);
+  assert.equal(legacy.composerAdmissionMode({
+    binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration }, generation: 'owner-1',
+  }), undefined);
+
+  const v9 = new ChatroomConversationController();
+  v9.createSource(binding, { admissionMode: 'v9' });
+  assert.equal(v9.requiresAdmissionOrigin({
+    binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration }, generation: 'owner-1',
+  }), true);
+  assert.equal(v9.composerAdmissionMode({
+    binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration }, generation: 'owner-1',
+  }), 'v9');
 });
 
 test('restores Room, run, and message id watermarks from the hydrated registry', () => {

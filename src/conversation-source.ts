@@ -57,6 +57,9 @@ export interface ChatroomCommandDelivery {
   readonly reason: RoomDispatchRecipient['reason'];
 }
 
+/** The Shell version that owns the composer admission capability for a source. */
+export type ChatroomComposerAdmissionMode = 'v8' | 'v9';
+
 export type ChatroomCommandIntent =
   { readonly kind: 'send-message'; readonly roomId: string; readonly roomCreated: boolean; readonly deliveries: readonly [ChatroomCommandDelivery, ...ChatroomCommandDelivery[]]; readonly userItemId: string; readonly bindingId: string; readonly generation: string; readonly dispatchText: string }
   | { readonly kind: 'approval-decision'; readonly roomId: string; readonly runId: string; readonly turn: string; readonly approvalId: string; readonly decision: 'approved' | 'denied' | 'cancelled' }
@@ -446,7 +449,7 @@ export class ChatroomConversationController {
   private readonly sources = new Map<string, {
     readonly binding: Readonly<AgentConversationShellBinding>;
     readonly source: ChatroomConversationSource;
-    readonly admissionOriginRequired: boolean;
+    readonly admissionMode?: ChatroomComposerAdmissionMode;
     roomId?: string;
   }>();
   private readonly playgroundSourceCorrelations = new Map<string, {
@@ -496,7 +499,7 @@ export class ChatroomConversationController {
 
   createSource(
     binding: Readonly<AgentConversationShellBinding>,
-    options: Readonly<{ admissionOriginRequired?: boolean }> = {},
+    options: Readonly<{ admissionMode?: ChatroomComposerAdmissionMode }> = {},
   ): ChatroomConversationSource {
     if (this.ownerGenerationValue !== binding.ownerGeneration) {
       this.ownerGenerationValue = binding.ownerGeneration;
@@ -525,7 +528,7 @@ export class ChatroomConversationController {
       },
     );
     this.sources.set(key, {
-      binding, source, admissionOriginRequired: options.admissionOriginRequired === true,
+      binding, source, admissionMode: options.admissionMode,
       roomId: binding.routeSelection.selectedRoomParam,
     });
     this.playgroundSourceCorrelations.set(key, {
@@ -620,14 +623,24 @@ export class ChatroomConversationController {
     )?.roomId;
   }
 
-  /** A Shell v8 source never downgrades a composer submit to v6/v7 admission. */
+  /** Versioned Shell sources never downgrade a composer submit to v6/v7 admission. */
   requiresAdmissionOrigin(context: Readonly<{
     binding: { readonly bindingId: string; readonly ownerGeneration: string };
     generation: string;
   }>): boolean {
     return this.sources.get(
       `${context.binding.bindingId}:${context.binding.ownerGeneration}:${context.generation}`,
-    )?.admissionOriginRequired === true;
+    )?.admissionMode !== undefined;
+  }
+
+  /** The exact public Shell admission contract selected for this live source. */
+  composerAdmissionMode(context: Readonly<{
+    binding: { readonly bindingId: string; readonly ownerGeneration: string };
+    generation: string;
+  }>): ChatroomComposerAdmissionMode | undefined {
+    return this.sources.get(
+      `${context.binding.bindingId}:${context.binding.ownerGeneration}:${context.generation}`,
+    )?.admissionMode;
   }
 
   /**
