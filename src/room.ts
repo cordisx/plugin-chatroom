@@ -465,6 +465,12 @@ export interface RoomAdmissionMessageLink {
   readonly messageId: MessageId;
   /** Exact Host-stamped plugin provenance expected on the SessionEvent. */
   readonly owner: { readonly pluginId: string; readonly generation: number };
+  /**
+   * Opaque projection item that was last visible when this later Room message
+   * was admitted. It is an ordering fence only: no SessionEvent content,
+   * timestamp, or Host-private state is copied into the Room document.
+   */
+  readonly appendAfterItemId?: string;
 }
 
 export type RoomRunPublicProjection = Readonly<{
@@ -1014,6 +1020,12 @@ export function createRoom(input: CreateRoomInput): Room {
     requireShellOpaqueId(link.runId, 'Room admission link runId');
     requireShellOpaqueId(link.sessionId, 'Room admission link sessionId');
     requireShellOpaqueId(link.messageId, 'Room admission link messageId');
+    if (link.appendAfterItemId !== undefined) {
+      requireShellOpaqueId(link.appendAfterItemId, 'Room admission link appendAfterItemId');
+      if (link.appendAfterItemId === link.itemId) {
+        throw new Error('Room admission append anchor cannot refer to its own Room item.');
+      }
+    }
     const member = membershipById.get(link.memberId);
     const run = runs.find(candidate => candidate.runId === link.runId);
     const item = itemById.get(link.itemId);
@@ -1492,7 +1504,8 @@ const sameAdmissionMessageLink = (
   && left.sessionId === right.sessionId
   && left.messageId === right.messageId
   && left.owner.pluginId === right.owner.pluginId
-  && left.owner.generation === right.owner.generation;
+  && left.owner.generation === right.owner.generation
+  && left.appendAfterItemId === right.appendAfterItemId;
 
 /**
  * Records the public result of an accepted admission/v6 reservation. The

@@ -92,21 +92,23 @@ function domainSource(itemOverride) {
   };
 }
 
-function sessionProjection(itemOverride) {
+function sessionProjection(itemOverride, admissionAppendAnchors) {
   let listener;
   let currentItems = itemOverride;
   let currentRuns;
+  let currentAdmissionAppendAnchors = admissionAppendAnchors;
   return {
     async hydrateRoom() {},
     subscribeProjection(next) { listener = next; return () => { listener = undefined; }; },
     emit(roomId = 'room-one') { listener?.(roomId); },
-    replace({ activeRuns, items }) {
+    replace({ activeRuns, items, admissionAppendAnchors: nextAdmissionAppendAnchors }) {
       currentRuns = activeRuns;
       currentItems = items;
+      currentAdmissionAppendAnchors = nextAdmissionAppendAnchors;
       listener?.('room-one');
     },
     projectionForRoom() {
-      return {
+      const projection = {
         activeRuns: currentRuns ?? [{
           participantId: 'reviewer', memberId: 'reviewer', runId: 'run-one',
           sessionId: 'session-one', lifecycle: { phase: 'running' },
@@ -121,6 +123,9 @@ function sessionProjection(itemOverride) {
           runState: 'idle', ariaLive: 'polite', actions: [],
         }],
       };
+      return currentAdmissionAppendAnchors === undefined
+        ? projection
+        : { ...projection, admissionAppendAnchors: currentAdmissionAppendAnchors };
     },
     projectionForRoomV6() { return this.projectionForRoom(); },
   };
@@ -433,7 +438,10 @@ test('Shell v7 keeps the complete A3/B1 Room timeline when Reviewer approval is 
   const before = await source.snapshot();
   const stable = before.items.map(item => [item.itemId, item.sequence]);
   const user1 = sessionMessage({
-    itemId: 'user-1-v7', sessionId: 'session-lead', eventSeq: 1, sequence: 504,
+    // This is the real B ordering shape: the durable Room item coordinate is
+    // older than the already-published approval coordinate. The opaque link
+    // must append B after the approval without moving that approval item.
+    itemId: 'user-1-v7', sessionId: 'session-lead', eventSeq: 1, sequence: 501,
     timestamp: '2026-09-04T00:00:03.000Z', author: human, text: '1',
   });
   const leadReply = sessionMessage({
@@ -447,6 +455,7 @@ test('Shell v7 keeps the complete A3/B1 Room timeline when Reviewer approval is 
       { participantId: 'lead', memberId: 'leader', runId: 'run-lead', sessionId: 'session-lead', lifecycle: { phase: 'active' } },
     ],
     items: [user3, intro, { ...denied, state: 'denied', actions: [] }, user1, leadReply],
+    admissionAppendAnchors: [{ itemId: 'user-1-v7', appendAfterItemId: 'approval-v7' }],
   });
   await new Promise(resolve => setImmediate(resolve));
   const after = await source.snapshot();
@@ -459,6 +468,26 @@ test('Shell v7 keeps the complete A3/B1 Room timeline when Reviewer approval is 
   assert.equal(terminal.state, 'denied');
   assert.deepEqual(terminal.actions, []);
   assert.equal('authorityBinding' in terminal, false);
+  const coldProjection = sessionProjection();
+  coldProjection.replace({
+    activeRuns: [
+      { participantId: 'reviewer', memberId: 'reviewer', runId: 'run-reviewer', sessionId: 'session-reviewer', lifecycle: { phase: 'active' } },
+      { participantId: 'lead', memberId: 'leader', runId: 'run-lead', sessionId: 'session-lead', lifecycle: { phase: 'active' } },
+    ],
+    items: [user3, intro, { ...denied, state: 'denied', actions: [] }, user1, leadReply],
+    admissionAppendAnchors: [{ itemId: 'user-1-v7', appendAfterItemId: 'approval-v7' }],
+  });
+  const cold = new ChatroomAgentSessionConversationSourceV7(
+    binding, domainSource([delegation]), coldProjection, 'enter',
+  );
+  const replayed = await cold.snapshot();
+  assert.deepEqual(
+    replayed.items.map(item => [item.itemId, item.sequence]),
+    after.items.map(item => [item.itemId, item.sequence]),
+    'cold replay rebuilds the append fence without moving the rejected approval item',
+  );
+  assert.equal(replayed.items.find(item => item.itemId === 'approval-v7').state, 'denied');
+  cold.dispose();
   const subscribed = await source.subscribe(after.snapshotSequence);
   assert.equal(subscribed.result.status, 'accepted');
   const closed = await subscribed.handle.unsubscribe();

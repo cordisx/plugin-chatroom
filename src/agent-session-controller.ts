@@ -197,6 +197,15 @@ interface RuntimeSubscription {
 export interface ChatroomRoomSessionProjection {
   readonly activeRuns: readonly ReturnType<ChatroomAgentSessionProjector['activeRun']>[];
   readonly items: readonly ProjectedItem[];
+  /**
+   * Durable opaque append fences for admitted Room messages. The V7 source
+   * applies these after its ordinary cross-source merge so a new B item cannot
+   * reposition an already materialized A approval card.
+   */
+  readonly admissionAppendAnchors?: readonly Readonly<{
+    itemId: string;
+    appendAfterItemId: string;
+  }>[];
 }
 
 export interface ChatroomRoomSessionProjectionV6 {
@@ -314,13 +323,20 @@ export class ChatroomAgentSessionController {
         }
       }
     }
+    const items = [...unlinked, ...[...linkedByItemId.values()].map(entry => entry.item)]
+      .sort((left, right) => left.sequence - right.sequence);
+    const admissionAppendAnchors = Object.freeze([...linkedByItemId.values()]
+      .flatMap(({ item, link }) => link.appendAfterItemId === undefined
+        ? []
+        : [{ itemId: item.itemId, appendAfterItemId: link.appendAfterItemId }])
+      .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0));
     return Object.freeze({
       activeRuns: Object.freeze(projectors.map(projector => projector.activeRun())),
       // One Room human item may be admitted to N exact targets. Keep every
       // durable Session/message link for replay/fencing, but expose one stable
       // canonical SessionEvent projection rather than duplicating it N times.
-      items: Object.freeze([...unlinked, ...[...linkedByItemId.values()].map(entry => entry.item)]
-        .sort((left, right) => left.sequence - right.sequence)),
+      items: Object.freeze(items),
+      ...(admissionAppendAnchors.length === 0 ? {} : { admissionAppendAnchors }),
     });
   }
 
@@ -722,6 +738,7 @@ export class ChatroomAgentSessionController {
     handle: AgentHandle,
     messageId: MessageId,
   ): Promise<void> {
+    const appendAfterItemId = this.appendAnchorForAdmissionMessage(roomId, userItemId);
     await this.mutateRoom(roomId, room => {
       const run = this.requireRun(room, delivery.runId);
       const member = this.requireMember(room, delivery.memberId);
@@ -730,6 +747,10 @@ export class ChatroomAgentSessionController {
         || run.sessionId !== handle.agent.session.id) {
         throw new Error('Accepted Chatroom admission no longer matches its exact Room target.');
       }
+      const existingForItem = room.admissionMessageLinks?.find(link => link.itemId === userItemId);
+      const retainedAppendAfterItemId = existingForItem === undefined
+        ? appendAfterItemId
+        : existingForItem.appendAfterItemId;
       return recordRoomAdmissionMessageLink(room, {
         roomId,
         itemId: userItemId,
@@ -742,9 +763,32 @@ export class ChatroomAgentSessionController {
           pluginId: handle.owner.pluginId,
           generation: handle.owner.generation,
         },
+        // N target reservations may settle in either order. All links for one
+        // Room item retain the first durable append fence rather than making a
+        // later target choose a different predecessor.
+        ...(retainedAppendAfterItemId === undefined ? {} : { appendAfterItemId: retainedAppendAfterItemId }),
       });
     });
     this.reconcileAdmissionMessageLinks(roomId);
+  }
+
+  /**
+   * A first Room message has no prior public fact to fence. When a later
+   * human Room message arrives while a non-terminal approval is already
+   * materialized, use the last Session projection item as an opaque append
+   * fence. This captures order at the owner-document commit, rather than
+   * inferring it from timestamps, text, or current Agent state.
+   */
+  private appendAnchorForAdmissionMessage(roomId: string, userItemId: string): string | undefined {
+    const room = this.requireRoom(roomId);
+    const itemIndex = room.items.findIndex(item => item.itemId === userItemId);
+    if (itemIndex < 0) throw new Error('Accepted Chatroom admission Room item is unavailable.');
+    const hasEarlierHumanMessage = room.items.slice(0, itemIndex).some(item =>
+      item.kind === 'message' && item.author.role === 'human' && item.semantic.purpose === 'conversation');
+    const items = this.projectionForRoom(roomId).items;
+    if (!hasEarlierHumanMessage
+      || !items.some(item => item.kind === 'approval' && item.state === 'pending')) return undefined;
+    return items.length === 0 ? undefined : items[items.length - 1].itemId;
   }
 
   private reconcileAdmissionMessageLinks(roomId: string): void {
