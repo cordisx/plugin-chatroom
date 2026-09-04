@@ -73,6 +73,7 @@ import {
   addRoomRun,
   bindRoomRunSession,
   createChatroomOpaqueId,
+  recordRoomAdmissionMessageLink,
   recordRoomSessionSelfIntroduction,
   type Room,
   type RoomMembership,
@@ -146,8 +147,12 @@ export function assertChatroomAdmissionDeliveriesAccepted(
   }
   const failed = outcomes.find(({ outcome }) => outcome.status !== 'accepted');
   if (failed === undefined) return;
+  const outcome = failed.outcome;
+  // `find()` cannot preserve the discriminant of its callback for TypeScript,
+  // even though a failed delivery is necessarily non-accepted at runtime.
+  if (outcome.status === 'accepted') return;
   throw new Error(
-    `Chatroom admission delivery failed for ${failed.memberId}/${failed.runId}: ${failed.outcome.status}:${failed.outcome.code}.`,
+    `Chatroom admission delivery failed for ${failed.memberId}/${failed.runId}: ${outcome.status}:${outcome.code}.`,
   );
 }
 
@@ -205,6 +210,17 @@ type RuntimeAcquireFailure = Exclude<EntityAgentAcquireResult, { readonly status
 
 const runKey = (roomId: string, runId: string) =>
   `${roomId.length}:${roomId}${runId.length}:${runId}`;
+
+const admissionLinkOrder = (
+  left: { readonly memberId: string; readonly runId: string; readonly sessionId: string; readonly messageId: string },
+  right: { readonly memberId: string; readonly runId: string; readonly sessionId: string; readonly messageId: string },
+): number => {
+  for (const key of ['memberId', 'runId', 'sessionId', 'messageId'] as const) {
+    if (left[key] < right[key]) return -1;
+    if (left[key] > right[key]) return 1;
+  }
+  return 0;
+};
 
 const acquisitionMutationId = (operation: 'create' | 'resume' | 'migrate', roomId: string, runId: string) =>
   createChatroomOpaqueId(`agent-${operation}`, roomId, runId);
@@ -277,9 +293,33 @@ export class ChatroomAgentSessionController {
       const projector = this.projectors.get(runKey(roomId, run.runId));
       return projector === undefined ? [] : [projector];
     });
+    const linkedByItemId = new Map<string, {
+      readonly item: ProjectedItem;
+      readonly link: NonNullable<Room['admissionMessageLinks']>[number];
+    }>();
+    const unlinked: ProjectedItem[] = [];
+    for (const projector of projectors) {
+      for (const item of projector.snapshotItems()) {
+        // The projector re-reads the authoritative SessionEvent and checks
+        // plugin owner/generation before returning a link. Never dedupe an
+        // arbitrary legacy-correlated message merely because ids collide.
+        const link = projector.admissionMessageLinkForItem(item);
+        if (link === undefined) {
+          unlinked.push(item);
+          continue;
+        }
+        const current = linkedByItemId.get(link.itemId);
+        if (current === undefined || admissionLinkOrder(link, current.link) < 0) {
+          linkedByItemId.set(link.itemId, { item, link });
+        }
+      }
+    }
     return Object.freeze({
       activeRuns: Object.freeze(projectors.map(projector => projector.activeRun())),
-      items: Object.freeze(projectors.flatMap(projector => projector.snapshotItems())
+      // One Room human item may be admitted to N exact targets. Keep every
+      // durable Session/message link for replay/fencing, but expose one stable
+      // canonical SessionEvent projection rather than duplicating it N times.
+      items: Object.freeze([...unlinked, ...[...linkedByItemId.values()].map(entry => entry.item)]
         .sort((left, right) => left.sequence - right.sequence)),
     });
   }
@@ -570,6 +610,7 @@ export class ChatroomAgentSessionController {
   async submitDeliveriesViaAdmissionV6(
     roomId: string,
     deliveries: readonly ChatroomAgentAdmissionDelivery[],
+    userItemId: string,
     origin: AgentBootstrapCommandOrigin,
     text: string,
     declarations: AgentAdmissionBootstrapRouteDeclarationService,
@@ -581,7 +622,7 @@ export class ChatroomAgentSessionController {
       memberId: delivery.memberId,
       runId: delivery.runId,
       outcome: await this.submitDeliveryViaAdmissionV6(
-        roomId, delivery, origin, text, declarations, reservations,
+        roomId, delivery, userItemId, origin, text, declarations, reservations,
       ),
     })));
   }
@@ -589,6 +630,7 @@ export class ChatroomAgentSessionController {
   private async submitDeliveryViaAdmissionV6(
     roomId: string,
     delivery: ChatroomAgentAdmissionDelivery,
+    userItemId: string,
     origin: AgentBootstrapCommandOrigin,
     text: string,
     declarations: AgentAdmissionBootstrapRouteDeclarationService,
@@ -659,11 +701,63 @@ export class ChatroomAgentSessionController {
       await this.failPendingDelivery(roomId, delivery.runId, result.code);
       return { status: 'denied', roomId, runId: delivery.runId, code: result.code };
     }
+    await this.recordAdmissionMessageLink(roomId, userItemId, delivery, acquired.handle, result.admission.messageId);
     return {
       status: 'accepted', roomId, runId: delivery.runId, messageId: result.admission.messageId,
       sessionId: acquired.handle.agent.session.id,
       disposition: acquired.disposition,
     };
+  }
+
+  /**
+   * The Host has already committed the authoritative SessionEvent when an
+   * admission reservation returns accepted. Persist its exact public identity
+   * in the existing Room owner document, then reconcile any live event that
+   * arrived before this result crossed the plugin boundary.
+   */
+  private async recordAdmissionMessageLink(
+    roomId: string,
+    userItemId: string,
+    delivery: ChatroomAgentAdmissionDelivery,
+    handle: AgentHandle,
+    messageId: MessageId,
+  ): Promise<void> {
+    await this.mutateRoom(roomId, room => {
+      const run = this.requireRun(room, delivery.runId);
+      const member = this.requireMember(room, delivery.memberId);
+      if (run.memberId !== delivery.memberId
+        || member.memberId !== delivery.memberId
+        || run.sessionId !== handle.agent.session.id) {
+        throw new Error('Accepted Chatroom admission no longer matches its exact Room target.');
+      }
+      return recordRoomAdmissionMessageLink(room, {
+        roomId,
+        itemId: userItemId,
+        participantId: member.participantId,
+        memberId: member.memberId,
+        runId: delivery.runId,
+        sessionId: handle.agent.session.id,
+        messageId,
+        owner: {
+          pluginId: handle.owner.pluginId,
+          generation: handle.owner.generation,
+        },
+      });
+    });
+    this.reconcileAdmissionMessageLinks(roomId);
+  }
+
+  private reconcileAdmissionMessageLinks(roomId: string): void {
+    const room = this.rooms.get(roomId);
+    if (room === undefined) return;
+    let changed = false;
+    for (const run of room.runs) {
+      if (run.sessionId === undefined) continue;
+      const projector = this.projectors.get(runKey(roomId, run.runId));
+      if (projector === undefined) continue;
+      if (projector.reconcileAdmissionLinks(room, run).length > 0) changed = true;
+    }
+    if (changed) for (const listener of this.projectionListeners) listener(roomId);
   }
 
   private async submitDeliveryViaAdmissionV4(

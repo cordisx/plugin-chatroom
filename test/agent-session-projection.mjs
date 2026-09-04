@@ -6,6 +6,7 @@ import {
   addRoomRun,
   bindRoomRunSession,
   createRoom,
+  recordRoomAdmissionMessageLink,
   recordRoomSessionSelfIntroduction,
 } from '../dist/room.js';
 
@@ -161,6 +162,113 @@ test('keeps the submitted Room message before first-run self-introduction and re
   assert.ok(ordered[0].sequence < ordered[1].sequence);
   assert.ok(ordered[1].sequence < ordered[2].sequence);
   assert.equal(ordered[0].timestamp, submitted.timestamp);
+});
+
+test('keeps B visible by exact admission identity while A stays pending, then rejects and cold-replays without duplicates', () => {
+  const submitted = {
+    kind: 'message', itemId: 'admitted-room-item', messageId: 'admitted-room-message', sequence: 1,
+    source: 'agent-loop',
+    author: {
+      participantId: 'user', role: 'human',
+      displayName: { namespace: 'chatroom', key: 'participant.name', fallback: 'You' },
+    },
+    semantic: { purpose: 'conversation' },
+    body: [{ kind: 'text', text: { namespace: 'chatroom', key: 'message', fallback: 'Room copy must not win' } }],
+    reactions: [], timestamp: '2026-09-04T00:00:00.000Z', deliveryState: 'pending',
+    runState: 'idle', ariaLive: 'off', actions: [],
+  };
+  let room = createRoom({
+    id: 'room', title: 'Room', timelineSequence: submitted.sequence,
+    participants: [
+      { id: 'user', name: 'You', kind: 'human' },
+      { id: 'reviewer', name: 'Reviewer', kind: 'agent' },
+    ],
+    items: [submitted],
+  });
+  room = addRoomRun(room, {
+    runId: 'review-run', memberId: 'reviewer', title: 'Reviewer', status: 'creating',
+  });
+  room = bindRoomRunSession(room, 'review-run', sessionId);
+  const eventData = {
+    id: 'admission-message', role: 'user', content: [{ type: 'text', text: 'Host-authoritative body' }],
+    source: { kind: 'plugin', pluginId: 'chatroom', generation: 7, form: 'relay' },
+  };
+  let sequence = room.timelineSequence;
+  const projector = new ChatroomAgentSessionProjector(
+    room, room.runs[0], sessionId, () => ++sequence, { generation: 9 },
+  );
+  const pendingA = event(0, 'approval/asked', {
+    id: 'approval-a', toolName: 'shell', reason: 'A remains pending while B arrives',
+  });
+  const admittedB = event(1, 'user/message', eventData);
+  const beforeLink = projector.project(page('live', [pendingA, admittedB]));
+  assert.equal(beforeLink.items.length, 1, 'the unlinked B event is buffered, never inferred by text');
+  assert.equal(beforeLink.items[0].kind, 'approval');
+  assert.equal(beforeLink.items[0].state, 'pending');
+
+  const linked = recordRoomAdmissionMessageLink(room, {
+    roomId: room.id, itemId: submitted.itemId,
+    participantId: 'reviewer', memberId: 'reviewer', runId: 'review-run',
+    sessionId, messageId: 'admission-message', owner: { pluginId: 'chatroom', generation: 7 },
+  });
+  const reconciled = projector.reconcileAdmissionLinks(linked, linked.runs[0]);
+  assert.equal(reconciled.length, 1);
+  assert.equal(reconciled[0].item.kind, 'message');
+  assert.equal(reconciled[0].item.messageId, 'admission-message');
+  assert.equal(reconciled[0].item.sequence, submitted.sequence);
+  assert.equal(reconciled[0].item.timestamp, submitted.timestamp);
+  assert.equal(reconciled[0].item.body[0].text.fallback, 'Host-authoritative body',
+    'the associated Room item orders the message but never supplies its content');
+
+  const afterLink = projector.snapshotItems();
+  assert.equal(afterLink.filter(item => item.kind === 'message' && item.messageId === 'admission-message').length, 1);
+  assert.equal(afterLink.find(item => item.kind === 'approval')?.state, 'pending',
+    'an existing A approval never filters B from the Room projection');
+
+  const duplicateLive = projector.project(page('live', [admittedB], 1));
+  assert.equal(duplicateLive.items.filter(item => item.kind === 'message' && item.messageId === 'admission-message').length, 1,
+    'duplicate live/replay delivery dedupes by the exact Session/message tuple');
+
+  const rejected = projector.project(page('live', [event(2, 'approval/decided', {
+    id: 'approval-a', outcome: 'rejected',
+  })], 2));
+  assert.equal(rejected.items.length, 2);
+  assert.equal(rejected.items.find(item => item.kind === 'approval')?.state, 'denied');
+  assert.equal(rejected.items.filter(item => item.kind === 'message' && item.messageId === 'admission-message').length, 1,
+    'reject updates A in place and retains B');
+
+  let coldSequence = linked.timelineSequence;
+  const cold = new ChatroomAgentSessionProjector(
+    linked, linked.runs[0], sessionId, () => ++coldSequence, { generation: 9 },
+  );
+  const replayed = cold.project(page('replay', [pendingA, admittedB, event(2, 'approval/decided', {
+    id: 'approval-a', outcome: 'rejected',
+  })]));
+  assert.deepEqual(
+    replayed.items.map(item => [item.kind, item.itemId, item.sequence, item.kind === 'message' ? item.messageId : item.state]),
+    rejected.items.map(item => [item.kind, item.itemId, item.sequence, item.kind === 'message' ? item.messageId : item.state]),
+    'cold replay preserves the same item ids, order, and count after rejection',
+  );
+
+  const foreignRoom = bindRoomRunSession(addRoomRun(linked, {
+    runId: 'lead-run', memberId: 'leader', title: 'Lead', status: 'creating',
+  }), 'lead-run', 'session-two');
+  const unprojected = (data, messageSessionId = sessionId) => {
+    const domain = messageSessionId === sessionId ? linked : foreignRoom;
+    const run = domain.runs.find(candidate => candidate.runId === (
+      messageSessionId === sessionId ? 'review-run' : 'lead-run'
+    ));
+    const probe = new ChatroomAgentSessionProjector(domain, run, messageSessionId, () => 99, { generation: 9 });
+    const foreignEvent = { ...event(1, 'user/message', data), sessionId: messageSessionId };
+    const foreignPage = { ...page('replay', [foreignEvent]), sessionId: messageSessionId, events: [foreignEvent] };
+    return probe.project(foreignPage).items;
+  };
+  assert.equal(unprojected({ ...eventData, id: 'foreign-message' }).length, 0, 'foreign message id is hidden');
+  assert.equal(unprojected({ ...eventData, source: { ...eventData.source, pluginId: 'foreign' } }).length, 0,
+    'foreign plugin owner is hidden');
+  assert.equal(unprojected({ ...eventData, source: { ...eventData.source, generation: 8 } }).length, 0,
+    'stale plugin generation is hidden');
+  assert.equal(unprojected(eventData, 'session-two').length, 0, 'foreign Session is hidden');
 });
 
 test('projects approvals only with real Agent generation and updates from the matching SessionEvent decision', () => {

@@ -445,6 +445,27 @@ export const CHATROOM_MAX_APPROVAL_DECISIONS = 4096 as const;
 export const CHATROOM_MAX_PLAYGROUND_AGENT_EGRESSES = 500 as const;
 export const CHATROOM_MAX_PLAYGROUND_AGENT_APPROVALS = 500 as const;
 export const CHATROOM_MAX_PLAYGROUND_APPROVAL_DECISION_ATTEMPTS = 32 as const;
+/**
+ * Bounded Room-owned associations from Host-admitted Session messages back to
+ * the pre-existing public human item.  This is intentionally not a second
+ * message ledger: SessionEvent remains the execution fact and this only
+ * supplies the exact durable display/dedup join for admission/v6 messages,
+ * whose reservation request cannot carry a plugin correlation.
+ */
+export const CHATROOM_MAX_ADMISSION_MESSAGE_LINKS = 4096 as const;
+
+export interface RoomAdmissionMessageLink {
+  /** Repeated for an exact, self-validating association across owner-doc replay. */
+  readonly roomId: string;
+  readonly itemId: string;
+  readonly participantId: string;
+  readonly memberId: string;
+  readonly runId: string;
+  readonly sessionId: SessionId;
+  readonly messageId: MessageId;
+  /** Exact Host-stamped plugin provenance expected on the SessionEvent. */
+  readonly owner: { readonly pluginId: string; readonly generation: number };
+}
 
 export type RoomRunPublicProjection = Readonly<{
   itemId: string;
@@ -514,6 +535,8 @@ export interface Room {
   readonly deliveries: readonly RoomDelivery[];
   readonly outbox: readonly RoomOutboxDelivery[];
   readonly approvalDecisions: readonly RoomApprovalDecision[];
+  /** Exact admission/v6 SessionEvent-to-Room-item associations; no message copy. */
+  readonly admissionMessageLinks?: readonly RoomAdmissionMessageLink[];
   /** Present only when the loopback Playground bridge projected Agent egress. */
   readonly playgroundAgentEgresses?: readonly RoomPlaygroundAgentEgress[];
   /** Present only when the loopback Playground bridge projected Agent approvals. */
@@ -546,6 +569,7 @@ type CreateRoomInput = {
   readonly deliveries?: readonly RoomDelivery[];
   readonly outbox?: readonly RoomOutboxDelivery[];
   readonly approvalDecisions?: readonly RoomApprovalDecision[];
+  readonly admissionMessageLinks?: readonly RoomAdmissionMessageLink[];
   readonly playgroundAgentEgresses?: readonly RoomPlaygroundAgentEgress[];
   readonly playgroundAgentApprovals?: readonly RoomPlaygroundAgentApproval[];
   readonly timelineSequence?: number;
@@ -966,6 +990,46 @@ export function createRoom(input: CreateRoomInput): Room {
     }
   }
   const itemById = new Map(items.map(item => [item.itemId, item]));
+  // A public timeline item has a bounded lifetime. Its SessionEvent join is
+  // useful only while that item remains displayable, so trim orphaned links
+  // together with the bounded Room window rather than retaining a shadow
+  // message history.
+  const admissionMessageLinks = Object.freeze([...(input.admissionMessageLinks ?? [])]
+    .filter(link => itemById.has(link.itemId))
+    .slice(-CHATROOM_MAX_ADMISSION_MESSAGE_LINKS)
+    .map(link => Object.freeze({
+      ...link,
+      owner: Object.freeze({ ...link.owner }),
+    })));
+  const admissionMessageKeys = admissionMessageLinks.map(link =>
+    `${link.sessionId.length}:${link.sessionId}${link.messageId.length}:${link.messageId}`);
+  if (new Set(admissionMessageKeys).size !== admissionMessageKeys.length) {
+    throw new Error('Room admission Session/message links must be unique.');
+  }
+  for (const link of admissionMessageLinks) {
+    requireShellOpaqueId(link.roomId, 'Room admission link roomId');
+    requireShellOpaqueId(link.itemId, 'Room admission link itemId');
+    requireShellOpaqueId(link.participantId, 'Room admission link participantId');
+    requireShellOpaqueId(link.memberId, 'Room admission link memberId');
+    requireShellOpaqueId(link.runId, 'Room admission link runId');
+    requireShellOpaqueId(link.sessionId, 'Room admission link sessionId');
+    requireShellOpaqueId(link.messageId, 'Room admission link messageId');
+    const member = membershipById.get(link.memberId);
+    const run = runs.find(candidate => candidate.runId === link.runId);
+    const item = itemById.get(link.itemId);
+    if (link.roomId !== input.id
+      || member?.participantId !== link.participantId
+      || run?.memberId !== link.memberId
+      || run.sessionId !== link.sessionId
+      || item?.kind !== 'message'
+      || item.author.role !== 'human'
+      || item.semantic.purpose !== 'conversation'
+      || link.owner.pluginId.trim() === ''
+      || !Number.isSafeInteger(link.owner.generation)
+      || link.owner.generation < 0) {
+      throw new Error('Room admission link must retain its exact Room/item/member/run/Session/owner identity.');
+    }
+  }
   for (const run of runs) {
     for (const projection of run.publicProjections ?? []) {
       const item = itemById.get(projection.itemId);
@@ -1395,6 +1459,7 @@ export function createRoom(input: CreateRoomInput): Room {
     deliveries,
     outbox,
     approvalDecisions,
+    ...(admissionMessageLinks.length === 0 ? {} : { admissionMessageLinks }),
     ...(playgroundAgentEgresses.length === 0 ? {} : { playgroundAgentEgresses }),
     ...(playgroundAgentApprovals.length === 0 ? {} : { playgroundAgentApprovals }),
     timelineSequence,
@@ -1414,6 +1479,52 @@ export function createRoom(input: CreateRoomInput): Room {
     ...(input.participantPresentation === undefined ? {} : { participantPresentation: input.participantPresentation }),
     items,
   });
+}
+
+const sameAdmissionMessageLink = (
+  left: RoomAdmissionMessageLink,
+  right: RoomAdmissionMessageLink,
+): boolean => left.roomId === right.roomId
+  && left.itemId === right.itemId
+  && left.participantId === right.participantId
+  && left.memberId === right.memberId
+  && left.runId === right.runId
+  && left.sessionId === right.sessionId
+  && left.messageId === right.messageId
+  && left.owner.pluginId === right.owner.pluginId
+  && left.owner.generation === right.owner.generation;
+
+/**
+ * Records the public result of an accepted admission/v6 reservation. The
+ * stored association is idempotent for the exact `{sessionId,messageId}` and
+ * rejects any attempt to repurpose that immutable Host message identity.
+ */
+export function recordRoomAdmissionMessageLink(
+  room: Room,
+  link: RoomAdmissionMessageLink,
+): Room {
+  const existing = room.admissionMessageLinks?.find(candidate =>
+    candidate.sessionId === link.sessionId && candidate.messageId === link.messageId);
+  if (existing !== undefined) {
+    if (!sameAdmissionMessageLink(existing, link)) {
+      throw new Error('Room admission Session/message identity was reused with a different correlation.');
+    }
+    return room;
+  }
+  return createRoom({
+    ...room,
+    admissionMessageLinks: [...(room.admissionMessageLinks ?? []), link],
+  });
+}
+
+/** Exact Room-owned join; callers must additionally validate Session provenance. */
+export function roomAdmissionMessageLinkFor(
+  room: Room,
+  sessionId: SessionId,
+  messageId: MessageId,
+): RoomAdmissionMessageLink | undefined {
+  return room.admissionMessageLinks?.find(link =>
+    link.sessionId === sessionId && link.messageId === messageId);
 }
 
 export function addRoomRun(
