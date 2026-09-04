@@ -10,6 +10,8 @@ import type {
   AgentConversationShellBinding,
   AgentConversationShellCommandContext,
 } from '@cordisx/protocol/agent-conversation-shell/v7';
+import type { AgentConversationShellBinding as AgentConversationShellBindingV8 } from '@cordisx/protocol/agent-conversation-shell/v8';
+import type { AgentCommandOrigin } from '@cordisx/protocol/agent-admission/v1';
 import type { PluginRuntimeManifestV6 } from '@cordisx/protocol/plugin-manifest/v6';
 
 import {
@@ -133,7 +135,8 @@ export const manifest = {
 
 export const inject = [
   'i18n', 'commands', 'pages', 'routes', 'slots', 'managerContent',
-  'agentConversationShell', 'agents', 'sessions', 'approvals', 'entities', 'documents',
+  'agentConversationShell', 'agents', 'sessions', 'approvals', 'agentAdmissionOrigins',
+  'agentAdmissionReservations', 'entities', 'documents',
   'settings',
 ];
 
@@ -176,6 +179,44 @@ function conversationContext(context: CordisXCommandContext): AgentConversationS
   return hostContext !== undefined && 'scope' in hostContext
     ? hostContext as unknown as AgentConversationShellCommandContext
     : undefined;
+}
+
+const record = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  value !== null && typeof value === 'object';
+
+/**
+ * A v7 command has no origin. A v8 composer command must carry the public
+ * Host-issued capability; validate its structural envelope before selecting
+ * the target-scoped path, leaving older source registrations untouched.
+ */
+function isAgentCommandOrigin(value: unknown): value is AgentCommandOrigin {
+  if (!record(value) || value.$schema !== 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-command-origin.v1.schema.json'
+    || value.contract !== 'cordisx.agent-command-origin/v1'
+    || value.schemaVersion !== 1
+    || typeof value.originId !== 'string'
+    || typeof value.generation !== 'string'
+    || typeof value.executionId !== 'string'
+    || typeof value.commandId !== 'string'
+    || value.scope !== 'composer-submit'
+    || !record(value.binding)
+    || typeof value.binding.bindingId !== 'string'
+    || typeof value.binding.ownerGeneration !== 'string'
+    || !record(value.room)
+    || typeof value.room.roomId !== 'string'
+    || typeof value.room.participantId !== 'string'
+    || typeof value.room.memberId !== 'string'
+    || typeof value.room.runId !== 'string') return false;
+  return true;
+}
+
+function composerSubmissionOrigin(context: AgentConversationShellCommandContext):
+  | { readonly status: 'legacy' }
+  | { readonly status: 'valid'; readonly origin: AgentCommandOrigin }
+  | { readonly status: 'invalid' } {
+  if (context.scope !== 'composer-submit' || !('origin' in context)) return { status: 'legacy' };
+  return isAgentCommandOrigin(context.origin)
+    ? { status: 'valid', origin: context.origin }
+    : { status: 'invalid' };
 }
 
 function agentConfiguration(config: unknown): ChatroomAgentConfiguration {
@@ -337,12 +378,27 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     }
     let deliveryFailure: unknown;
     try {
-      await Promise.all(intent.deliveries.map(delivery => agentSession.sendToRoom(
-        intent.roomId,
-        delivery.runId,
-        intent.userItemId,
-        intent.dispatchText,
-      )));
+      const admissionOrigin = composerSubmissionOrigin(hostContext);
+      if (admissionOrigin.status === 'invalid') {
+        throw new Error('Shell v8 composer admission origin is invalid.');
+      }
+      if (admissionOrigin.status === 'legacy') {
+        await Promise.all(intent.deliveries.map(delivery => agentSession.sendToRoom(
+          intent.roomId,
+          delivery.runId,
+          intent.userItemId,
+          intent.dispatchText,
+        )));
+      } else {
+        await agentSession.submitDeliveriesViaAdmissionV3(
+          intent.roomId,
+          intent.deliveries,
+          admissionOrigin.origin,
+          intent.dispatchText,
+          ctx.agentAdmissionOrigins,
+          ctx.agentAdmissionReservations,
+        );
+      }
     } catch (error) {
       deliveryFailure = error;
     }
@@ -372,7 +428,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     unsubscribeSettings = composerSettings.subscribe(policy => source.setComposerShortcutPolicy(policy));
     return source;
   });
-  const conversation = ctx.agentConversationShell.registerSourceV7((binding: AgentConversationShellBinding) => {
+  const createV7ConversationSource = (binding: AgentConversationShellBinding) => {
     const domain = controller.createSource(v3BindingFor(binding));
     let unsubscribeSettings = () => {};
     const source = new ChatroomAgentSessionConversationSourceV7(
@@ -384,7 +440,13 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     );
     unsubscribeSettings = composerSettings.subscribe(policy => source.setComposerShortcutPolicy(policy));
     return source;
-  });
+  };
+  // Frozen v7 source stays registered for legacy consumers; the primary page
+  // mounts v8 so a Host-provided composer capability selects the admission
+  // path above without changing v6/v7 behavior.
+  ctx.agentConversationShell.registerSourceV7(createV7ConversationSource);
+  const conversation = ctx.agentConversationShell.registerSourceV8((binding: AgentConversationShellBindingV8) =>
+    createV7ConversationSource(binding));
   const playgroundBridge = ctx.reflect.get(
     'playgroundRoomSimulationBridge', false,
   ) as PlaygroundRoomSimulationBridgeService | undefined;
