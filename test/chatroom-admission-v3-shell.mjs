@@ -17,6 +17,8 @@ test('Shell v8 composer submits every Chatroom delivery through target-scoped ad
   assert.match(source, /Chatroom conversation command context is unavailable/);
   assert.match(source, /composer submit is unavailable for the current Shell binding or generation/);
   assert.match(source, /Chatroom composer submit resolved no deliveries/);
+  assert.match(source, /Shell v8 composer admission origin is required/);
+  assert.match(source, /controller\.requiresAdmissionOrigin\(hostContext\)/);
   assert.match(source, /Chatroom composer target error: \$\{intent.code\}\$\{mention\}/);
   assert.match(source, /await controller.persistComposerRoom\(intent.roomId\)/);
   assert.match(source, /assertChatroomAdmissionDeliveriesAccepted\(outcomes\)/);
@@ -30,4 +32,6 @@ test('Shell v8 composer submits every Chatroom delivery through target-scoped ad
   const pageMount = source.indexOf('ctx.pages.register(page, conversation.mount)');
   assert.ok(v8 >= 0 && pageMount > v8,
     'the current page mount is the Host-owned Shell v8 registration');
+  assert.match(source, /createV7ConversationSource\(binding, true\)/,
+    'the v8 source must require its Host-generated admission origin');
 });

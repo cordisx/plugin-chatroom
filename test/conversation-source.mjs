@@ -359,6 +359,22 @@ test('a mismatched composer binding or generation writes no Room item or deliver
   assert.deepEqual(controller.takePendingIntents(), []);
 });
 
+test('marks only the v8 source binding as requiring a composer admission origin', () => {
+  const controller = new ChatroomConversationController();
+  controller.createSource(binding, { admissionOriginRequired: true });
+  assert.equal(controller.requiresAdmissionOrigin({
+    binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration }, generation: 'owner-1',
+  }), true);
+  assert.equal(controller.requiresAdmissionOrigin({
+    binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration }, generation: 'stale',
+  }), false);
+  const legacy = new ChatroomConversationController();
+  legacy.createSource(binding);
+  assert.equal(legacy.requiresAdmissionOrigin({
+    binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration }, generation: 'owner-1',
+  }), false);
+});
+
 test('restores Room, run, and message id watermarks from the hydrated registry', () => {
   let hydrated = createRoom({
     id: 'room-9', title: 'Hydrated',

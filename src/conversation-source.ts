@@ -446,6 +446,7 @@ export class ChatroomConversationController {
   private readonly sources = new Map<string, {
     readonly binding: Readonly<AgentConversationShellBinding>;
     readonly source: ChatroomConversationSource;
+    readonly admissionOriginRequired: boolean;
     roomId?: string;
   }>();
   private readonly playgroundSourceCorrelations = new Map<string, {
@@ -493,7 +494,10 @@ export class ChatroomConversationController {
     });
   }
 
-  createSource(binding: Readonly<AgentConversationShellBinding>): ChatroomConversationSource {
+  createSource(
+    binding: Readonly<AgentConversationShellBinding>,
+    options: Readonly<{ admissionOriginRequired?: boolean }> = {},
+  ): ChatroomConversationSource {
     if (this.ownerGenerationValue !== binding.ownerGeneration) {
       this.ownerGenerationValue = binding.ownerGeneration;
       this.playgroundSourceCorrelations.clear();
@@ -520,7 +524,10 @@ export class ChatroomConversationController {
         return 'applied';
       },
     );
-    this.sources.set(key, { binding, source, roomId: binding.routeSelection.selectedRoomParam });
+    this.sources.set(key, {
+      binding, source, admissionOriginRequired: options.admissionOriginRequired === true,
+      roomId: binding.routeSelection.selectedRoomParam,
+    });
     this.playgroundSourceCorrelations.set(key, {
       binding,
       roomId: binding.routeSelection.selectedRoomParam,
@@ -611,6 +618,16 @@ export class ChatroomConversationController {
     return this.sources.get(
       `${context.binding.bindingId}:${context.binding.ownerGeneration}:${context.generation}`,
     )?.roomId;
+  }
+
+  /** A Shell v8 source never downgrades a composer submit to v6/v7 admission. */
+  requiresAdmissionOrigin(context: Readonly<{
+    binding: { readonly bindingId: string; readonly ownerGeneration: string };
+    generation: string;
+  }>): boolean {
+    return this.sources.get(
+      `${context.binding.bindingId}:${context.binding.ownerGeneration}:${context.generation}`,
+    )?.admissionOriginRequired === true;
   }
 
   /**
