@@ -56,6 +56,9 @@ import {
 } from './agent-session-projection.js';
 import { ChatroomRoomStoreError, type DurableChatroomRoomStore } from './room-store.js';
 import {
+  failRoomRunPresence,
+} from './room-engagement.js';
+import {
   approvalAuthorityMemberIds,
   addRoomRun,
   bindRoomRunSession,
@@ -534,13 +537,28 @@ export class ChatroomAgentSessionController {
     // reports-to authority first, so its exact owner and answerer exist when
     // the newly admitted target asks. This never selects by label or falls
     // back to another manager.
-    const authority = await this.ensureDirectApprovalAuthorityOwner(roomId, delivery.runId);
+    let authority: ApprovalAuthorityWarmup;
+    try {
+      authority = await this.ensureDirectApprovalAuthorityOwner(roomId, delivery.runId);
+    } catch (error) {
+      await this.failPendingDelivery(roomId, delivery.runId, 'authority-acquire-failed', error);
+      throw error;
+    }
     if (authority.status === 'unavailable') {
+      await this.failPendingDelivery(roomId, delivery.runId, authority.code);
       return { status: 'unavailable', roomId, runId: delivery.runId, code: authority.code };
     }
-    const acquired = await this.ensureOwner(roomId, delivery.runId);
+    let acquired: RuntimeOwner | RuntimeAcquireFailure;
+    try {
+      acquired = await this.ensureOwner(roomId, delivery.runId);
+    } catch (error) {
+      await this.failPendingDelivery(roomId, delivery.runId, 'agent-acquire-failed', error);
+      throw error;
+    }
     if (!('handle' in acquired)) {
-      return { status: acquired.status, roomId, runId: delivery.runId, code: acquireErrorCode(acquired) };
+      const code = acquireErrorCode(acquired);
+      await this.failPendingDelivery(roomId, delivery.runId, code);
+      return { status: acquired.status, roomId, runId: delivery.runId, code };
     }
     const target: AgentAdmissionTarget = {
       participantId: member.participantId,
@@ -561,6 +579,29 @@ export class ChatroomAgentSessionController {
       sessionId: acquired.handle.agent.session.id,
       disposition: acquired.disposition,
     };
+  }
+
+  /**
+   * A failed pre-submit acquisition must not strand a durable Room run in
+   * `creating`. There is intentionally no driver fallback from this path.
+   */
+  private async failPendingDelivery(
+    roomId: string,
+    runId: string,
+    code: string,
+    error?: unknown,
+  ): Promise<void> {
+    const key = runKey(roomId, runId);
+    this.localUnavailableRuns.set(key, code);
+    const diagnostic = error instanceof Error && error.message.trim() !== ''
+      ? error.message
+      : `Agent admission could not acquire the exact Room run: ${code}.`;
+    await this.mutateRoom(roomId, room => {
+      const run = this.requireRun(room, runId);
+      return run.status === 'creating' || run.presence.state === 'creating'
+        ? failRoomRunPresence(room, runId, { code, retryable: true, diagnostic })
+        : room;
+    });
   }
 
   private async ensureDirectApprovalAuthorityOwner(
