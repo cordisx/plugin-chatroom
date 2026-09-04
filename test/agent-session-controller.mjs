@@ -764,7 +764,7 @@ test('a concurrent second run and permission replacement never publish a Room sn
   store.dispose();
 });
 
-test('a terminal V7 rejection retains the complete Room projection while its permission-revoked replay is temporarily unavailable', async () => {
+test('a terminal V7 rejection retains the complete Room projection through same-Session route replacement', async () => {
   const reviewerSessionId = 'cx-session.reviewer-terminal';
   const leadSessionId = 'cx-session.lead-terminal';
   const aTimestamp = new Date(1_001).toISOString();
@@ -933,22 +933,55 @@ test('a terminal V7 rejection retains the complete Room projection while its per
   assert.equal(terminalApproval.state, 'denied');
   assert.deepEqual(terminalApproval.actions, []);
 
-  const originalGet = harness.sessionRegistry.get;
-  harness.sessionRegistry.get = async id => id === reviewerSessionId ? undefined : await originalGet(id);
-  await reviewerSession.close('permission-revoked');
-  await new Promise(resolve => setImmediate(resolve));
-  const afterFence = await source.snapshot();
-  assert.deepEqual(afterFence.items.map(item => item.itemId), expectedIds,
-    'a temporary replay gap cannot replace the terminal Room snapshot with domain-only facts');
-  assert.equal(afterFence.items.find(item => item.itemId === pending.itemId).state, 'denied');
-  assert.deepEqual(afterFence.items.map(item => item.sequence), terminal.items.map(item => item.sequence));
+  const assertTerminalSnapshot = (snapshot, label) => {
+    assert.deepEqual(snapshot.items.map(item => item.itemId), expectedIds, label);
+    const approval = snapshot.items.find(item => item.itemId === pending.itemId);
+    assert.equal(approval.state, 'denied', `${label}: same approval item remains terminal`);
+    assert.deepEqual(approval.actions, [], `${label}: terminal approval remains actionless`);
+    assert.deepEqual(snapshot.items.map(item => item.sequence), terminal.items.map(item => item.sequence),
+      `${label}: prior Room item coordinates remain stable`);
+  };
 
+  // Subscribe only after the six-item terminal source snapshot is established.
+  // This makes each subsequent page an exact lifecycle replacement caused by
+  // the Route fence, rather than a queued pre-terminal update.
+  const subscription = await source.subscribe(terminal.snapshotSequence);
+  assert.equal(subscription.result.status, 'accepted');
+  const pages = subscription.handle.pages[Symbol.asyncIterator]();
+
+  const originalGet = harness.sessionRegistry.get;
+  harness.sessionRegistry.get = async id => id === reviewerSessionId || id === leadSessionId
+    ? undefined
+    : await originalGet(id);
+  await reviewerSession.close('route-replaced');
+  await new Promise(resolve => setImmediate(resolve));
+  const afterReviewerRouteFence = await source.snapshot();
+  assertTerminalSnapshot(afterReviewerRouteFence,
+    'Reviewer route replacement cannot replace the terminal Room snapshot with domain-only facts');
+  const reviewerRoutePage = await pages.next();
+  assert.equal(reviewerRoutePage.done, false);
+  assert.equal(reviewerRoutePage.value.updates[0].kind, 'snapshot-replaced');
+  assertTerminalSnapshot(reviewerRoutePage.value.updates[0].snapshot,
+    'Reviewer route replacement stream page retains the terminal Room timeline');
+
+  await leadSession.close('route-replaced');
+  await new Promise(resolve => setImmediate(resolve));
+  const afterLeadRouteFence = await source.snapshot();
+  assertTerminalSnapshot(afterLeadRouteFence,
+    'Lead route replacement cannot remove admitted A/B or Reviewer terminal facts');
+  const leadRoutePage = await pages.next();
+  assert.equal(leadRoutePage.done, false);
+  assert.equal(leadRoutePage.value.updates[0].kind, 'snapshot-replaced');
+  assertTerminalSnapshot(leadRoutePage.value.updates[0].snapshot,
+    'Lead route replacement stream page retains the complete terminal Room timeline');
+
+  await subscription.handle.unsubscribe();
   source.dispose();
   const remounted = new ChatroomAgentSessionConversationSourceV7(
     binding, domain.createSource(binding), controller, 'enter',
   );
   const roundTrip = await remounted.snapshot();
-  assert.deepEqual(roundTrip.items.map(item => item.itemId), expectedIds,
+  assertTerminalSnapshot(roundTrip,
     'Room/Task remount retains the exact cached terminal SessionEvent projection until replay is available');
   remounted.dispose();
   await controller.dispose();
@@ -967,10 +1000,41 @@ test('a terminal V7 rejection retains the complete Room projection while its per
     binding, coldDomain.createSource(binding), coldController, 'enter',
   );
   const cold = await coldSource.snapshot();
-  assert.deepEqual(cold.items.map(item => item.itemId), expectedIds,
+  assertTerminalSnapshot(cold,
     'cold replay rebuilds the same terminal item ids and append fence without a second ledger');
-  assert.deepEqual(cold.items.map(item => item.sequence), terminal.items.map(item => item.sequence));
-  assert.equal(cold.items.find(item => item.itemId === pending.itemId).state, 'denied');
+
+  // Retention is scoped to the persisted Session identity. A different
+  // Session on the same Room run must discard the old Reviewer's facts rather
+  // than smuggling them across an Agent replacement.
+  const replacementReviewerSessionId = 'cx-session.reviewer-terminal-replacement';
+  coldHarness.sessions.set(replacementReviewerSessionId, new FakeSession(replacementReviewerSessionId, [
+    sessionEvent(replacementReviewerSessionId, 0, 'turn/start', { turn: 1 }),
+    userEvent(replacementReviewerSessionId, 1, 'replacement-reviewer-message', 'Replacement reviewer.'),
+  ]));
+  const replacementRoom = createRoom({
+    ...store.rooms.get('room'),
+    runs: store.rooms.get('room').runs.map(run => run.runId === 'review-run'
+      ? {
+        ...run,
+        sessionId: replacementReviewerSessionId,
+        status: 'active',
+        presence: { ...run.presence, state: 'ready' },
+      }
+      : run),
+  });
+  await store.upsert(replacementRoom);
+  await coldController.hydrateRoom('room');
+  await new Promise(resolve => setImmediate(resolve));
+  const replacement = await coldSource.snapshot();
+  assert.equal(replacement.items.some(item => item.itemId === pending.itemId), false,
+    'a different persisted Session identity discards the old terminal approval projector');
+  assert.equal(replacement.items.some(item => item.itemId === rejectionItem.itemId), false,
+    'a different persisted Session identity discards the old terminal reply projector');
+  assert.equal(replacement.items.some(item => item.kind === 'message'
+    && item.messageId === 'replacement-reviewer-message'), true,
+  'the new exact Session is projected after the old projector is discarded');
+  assert.equal(replacement.items.some(item => item.itemId === beforeIds[4]), true,
+    'a different Reviewer Session does not remove the independently admitted Lead B projection');
 
   coldSource.dispose();
   await coldController.dispose();

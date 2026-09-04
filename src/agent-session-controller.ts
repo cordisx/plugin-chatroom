@@ -1405,11 +1405,15 @@ export class ChatroomAgentSessionController {
       || closed.sessionGeneration !== active.sessionGeneration
       || closed.subscriptionGeneration !== active.subscription.subscriptionGeneration) return;
     this.subscriptions.delete(key);
-    // `permission-revoked` fences the live owner and its answerers, not the
-    // durable SessionEvent facts.  Keep the exact projector until a new
-    // read-only replay replaces it (or the Room run changes Session identity),
-    // so a V7 replacement cannot collapse to domain-only items mid-terminal.
-    if (closed.code !== 'permission-revoked') this.projectors.delete(key);
+    // `permission-revoked` and a same-Session `route-replaced` fence the live
+    // owner and its answerers, not the durable SessionEvent facts. Keep that
+    // exact projector until a new read-only replay replaces it (or the Room
+    // run changes Session identity), so a V7 replacement cannot collapse to
+    // domain-only items mid-terminal. detachRuntime() and a different
+    // persisted SessionId still discard it deliberately.
+    if (closed.code !== 'permission-revoked' && closed.code !== 'route-replaced') {
+      this.projectors.delete(key);
+    }
     if (closed.code === 'unsubscribed') return;
     // Permission decisions replace the issued lease, not the durable Session.
     // The next explicit action may resume that Session under refreshed grants.
