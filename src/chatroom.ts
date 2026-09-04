@@ -9,7 +9,7 @@ import {
 import type {
   AgentConversationShellBinding,
   AgentConversationShellCommandContext,
-} from '@cordisx/protocol/agent-conversation-shell/v6';
+} from '@cordisx/protocol/agent-conversation-shell/v7';
 import type { PluginRuntimeManifestV6 } from '@cordisx/protocol/plugin-manifest/v6';
 
 import {
@@ -29,6 +29,7 @@ import {
   ChatroomAgentSessionConversationSource,
   v3BindingFor,
 } from './agent-session-conversation-source.js';
+import { ChatroomAgentSessionConversationSourceV7 } from './agent-session-conversation-source-v7.js';
 import { ChatroomConversationController } from './conversation-source.js';
 import {
   CHATROOM_MANAGER_CONTENT_DECLARATIONS,
@@ -313,13 +314,14 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     if (hostContext === undefined) return;
     const intent = controller.handle(hostContext);
     if (intent === undefined && hostContext.scope === 'approval') {
-      const decision = hostContext.command.id === CHATROOM_COMMAND_APPROVAL_APPROVE ? 'allowed-once'
-        : hostContext.command.id === CHATROOM_COMMAND_APPROVAL_DENY ? 'rejected'
-          : hostContext.command.id === CHATROOM_COMMAND_APPROVAL_CANCEL ? 'cancelled'
-            : undefined;
       const roomId = controller.selectedRoomId(hostContext);
-      if (decision !== undefined && roomId !== undefined) {
-        agentSession.answerApprovalItem(roomId, hostContext.itemId, decision);
+      if (roomId !== undefined
+        && (hostContext.command.id === CHATROOM_COMMAND_APPROVAL_APPROVE
+          || hostContext.command.id === CHATROOM_COMMAND_APPROVAL_DENY)) {
+        agentSession.answerApprovalCommand(roomId, hostContext);
+      } else if (roomId !== undefined && hostContext.command.id === CHATROOM_COMMAND_APPROVAL_CANCEL) {
+        // Frozen v6 compatibility only; v7 never publishes a cancel action.
+        agentSession.answerApprovalItem(roomId, hostContext.itemId, 'cancelled');
       }
       return;
     }
@@ -354,10 +356,26 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   ctx.commands.register({ id: CHATROOM_COMMAND_APPROVAL_DENY, title: text('approval.deny', 'Deny') }, handleConversationCommand);
   ctx.commands.register({ id: CHATROOM_COMMAND_APPROVAL_CANCEL, title: text('approval.cancel', 'Cancel') }, handleConversationCommand);
 
-  const conversation = ctx.agentConversationShell.registerSourceV6((binding: AgentConversationShellBinding) => {
+  // Retain the frozen v6 source for old authority-less Session ledgers. The
+  // Room page mounts v7; old consumers can continue binding the versioned v6
+  // registration without Chatroom inventing a Lead identity.
+  ctx.agentConversationShell.registerSourceV6((binding: import('@cordisx/protocol/agent-conversation-shell/v6').AgentConversationShellBinding) => {
     const domain = controller.createSource(v3BindingFor(binding));
     let unsubscribeSettings = () => {};
     const source = new ChatroomAgentSessionConversationSource(
+      binding,
+      domain,
+      agentSession,
+      composerSettings.current,
+      () => unsubscribeSettings(),
+    );
+    unsubscribeSettings = composerSettings.subscribe(policy => source.setComposerShortcutPolicy(policy));
+    return source;
+  });
+  const conversation = ctx.agentConversationShell.registerSourceV7((binding: AgentConversationShellBinding) => {
+    const domain = controller.createSource(v3BindingFor(binding));
+    let unsubscribeSettings = () => {};
+    const source = new ChatroomAgentSessionConversationSourceV7(
       binding,
       domain,
       agentSession,

@@ -5,6 +5,7 @@ import {
   ChatroomAgentSessionConversationSource,
   v3BindingFor,
 } from '../dist/agent-session-conversation-source.js';
+import { ChatroomAgentSessionConversationSourceV7 } from '../dist/agent-session-conversation-source-v7.js';
 
 const binding = {
   bindingId: 'binding-one', shell: 'agent-desktop', ownerGeneration: 'owner-one',
@@ -121,6 +122,7 @@ function sessionProjection(itemOverride) {
         }],
       };
     },
+    projectionForRoomV6() { return this.projectionForRoom(); },
   };
 }
 
@@ -377,5 +379,90 @@ test('committed shortcut changes replace every live Shell v6 snapshot without ch
   assert.equal((await source.snapshot()).composer.shortcutPolicy, 'mod-enter');
 
   await result.handle.unsubscribe();
+  source.dispose();
+});
+
+test('Shell v7 keeps the complete A3/B1 Room timeline when Reviewer approval is rejected', async () => {
+  const lead = {
+    participantId: 'lead', role: 'agent',
+    displayName: { namespace: 'chatroom', key: 'lead', fallback: 'Lead' },
+    agentIdentity: { agentId: 'lead-agent', revision: 'lead-r1' },
+  };
+  const requester = { agentId: 'reviewer-agent', revision: 'reviewer-r1' };
+  const authorityBinding = {
+    agentId: 'session-lead', sessionId: 'session-lead', agentGeneration: 3,
+    definition: lead.agentIdentity,
+  };
+  const user3 = sessionMessage({
+    itemId: 'user-3-v7', sessionId: 'session-reviewer', eventSeq: 1, sequence: 500,
+    timestamp: '2026-09-04T00:00:00.000Z', author: human, text: '3',
+  });
+  const intro = sessionMessage({
+    itemId: 'reviewer-intro-v7', sessionId: 'session-reviewer', eventSeq: 4, sequence: 502,
+    timestamp: '2026-09-04T00:00:02.000Z', author: agent, text: 'Reviewer introduction',
+  });
+  const pending = {
+    kind: 'approval', itemId: 'approval-v7', sequence: 503,
+    participantId: 'reviewer', memberId: 'reviewer', runId: 'run-reviewer',
+    sessionId: 'session-reviewer', approvalId: 'approval-v7', approvalKind: 'command',
+    requester,
+    authority: { participantId: 'lead', memberId: 'leader', identity: lead.agentIdentity },
+    reason: { kind: 'plain-text', text: 'Reviewer requests permission for the protected check.' },
+    state: 'pending', agentGeneration: 2, authorityBinding,
+    actions: [
+      { decision: 'approve', command: { id: 'chatroom.approval.approve' } },
+      { decision: 'reject', command: { id: 'chatroom.approval.deny' } },
+    ],
+  };
+  const delegation = {
+    kind: 'message', itemId: 'delegation-v7', messageId: 'delegation-v7', sequence: 20,
+    source: 'chatroom-acknowledgement', author: lead,
+    semantic: { purpose: 'chatroom-acknowledgement' },
+    body: [{ kind: 'text', text: { key: 'delegation', fallback: '已向 @Reviewer 下发任务：3。' } }],
+    reactions: [], timestamp: '2026-09-04T00:00:01.000Z', deliveryState: 'delivered',
+    runState: 'idle', ariaLive: 'polite', actions: [],
+  };
+  const projection = sessionProjection();
+  projection.replace({
+    activeRuns: [{ participantId: 'reviewer', memberId: 'reviewer', runId: 'run-reviewer', sessionId: 'session-reviewer', lifecycle: { phase: 'waiting' } }],
+    items: [user3, intro, pending],
+  });
+  const source = new ChatroomAgentSessionConversationSourceV7(
+    binding, domainSource([delegation]), projection, 'enter',
+  );
+  const before = await source.snapshot();
+  const stable = before.items.map(item => [item.itemId, item.sequence]);
+  const user1 = sessionMessage({
+    itemId: 'user-1-v7', sessionId: 'session-lead', eventSeq: 1, sequence: 504,
+    timestamp: '2026-09-04T00:00:03.000Z', author: human, text: '1',
+  });
+  const leadReply = sessionMessage({
+    itemId: 'lead-reply-v7', sessionId: 'session-lead', eventSeq: 2, sequence: 505,
+    timestamp: '2026-09-04T00:00:04.000Z', author: lead, text: 'Lead reply',
+  });
+  const { authorityBinding: _removed, ...denied } = pending;
+  projection.replace({
+    activeRuns: [
+      { participantId: 'reviewer', memberId: 'reviewer', runId: 'run-reviewer', sessionId: 'session-reviewer', lifecycle: { phase: 'active' } },
+      { participantId: 'lead', memberId: 'leader', runId: 'run-lead', sessionId: 'session-lead', lifecycle: { phase: 'active' } },
+    ],
+    items: [user3, intro, { ...denied, state: 'denied', actions: [] }, user1, leadReply],
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  const after = await source.snapshot();
+
+  assert.deepEqual(after.items.slice(0, stable.length).map(item => [item.itemId, item.sequence]), stable);
+  assert.deepEqual(after.items.map(item => item.itemId), [
+    'user-3-v7', 'delegation-v7', 'reviewer-intro-v7', 'approval-v7', 'user-1-v7', 'lead-reply-v7',
+  ]);
+  const terminal = after.items.find(item => item.itemId === 'approval-v7');
+  assert.equal(terminal.state, 'denied');
+  assert.deepEqual(terminal.actions, []);
+  assert.equal('authorityBinding' in terminal, false);
+  const subscribed = await source.subscribe(after.snapshotSequence);
+  assert.equal(subscribed.result.status, 'accepted');
+  const closed = await subscribed.handle.unsubscribe();
+  assert.equal(closed.contract, 'cordisx.agent-conversation-shell-subscription-close/v7');
+  assert.equal(closed.schemaVersion, 7);
   source.dispose();
 });

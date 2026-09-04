@@ -25,12 +25,12 @@
     "node": ">=22.19"
   },
   "devDependencies": {
-    "@cordisx/protocol": "github:cordisx/cordisx-protocol#df6caacaf7f538b6e0fe95e2dfaa30e11961fa1e",
+    "@cordisx/protocol": "github:cordisx/cordisx-protocol#77a09f7c5092a88155338b8651a09cf2b22a0207",
     "@deepseek-ai/cordis": "4.0.1",
     "@deepseek-ai/schemastery": "3.18.1",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
-    "cordisx": "github:cordisx/cordisx#c1f925bd13e8e593aa09691d24a2120b5ff88357",
+    "cordisx": "github:cordisx/cordisx#9330d11cfb071e6483c9396afc4cd332fe22feb1",
     "esbuild": "^0.28.2",
     "typescript": "^5.9.2"
   }

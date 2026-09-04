@@ -205,6 +205,7 @@ function fakeHandle(session, admissions = []) {
 
 class FakeApprovals {
   answerers = new Map();
+  authorityAnswerers = new Map();
   facts = [];
 
   async registerAnswerer(agent, answerer) {
@@ -216,7 +217,62 @@ class FakeApprovals {
     };
   }
 
+  async registerAuthorityAnswerer(authority, answerer) {
+    this.authorityAnswerers.set(authority.agent.id, { authority, answerer });
+    return {
+      authority: {
+        agentId: authority.agent.id,
+        sessionId: authority.agent.session.id,
+        agentGeneration: authority.agent.generation,
+        definition: authority.definition,
+      },
+      dispose: async () => ({ status: 'closed', code: 'disposed' }),
+    };
+  }
+
   async request(request) {
+    if ('requester' in request) {
+      const registered = this.authorityAnswerers.get(request.authority.agent.id);
+      const id = `approval-v2-${this.facts.length + 1}`;
+      const binding = target => ({
+        agentId: target.agent.id,
+        sessionId: target.agent.session.id,
+        agentGeneration: target.agent.generation,
+        definition: target.definition,
+      });
+      const question = {
+        $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/approval-question.v2.schema.json',
+        contract: 'cordisx.approval-question/v2', schemaVersion: 2,
+        id,
+        requester: binding(request.requester),
+        authority: binding(request.authority),
+        toolName: request.toolName,
+        ...(request.callId === undefined ? {} : { callId: request.callId }),
+        reason: request.reason,
+      };
+      const session = request.requester.agent.session;
+      const start = session.replay.at(-1)?.seq + 1 || 0;
+      await session.emitLive([
+        sessionEvent(session.id, start, 'approval/authority-bound', {
+          approvalId: id,
+          requester: request.requester.definition,
+          authority: request.authority.definition,
+          reason: request.reason,
+        }, { ignorable: true }),
+        sessionEvent(session.id, start + 1, 'approval/asked', {
+          id, toolName: request.toolName,
+          ...(request.callId === undefined ? {} : { callId: request.callId }),
+          reason: request.reason.text,
+        }),
+      ]);
+      const outcome = registered === undefined ? 'unavailable' : await registered.answerer(question);
+      await session.emitLive([sessionEvent(session.id, start + 2, 'approval/decided', { id, outcome })]);
+      return {
+        $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/approval-decision.v2.schema.json',
+        contract: 'cordisx.approval-decision/v2', schemaVersion: 2,
+        id, requester: question.requester, authority: question.authority, outcome,
+      };
+    }
     const registered = this.answerers.get(request.agent.id);
     const question = {
       $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/approval-question.v1.schema.json',
@@ -1134,6 +1190,62 @@ test('Shell approval action settles only the matching independent ctx.approvals 
   assert.equal(controller.answerApprovalItem('room', item.itemId, 'allowed-once'), true);
   assert.equal((await decision).outcome, 'allowed-once');
   assert.equal(store.rooms.get('room').approvalDecisions.length, 0);
+  await controller.dispose();
+  store.dispose();
+});
+
+test('approval v2 binds Reviewer requester to exact Lead authority and updates one v7 item in place', async () => {
+  let room = createRoom({ id: 'room', title: 'Room' });
+  room = addRoomRun(room, {
+    runId: 'lead-run', memberId: 'leader', title: 'Lead', status: 'creating',
+  });
+  room = addRoomRun(room, {
+    runId: 'review-run', memberId: 'reviewer', title: 'Reviewer', status: 'creating',
+  });
+  const harness = runtimeHarness({ room });
+  const store = DurableChatroomRoomStore.memory([room]);
+  const controller = new ChatroomAgentSessionController(
+    { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+
+  const decision = controller.requestApproval(
+    'room', 'review-run', 'shell', 'Reviewer needs permission to inspect the protected result.', 'call-review',
+  );
+  await new Promise(resolve => setImmediate(resolve));
+  const pending = controller.projectionForRoom('room').items.find(item => item.kind === 'approval');
+
+  assert.ok(pending);
+  assert.equal(pending.memberId, 'reviewer');
+  assert.equal(pending.authority.memberId, 'leader');
+  assert.equal(pending.reason.text, 'Reviewer needs permission to inspect the protected result.');
+  assert.deepEqual(pending.actions.map(action => action.decision), ['approve', 'reject']);
+  const stable = { itemId: pending.itemId, sequence: pending.sequence };
+  const commandContext = {
+    binding: { bindingId: 'binding', ownerGeneration: 'owner' },
+    generation: 'shell-generation', scope: 'approval', itemId: pending.itemId,
+    command: { id: 'chatroom.approval.deny' },
+    approval: {
+      sessionId: pending.sessionId,
+      approvalId: pending.approvalId,
+      requester: pending.requester,
+      authority: pending.authorityBinding,
+      decision: 'reject',
+    },
+  };
+  assert.equal(controller.answerApprovalCommand('room', {
+    ...commandContext,
+    approval: { ...commandContext.approval, approvalId: 'foreign-approval' },
+  }), false);
+  assert.equal(controller.answerApprovalCommand('room', commandContext), true);
+  assert.equal((await decision).decision.outcome, 'rejected');
+  const denied = controller.projectionForRoom('room').items.find(item => item.kind === 'approval');
+  assert.deepEqual({ itemId: denied.itemId, sequence: denied.sequence }, stable);
+  assert.equal(denied.state, 'denied');
+  assert.deepEqual(denied.actions, []);
+  assert.equal(store.rooms.get('room').approvalDecisions.length, 0);
+
   await controller.dispose();
   store.dispose();
 });
