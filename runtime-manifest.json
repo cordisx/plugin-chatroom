@@ -1,6 +1,6 @@
 {
-  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v5.schema.json",
-  "schemaVersion": 5,
+  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v6.schema.json",
+  "schemaVersion": 6,
   "id": "chatroom",
   "name": "Chatroom",
   "capabilities": [
@@ -11,7 +11,28 @@
     { "name": "agents.message.cancel", "required": true, "scope": {} },
     { "name": "sessions.get", "required": true, "scope": {} },
     { "name": "sessions.subscribe", "required": true, "scope": {} },
-    { "name": "approvals.answer", "required": true, "scope": {} }
+    {
+      "name": "approvals.request",
+      "required": false,
+      "scope": {
+        "sessionIds": {
+          "kind": "host-route-param",
+          "routeId": "room-session-detail",
+          "param": "sessionId"
+        }
+      }
+    },
+    {
+      "name": "approvals.answer",
+      "required": false,
+      "scope": {
+        "sessionIds": {
+          "kind": "host-route-param",
+          "routeId": "room-session-detail",
+          "param": "sessionId"
+        }
+      }
+    }
   ],
   "services": []
 }

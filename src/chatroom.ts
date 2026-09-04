@@ -2,12 +2,12 @@ import type { Context } from '@deepseek-ai/cordis';
 import { Config, ChatroomComposerSettings, configApplies } from './composer-settings.js';
 import {
   CORDISX_PAGE_SCHEMA_V3,
-  CORDISX_PLUGIN_MANIFEST_SCHEMA_V5,
+  CORDISX_PLUGIN_MANIFEST_SCHEMA_V6,
   CORDISX_ROUTE_SCHEMA_V2,
   type CordisXCommandContext,
-  type CordisXPluginManifestV5,
 } from 'cordisx/contracts';
 import type { AgentConversationShellCommandContext } from '@cordisx/protocol/agent-conversation-shell/v5';
+import type { PluginRuntimeManifestV6 } from '@cordisx/protocol/plugin-manifest/v6';
 
 import {
   CHATROOM_COMMAND_APPROVAL_APPROVE,
@@ -100,8 +100,8 @@ const message = (key: keyof ChatroomMessages, fallback: string) => ({
 } as const);
 
 export const manifest = {
-  $schema: CORDISX_PLUGIN_MANIFEST_SCHEMA_V5,
-  schemaVersion: 5,
+  $schema: CORDISX_PLUGIN_MANIFEST_SCHEMA_V6,
+  schemaVersion: 6,
   id: 'chatroom',
   name: 'Chatroom',
   capabilities: [
@@ -112,10 +112,19 @@ export const manifest = {
     { name: 'agents.message.cancel', required: true, scope: {} },
     { name: 'sessions.get', required: true, scope: {} },
     { name: 'sessions.subscribe', required: true, scope: {} },
-    { name: 'approvals.answer', required: true, scope: {} },
+    {
+      name: 'approvals.request',
+      required: false,
+      scope: { sessionIds: { kind: 'host-route-param', routeId: 'room-session-detail', param: 'sessionId' } },
+    },
+    {
+      name: 'approvals.answer',
+      required: false,
+      scope: { sessionIds: { kind: 'host-route-param', routeId: 'room-session-detail', param: 'sessionId' } },
+    },
   ],
   services: [],
-} as const satisfies CordisXPluginManifestV5;
+} as const satisfies PluginRuntimeManifestV6;
 
 export const inject = [
   'i18n', 'commands', 'pages', 'routes', 'slots', 'managerContent',
@@ -148,6 +157,13 @@ const roomRoute = {
   ...newRoomRoute,
   id: 'room',
   path: '/main/chatroom/:roomId',
+} as const;
+
+/** Host-owned exact Session authority route; ordinary Room navigation remains unchanged. */
+export const roomSessionDetailRoute = {
+  ...newRoomRoute,
+  id: 'room-session-detail',
+  path: '/main/chatroom/:roomId/session/:sessionId',
 } as const;
 
 function conversationContext(context: CordisXCommandContext): AgentConversationShellCommandContext | undefined {
@@ -356,6 +372,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   ctx.pages.register(page, conversation.mount);
   ctx.routes.register(newRoomRoute);
   ctx.routes.register(roomRoute);
+  ctx.routes.register(roomSessionDetailRoute);
   ctx.slots.register({
     name: 'sidebar.navigation.items',
     id: 'chatroom',
