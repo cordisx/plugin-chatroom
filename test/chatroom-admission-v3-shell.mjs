@@ -17,6 +17,8 @@ test('Shell v8 composer submits every Chatroom delivery through target-scoped ad
   assert.match(source, /Chatroom conversation command context is unavailable/);
   assert.match(source, /composer submit is unavailable for the current Shell binding or generation/);
   assert.match(source, /Chatroom composer submit resolved no deliveries/);
+  assert.match(source, /Chatroom composer target error: \$\{intent.code\}\$\{mention\}/);
+  assert.match(source, /await controller.persistComposerRoom\(intent.roomId\)/);
   assert.match(source, /assertChatroomAdmissionDeliveriesAccepted\(outcomes\)/);
 
   const legacy = source.indexOf('if (admissionOrigin.status === \'legacy\')');

@@ -381,7 +381,10 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       }
       return;
     }
-    if (intent.kind === 'target-error') return;
+    if (intent.kind === 'target-error') {
+      const mention = intent.mention === undefined ? '' : ` ${intent.mention}`;
+      throw new Error(`Chatroom composer target error: ${intent.code}${mention}.`);
+    }
     if (intent.kind === 'approval-decision') {
       return;
     }
@@ -391,6 +394,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       );
       return;
     }
+    await controller.persistComposerRoom(intent.roomId);
     let deliveryFailure: unknown;
     try {
       if (intent.deliveries.length === 0) {

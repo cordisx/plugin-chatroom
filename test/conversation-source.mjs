@@ -8,6 +8,7 @@ import { ChatroomConversationController } from '../dist/conversation-source.js';
 import { CHATROOM_DEFAULT_AGENT_CONFIGURATION } from '../dist/agent-definition.js';
 import { addRoomRun, bindRoomRunSession, createRoom } from '../dist/room.js';
 import { failRoomRunPresence } from '../dist/room-engagement.js';
+import { DurableChatroomRoomStore } from '../dist/room-store.js';
 
 const binding = Object.freeze({
   bindingId: 'binding-1', shell: 'agent-desktop', ownerGeneration: 'owner-1',
@@ -304,6 +305,44 @@ test('creates and projects a Room only from the first Host-generated composer su
   assert.deepEqual(room.runs.map(run => [run.memberId, run.status]), [['leader', 'creating']]);
 });
 
+test('persists the first Room before route replacement and resolves a later ambient composer submit', async () => {
+  const store = DurableChatroomRoomStore.memory();
+  const firstController = new ChatroomConversationController(
+    store.rooms,
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    async room => { await store.upsert(room); },
+  );
+  firstController.createSource(binding);
+  const first = firstController.handle({
+    binding: { bindingId: 'binding-1', ownerGeneration: 'owner-1' }, generation: 'owner-1',
+    scope: 'composer-submit', command: { id: CHATROOM_COMMAND_SUBMIT }, submitPayload: '3',
+  });
+  assert.equal(first?.kind, 'send-message');
+  if (first?.kind !== 'send-message') return;
+  await firstController.persistComposerRoom(first.roomId);
+  assert.equal(store.document(first.roomId)?.room.items.some(item => item.kind === 'message'), true);
+
+  const secondController = new ChatroomConversationController(
+    store.rooms,
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    async room => { await store.upsert(room); },
+  );
+  secondController.createSource({
+    ...binding,
+    bindingId: 'binding-reloaded-room',
+    routeSelection: { scope: 'room-or-new', selectedRoomParam: first.roomId },
+  });
+  const second = secondController.handle({
+    binding: { bindingId: 'binding-reloaded-room', ownerGeneration: 'owner-1' }, generation: 'owner-1',
+    scope: 'composer-submit', command: { id: CHATROOM_COMMAND_SUBMIT }, submitPayload: '3',
+  });
+  assert.deepEqual(second?.kind, 'send-message');
+  if (second?.kind === 'send-message') {
+    assert.deepEqual(second.deliveries.map(delivery => delivery.reason), ['ambient']);
+    assert.equal(second.dispatchText, '3');
+  }
+});
+
 test('a mismatched composer binding or generation writes no Room item or delivery intent', async () => {
   const controller = new ChatroomConversationController();
   const source = controller.createSource(binding);
@@ -462,4 +501,37 @@ test('returns explicit target errors without creating a run or public message', 
   assert.deepEqual(controller.rooms.get('team').runs, []);
   assert.equal(controller.rooms.get('team').items.length, 1);
   assert.match(controller.rooms.get('team').items[0].label.fallback, /@missing/);
+});
+
+test('classifies every invalid composer target before any public message is appended', () => {
+  const noRecipientsConfiguration = {
+    ...CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    members: CHATROOM_DEFAULT_AGENT_CONFIGURATION.members.map(member => ({
+      ...member,
+      attentionPolicy: 'mention-only',
+    })),
+  };
+  const cases = [
+    { name: 'empty', configuration: CHATROOM_DEFAULT_AGENT_CONFIGURATION, payload: '', code: 'empty' },
+    { name: 'no-recipients', configuration: noRecipientsConfiguration, payload: '3', code: 'no-recipients' },
+    { name: 'missing', configuration: CHATROOM_DEFAULT_AGENT_CONFIGURATION, payload: '@missing 3', code: 'missing', mention: '@missing' },
+    { name: 'ambiguous', configuration: {
+      ...CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+      members: CHATROOM_DEFAULT_AGENT_CONFIGURATION.members.map(member => ({ ...member, label: 'Same' })),
+    }, payload: '@same 3', code: 'ambiguous', mention: '@same' },
+    { name: 'empty-targeted-message', configuration: CHATROOM_DEFAULT_AGENT_CONFIGURATION, payload: '@leader', code: 'empty-targeted-message', mention: '@leader' },
+  ];
+  for (const scenario of cases) {
+    const controller = new ChatroomConversationController([], scenario.configuration);
+    controller.createSource({ ...binding, bindingId: `binding-${scenario.name}` });
+    const intent = controller.handle({
+      binding: { bindingId: `binding-${scenario.name}`, ownerGeneration: 'owner-1' }, generation: 'owner-1',
+      scope: 'composer-submit', command: { id: CHATROOM_COMMAND_SUBMIT }, submitPayload: scenario.payload,
+    });
+    assert.equal(intent?.kind, 'target-error', scenario.name);
+    if (intent?.kind !== 'target-error') continue;
+    assert.equal(intent.code, scenario.code, scenario.name);
+    assert.equal(intent.mention, scenario.mention, scenario.name);
+    assert.equal(controller.rooms.snapshot().length, 0, scenario.name);
+  }
 });

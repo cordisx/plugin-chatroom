@@ -613,6 +613,16 @@ export class ChatroomConversationController {
     )?.roomId;
   }
 
+  /**
+   * Commits the Room mutation made for a Host composer submit before its
+   * delivery or first-message route transition can replace this owner.
+   */
+  async persistComposerRoom(roomId: string): Promise<void> {
+    const room = this.rooms.get(roomId);
+    if (room === undefined) throw new Error('Composer Room is unavailable for persistence.');
+    await this.commitDirectRoom(room);
+  }
+
   takePendingIntents(): readonly ChatroomCommandIntent[] {
     return this.pending.splice(0);
   }
