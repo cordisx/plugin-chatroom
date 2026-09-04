@@ -6,7 +6,10 @@ import {
   CORDISX_ROUTE_SCHEMA_V2,
   type CordisXCommandContext,
 } from 'cordisx/contracts';
-import type { AgentConversationShellCommandContext } from '@cordisx/protocol/agent-conversation-shell/v5';
+import type {
+  AgentConversationShellBinding,
+  AgentConversationShellCommandContext,
+} from '@cordisx/protocol/agent-conversation-shell/v6';
 import type { PluginRuntimeManifestV6 } from '@cordisx/protocol/plugin-manifest/v6';
 
 import {
@@ -86,6 +89,7 @@ export type ChatroomMessages = {
   'composer.unavailable': undefined;
   'composer.shortcut.enter': undefined;
   'composer.shortcut.mod-enter': undefined;
+  'agent.approval.unavailable': undefined;
   'permission.tasks.create': undefined;
   'permission.tasks.content.read': undefined;
   'permission.turns.submit': undefined;
@@ -239,6 +243,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       'composer.unavailable': 'Messaging is not available yet.',
       'composer.shortcut.enter': 'Enter sends',
       'composer.shortcut.mod-enter': 'Command/Ctrl+Enter sends',
+      'agent.approval.unavailable': 'Approval unavailable',
       'permission.tasks.create': 'Create a task for a new Room.',
       'permission.tasks.content.read': 'Read replies and task status for a Room.',
       'permission.turns.submit': 'Send Room messages to its Agent.',
@@ -286,6 +291,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       'composer.unavailable': '消息功能暂不可用。',
       'composer.shortcut.enter': 'Enter 发送',
       'composer.shortcut.mod-enter': 'Command/Ctrl+Enter 发送',
+      'agent.approval.unavailable': '审批不可用',
       'permission.tasks.create': '为新房间创建任务。',
       'permission.tasks.content.read': '读取房间回复和任务状态。',
       'permission.turns.submit': '向房间 Agent 发送消息。',
@@ -348,7 +354,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   ctx.commands.register({ id: CHATROOM_COMMAND_APPROVAL_DENY, title: text('approval.deny', 'Deny') }, handleConversationCommand);
   ctx.commands.register({ id: CHATROOM_COMMAND_APPROVAL_CANCEL, title: text('approval.cancel', 'Cancel') }, handleConversationCommand);
 
-  const conversation = ctx.agentConversationShell.registerSourceV5(binding => {
+  const conversation = ctx.agentConversationShell.registerSourceV6((binding: AgentConversationShellBinding) => {
     const domain = controller.createSource(v3BindingFor(binding));
     let unsubscribeSettings = () => {};
     const source = new ChatroomAgentSessionConversationSource(

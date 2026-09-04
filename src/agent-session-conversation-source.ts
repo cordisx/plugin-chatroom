@@ -15,7 +15,7 @@ import type {
   AgentConversationShellSubscriptionClosed,
   AgentConversationShellSubscribeRuntimeResult,
   AgentConversationShellUpdate,
-} from '@cordisx/protocol/agent-conversation-shell/v5';
+} from '@cordisx/protocol/agent-conversation-shell/v6';
 
 import type { ChatroomAgentSessionController } from './agent-session-controller.js';
 import type { ChatroomComposerShortcutPolicy } from './composer-settings.js';
@@ -24,9 +24,9 @@ const closeEnvelope = (
   subscription: AgentConversationShellSubscription,
   code: AgentConversationShellSubscriptionClosed['code'],
 ): AgentConversationShellSubscriptionClosed => Object.freeze({
-  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-conversation-shell-subscription-close.v5.schema.json',
-  contract: 'cordisx.agent-conversation-shell-subscription-close/v5',
-  schemaVersion: 5,
+  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-conversation-shell-subscription-close.v6.schema.json',
+  contract: 'cordisx.agent-conversation-shell-subscription-close/v6',
+  schemaVersion: 6,
   subscriptionId: subscription.subscriptionId,
   binding: subscription.binding,
   generation: subscription.generation,
@@ -34,7 +34,7 @@ const closeEnvelope = (
   code,
 });
 
-class V5Stream {
+class V6Stream {
   private cursor: number;
   private terminal?: AgentConversationShellSubscriptionClosed;
   private readonly updates: AgentConversationShellUpdate[] = [];
@@ -153,10 +153,11 @@ const itemTime = (item: AgentConversationItem): number | undefined => {
 
 /**
  * Domain acknowledgements and SessionEvent messages arrive with independent
- * sequence coordinates. Preserve the stable sequence slots for non-message
- * product items, while ordering the timestamped message facts by their actual
- * cross-source chronology. Original sequence and itemId make equal timestamps
- * deterministic, so replay cannot reshuffle or duplicate unchanged facts.
+ * sequence coordinates. Order timestamped message facts by their actual
+ * cross-source chronology while retaining non-message facts in their stable
+ * source-relative positions. Original sequence and itemId make equal
+ * timestamps deterministic; refresh() then assigns the shared Room-local
+ * presentation coordinates, so replay cannot reshuffle unchanged facts.
  */
 function chronologicalRoomItems(items: readonly AgentConversationItem[]): readonly AgentConversationItem[] {
   const stable = [...items].sort(stableItemOrder);
@@ -168,7 +169,7 @@ function chronologicalRoomItems(items: readonly AgentConversationItem[]): readon
 }
 
 /**
- * Atomic Shell-v5 adapter around the accepted Chatroom domain source. Domain
+ * Atomic Shell-v6 adapter around the accepted Chatroom domain source. Domain
  * state/copy stays unchanged; only execution facts are replaced by the
  * SessionEvent projector.
  */
@@ -178,7 +179,9 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
   private subscriptions = 0;
   private snapshotValue?: AgentConversationShellSnapshot;
   private roomId?: string;
-  private readonly streams = new Set<V5Stream>();
+  private refreshRevision = 0;
+  private refreshTail: Promise<void> = Promise.resolve();
+  private readonly streams = new Set<V6Stream>();
   private readonly ready: Promise<void>;
   private unsubscribeDomain?: () => void;
   private readonly unsubscribeProjection: () => void;
@@ -198,7 +201,8 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
 
   async snapshot(): Promise<AgentConversationShellSnapshot> {
     await this.ready;
-    if (this.snapshotValue === undefined) throw new Error('Chatroom Shell v5 source is unavailable.');
+    await this.refreshTail;
+    if (this.snapshotValue === undefined) throw new Error('Chatroom Shell v6 source is unavailable.');
     return this.snapshotValue;
   }
 
@@ -214,8 +218,8 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
       afterSequence,
       snapshotSequence: snapshot.snapshotSequence,
     };
-    let stream!: V5Stream;
-    stream = new V5Stream(subscription, () => this.streams.delete(stream));
+    let stream!: V6Stream;
+    stream = new V6Stream(subscription, () => this.streams.delete(stream));
     this.streams.add(stream);
     return {
       result: { type: 'subscribe', status: 'accepted', code: 'allowed', subscription },
@@ -306,7 +310,14 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
     })();
   }
 
-  private async refresh(publish = true): Promise<void> {
+  private refresh(publish = true): Promise<void> {
+    const revision = ++this.refreshRevision;
+    const operation = this.refreshTail.then(() => this.refreshNow(publish, revision));
+    this.refreshTail = operation.then(() => {}, () => {});
+    return operation;
+  }
+
+  private async refreshNow(publish: boolean, revision: number): Promise<void> {
     if (this.disposed) return;
     const domain = await this.domain.snapshot();
     const roomId = domain.selection.kind === 'room' ? domain.selection.roomId : undefined;
@@ -336,7 +347,6 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
         ? { ...common, multiParticipant: true, participantPresentation: domain.selection.participantPresentation }
         : { ...common, multiParticipant: false, participantPresentation: 'none' };
     }
-    let itemSequence = -1;
     const mergedItems = [
       ...domain.items.flatMap(item => {
         const mapped = domainItem(item, sessionByRun);
@@ -344,10 +354,16 @@ export class ChatroomAgentSessionConversationSource implements AgentConversation
       }),
       ...projection.items,
     ];
-    const items = chronologicalRoomItems(mergedItems).map(item => {
-      itemSequence = Math.max(itemSequence + 1, item.sequence);
-      return item.sequence === itemSequence ? item : { ...item, sequence: itemSequence };
-    });
+    // Domain and SessionEvent source coordinates are intentionally unrelated.
+    // Once their deterministic chronology is known, assign one Room-local
+    // presentation coordinate from that order. This makes replay independent
+    // of which source happened to reserve a process-local coordinate first.
+    const items = chronologicalRoomItems(mergedItems)
+      .map((item, sequence) => item.sequence === sequence ? item : { ...item, sequence });
+    // Projection and domain notifications may overlap while a Session lease
+    // is being replaced. A refresh superseded during an await must never
+    // publish its now-partial Room snapshot over a newer all-run view.
+    if (this.disposed || revision !== this.refreshRevision) return;
     this.sequence = Math.max(this.sequence, domain.snapshotSequence) + (this.snapshotValue === undefined ? 0 : 1);
     const snapshot: AgentConversationShellSnapshot = {
       binding: { bindingId: this.binding.bindingId, ownerGeneration: this.binding.ownerGeneration },
