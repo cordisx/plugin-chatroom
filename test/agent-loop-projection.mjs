@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { CHATROOM_DEFAULT_AGENT_CONFIGURATION } from '../dist/agent-definition.js';
 import { projectAgentLoopEvent } from '../dist/agent-loop-projection.js';
+import {
+  acceptRoomDelivery,
+  planRoomDelivery,
+  prepareRoomOutboxDelivery,
+} from '../dist/room-delivery.js';
 import { planApprovalDecision, updateApprovalDecision } from '../dist/room-agent-operations.js';
 import { createRoomConversationModel } from '../dist/conversation-model.js';
 import {
@@ -10,18 +16,24 @@ import {
   createChatroomOpaqueId,
   createRoom,
 } from '../dist/room.js';
-import { acceptRoomRunPresence, createStoredRoomRunDetailsUrl } from '../dist/room-engagement.js';
+import {
+  acceptRoomRunPresence,
+  createStoredRoomRunDetailsUrl,
+  markRoomAcknowledgementSent,
+  prepareRoomAcknowledgement,
+} from '../dist/room-engagement.js';
 
 const identities = {
   lead: { agentId: 'chatroom.generalist', revision: 'chatroom-internal-v1' },
   review: { agentId: 'chatroom.reviewer', revision: 'chatroom-internal-v1' },
 };
 const binding = (id, definition, generation = 1) => ({
-  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-task-binding.v2.schema.json',
-  contract: 'cordisx.agent-loop-task-binding/v2', schemaVersion: 2,
+  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-task-binding.v4.schema.json',
+  contract: 'cordisx.agent-loop-task-binding/v4', schemaVersion: 4,
   binding: { bindingId: `Opaque:Binding-${id}`, generation }, definition,
   task: `Opaque:Task-${id}`, state: 'active',
 });
+const acceptedTurnFor = runBinding => `turn-${runBinding.task}`;
 const members = [
   {
     memberId: 'lead', label: 'Lead', definition: identities.lead, role: 'leader', attentionPolicy: 'ambient',
@@ -35,6 +47,38 @@ const members = [
       seed: 'cordisx.agent-avatar.seed/v1:agent-definition:24:chatroom-reviewer-animal' },
   },
 ];
+const testConfiguration = { ...CHATROOM_DEFAULT_AGENT_CONFIGURATION, members };
+
+function acceptConversationTurn(input, runId) {
+  const run = input.runs.find(candidate => candidate.runId === runId);
+  const member = input.memberships.find(candidate => candidate.memberId === run.memberId);
+  const fixtureKey = `${runId}-${run.taskBinding.binding.generation}`;
+  const userItemId = `fixture-user-${fixtureKey}`;
+  const acknowledgement = prepareRoomAcknowledgement(input, testConfiguration, {
+    userItemId, memberId: member.memberId, runId,
+  });
+  let result = markRoomAcknowledgementSent(
+    acknowledgement.room,
+    acknowledgement.acknowledgement.acknowledgementKey,
+  );
+  const deliveryId = `fixture-delivery-${fixtureKey}`;
+  const operationId = `fixture-send-${fixtureKey}`;
+  result = prepareRoomOutboxDelivery(result, {
+    deliveryId, userItemId, memberId: member.memberId, runId, sendOperationId: operationId,
+  }).room;
+  result = planRoomDelivery(result, {
+    deliveryId, operationId, userItemId, participantId: member.participantId,
+    memberId: member.memberId, runId, issuedAt: '2026-08-30T00:00:00.000Z',
+    operation: {
+      kind: 'send', acknowledgementKey: acknowledgement.acknowledgement.acknowledgementKey,
+      payload: { commandId: operationId, type: 'send', binding: run.taskBinding },
+    },
+  }).room;
+  return acceptRoomDelivery(result, operationId, {
+    kind: 'send', disposition: 'executed', firstObservedAt: '2026-08-30T00:00:00.000Z',
+    messageId: `fixture-message-${fixtureKey}`, turn: acceptedTurnFor(run.taskBinding),
+  });
+}
 
 function room() {
   let result = createRoom({
@@ -50,18 +94,23 @@ function room() {
     result, 'lead-run', binding('lead', identities.lead),
     createStoredRoomRunDetailsUrl({ url: 'app:task/lead', target: 'host' }),
   );
-  return acceptRoomRunPresence(
+  result = acceptRoomRunPresence(
     result, 'review-run', binding('review', identities.review),
     createStoredRoomRunDetailsUrl({ url: 'app:task/review', target: 'host' }),
   );
+  result = acceptConversationTurn(result, 'lead-run');
+  return acceptConversationTurn(result, 'review-run');
 }
 
 const event = (runBinding, sequence, extra) => ({
-  $schema: 'event', contract: 'cordisx.agent-loop-event/v2', schemaVersion: 2,
+  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
   eventId: `event-${runBinding.binding.bindingId}-${sequence}`,
   binding: runBinding.binding, sequence, occurredAt: '2026-08-30T00:00:00.000Z',
   ...extra,
-  ...(extra.type === 'message' ? { message: { purpose: 'conversation', ...extra.message } } : {}),
+  ...(extra.type === 'message' ? {
+    turn: acceptedTurnFor(runBinding),
+    message: { purpose: 'conversation', ...extra.message },
+  } : {}),
 });
 
 test('keeps per-run cursors independent while Room assigns one public timeline sequence', () => {

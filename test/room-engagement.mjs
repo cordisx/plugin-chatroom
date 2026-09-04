@@ -49,9 +49,9 @@ const definitionFor = memberId => CHATROOM_DEFAULT_AGENT_CONFIGURATION.members
   .find(member => member.memberId === memberId).definition;
 
 const taskBinding = (number, memberId = 'leader', generation = 1) => ({
-  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-task-binding.v2.schema.json',
-  contract: 'cordisx.agent-loop-task-binding/v2',
-  schemaVersion: 2,
+  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-task-binding.v4.schema.json',
+  contract: 'cordisx.agent-loop-task-binding/v4',
+  schemaVersion: 4,
   binding: { bindingId: `Opaque:Binding-${number}`, generation },
   definition: definitionFor(memberId),
   task: `Opaque:Task-${number}`,
@@ -74,6 +74,40 @@ function outboxFor(room, input) {
     createOperationId: input.createOperationId,
     sendOperationId: input.sendOperationId,
   });
+}
+
+function acceptConversationTurn(room, input) {
+  const prepared = prepareRoomAcknowledgement(room, input.configuration, {
+    userItemId: input.userItemId, memberId: input.memberId, runId: input.runId,
+  });
+  let next = markRoomAcknowledgementSent(
+    prepared.room,
+    prepared.acknowledgement.acknowledgementKey,
+  );
+  const deliveryId = `fixture-delivery-${input.runId}`;
+  const operationId = `fixture-send-${input.runId}`;
+  next = prepareRoomOutboxDelivery(next, {
+    deliveryId, userItemId: input.userItemId, memberId: input.memberId,
+    runId: input.runId, sendOperationId: operationId,
+  }).room;
+  next = planRoomDelivery(next, {
+    deliveryId, operationId, userItemId: input.userItemId,
+    participantId: prepared.acknowledgement.participantId,
+    memberId: input.memberId, runId: input.runId,
+    issuedAt: '2026-08-31T00:00:05.000Z',
+    operation: {
+      kind: 'send', acknowledgementKey: prepared.acknowledgement.acknowledgementKey,
+      payload: { commandId: operationId, type: 'send', binding: input.binding },
+    },
+  }).room;
+  const turn = `turn-${input.runId}`;
+  return {
+    room: acceptRoomDelivery(next, operationId, {
+      kind: 'send', disposition: 'executed', firstObservedAt: '2026-08-31T00:00:05.000Z',
+      messageId: `fixture-message-${input.runId}`, turn,
+    }),
+    turn,
+  };
 }
 
 function ownerDocumentsFixture(initial) {
@@ -212,10 +246,15 @@ test('does not synthesize member speech after accepted create, rebind, or reload
   assert.equal('engagement' in hydrated.memberships[0], false);
   assert.equal(createRoomConversationModel(hydrated).items.some(item => item.kind === 'message'
     && item.author.role === 'agent'), false);
-  const projected = projectAgentLoopEvent(hydrated, 'lead-run', {
-    $schema: 'event', contract: 'cordisx.agent-loop-event/v2', schemaVersion: 2,
+  const accepted = acceptConversationTurn(hydrated, {
+    configuration: CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    userItemId: 'user-first', memberId: 'leader', runId: 'lead-run',
+    binding: hydrated.runs[0].taskBinding,
+  });
+  const projected = projectAgentLoopEvent(accepted.room, 'lead-run', {
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
     eventId: 'event-real-reply', binding: hydrated.runs[0].taskBinding.binding, sequence: 0,
-    occurredAt: '2026-08-31T00:00:06.000Z', type: 'message',
+    occurredAt: '2026-08-31T00:00:06.000Z', type: 'message', turn: accepted.turn,
     message: { messageId: 'provider-reply', role: 'assistant', purpose: 'conversation', content: [{ kind: 'text', text: 'Done' }] },
   }).room;
   const model = createRoomConversationModel(projected);
@@ -363,10 +402,15 @@ test('projects every Shell v2 surfaced Room identity as a formal opaque ID', () 
     room = markRoomAcknowledgementSent(prepared.room, prepared.acknowledgement.acknowledgementKey);
   }
   const leadBinding = room.runs[0].taskBinding;
+  const accepted = acceptConversationTurn(room, {
+    configuration, userItemId: 'user-item.1', memberId: 'leader', runId: 'lead-run',
+    binding: leadBinding,
+  });
+  room = accepted.room;
   room = projectAgentLoopEvent(room, 'lead-run', {
-    $schema: 'event', contract: 'cordisx.agent-loop-event/v2', schemaVersion: 2,
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
     eventId: 'event-opaque-1', binding: leadBinding.binding, sequence: 0,
-    occurredAt: '2026-08-31T00:00:01.000Z', type: 'message',
+    occurredAt: '2026-08-31T00:00:01.000Z', type: 'message', turn: accepted.turn,
     message: {
       messageId: 'provider-message-1', role: 'assistant', purpose: 'conversation',
       content: [{ kind: 'text', text: 'Reviewed' }],
