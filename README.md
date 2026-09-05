@@ -45,7 +45,7 @@ React/ReactDOM singletons, replacement fencing, and stylesheet cleanup.
   each run.
 - Present real Session messages, approvals, failures, and lifecycle events in
   a chronological plugin-owned timeline.
-- Resolve and render the exact five OneWorks RC.8 animal assets directly in the
+- Resolve and render the exact five OneWorks RC.9 animal assets directly in the
   page, with deterministic initials for unsupported or absent references.
 
 Out of scope: host adapters, credentials, external channels, automation,

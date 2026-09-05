@@ -31,7 +31,7 @@ export const CHATROOM_ONEWORKS_YELLOW_DUCKLING_AVATAR_ASSET_REVISION =
 
 export const CHATROOM_ONEWORKS_AVATAR_ASSET_PROVENANCE = Object.freeze({
   source: 'https://oneworks.cloud/avatar/',
-  renderer: '@oneworks/avatar-react@1.0.0-rc.8',
+  renderer: '@oneworks/avatar-react@1.0.0-rc.9',
   definitions: Object.freeze({
     [CHATROOM_ONEWORKS_RED_FOX_AVATAR_ASSET_REF]: Object.freeze({
       profileId: 'red-fox',

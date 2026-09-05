@@ -81,7 +81,7 @@ test('publishes only completed generic images to sidebar and semantic icons to M
   assert.doesNotMatch(manager, /avatar-stack|cloneAgentAvatarRef/u);
 });
 
-test('pins OneWorks RC.8 and produces the lazy graph through the public CordisX Vite config', async () => {
+test('pins OneWorks RC.9 and produces the lazy graph through the public CordisX Vite config', async () => {
   const [packageText, entry, avatar, renderer, viteConfig, verify, notices] = await Promise.all([
     source('package.json'),
     source('src/chatroom.ts'),
@@ -92,8 +92,17 @@ test('pins OneWorks RC.8 and produces the lazy graph through the public CordisX 
     source('THIRD_PARTY_NOTICES.md'),
   ]);
   const packageJson = JSON.parse(packageText);
-  assert.equal(packageJson.devDependencies['@oneworks/avatar'], '1.0.0-rc.8');
-  assert.equal(packageJson.devDependencies['@oneworks/avatar-react'], '1.0.0-rc.8');
+  assert.equal(packageJson.devDependencies['@oneworks/avatar'], '1.0.0-rc.9');
+  assert.equal(packageJson.devDependencies['@oneworks/avatar-react'], '1.0.0-rc.9');
+  assert.match(notices, /abce277ee9a9d846ef6964766d3be8938d787ffc/u);
+  assert.match(
+    notices,
+    /sha512-3EmbF3iWZ9qD9vxFYI0aMzINFoIYG38UIu3ngsK6QfWm6sqZf46e29G\+BX0UiIERQ3ntWNzRun8FA5mpGMQcxw==/u,
+  );
+  assert.match(
+    notices,
+    /sha512-HqxGcmweaIyS1ppM\+uJuUJ6NyZWdZnJHGTYyOm385tw21hcYYeFLUqu\+l45D0XtsrPlPRA34h3mYdrgnRmDXUQ==/u,
+  );
   assert.match(entry, /avatarDevelopmentDependencies/u);
   assert.match(entry, /import\('@oneworks\/avatar-react\/renderer'\)/u);
   assert.doesNotMatch(avatar, /from '@oneworks\/avatar-react'/u);
