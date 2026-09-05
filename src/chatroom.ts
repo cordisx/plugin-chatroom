@@ -1,7 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { ChatroomComposerSettings, Config, configApplies } from './composer-settings.js';
 import { CORDISX_PAGE_SCHEMA_V3, CORDISX_ROUTE_SCHEMA_V2 } from 'cordisx/contracts';
-import type { PluginRuntimeManifestV8 } from '@cordisx/protocol/plugin-manifest/v8';
 
 // Keep product-owned avatar packages visible to Vite's initial dependency
 // scan without evaluating React-bound modules before the Host publishes its
@@ -9,7 +8,7 @@ import type { PluginRuntimeManifestV8 } from '@cordisx/protocol/plugin-manifest/
 const avatarDevelopmentDependencies = () =>
   Promise.all([
     import('@oneworks/avatar'),
-    import('@oneworks/avatar-react'),
+    import('@oneworks/avatar-react/renderer'),
   ]);
 void avatarDevelopmentDependencies;
 
@@ -22,6 +21,7 @@ import { ChatroomAgentSessionController } from './agent-session-controller.js';
 import { ChatroomConversationController } from './conversation-source.js';
 import { createLazyChatroomPage } from './chatroom-page-loader.js';
 import { ChatroomPageSource } from './chatroom-page-source.js';
+import { manifest, roomSessionDetailRoute } from './chatroom-runtime-contract.js';
 import { CHATROOM_MANAGER_CONTENT_DECLARATIONS, registerChatroomManager } from './manager-chat.js';
 import { ChatroomProductBase } from './product-base.js';
 import { configurationFromEntitySnapshot } from './entity-registry-configuration.js';
@@ -114,44 +114,13 @@ export type ChatroomMessages = {
 };
 
 export { Config, configApplies };
+export { manifest, roomSessionDetailRoute };
 
 const message = (key: keyof ChatroomMessages, fallback: string) => ({
   namespace: 'chatroom',
   key,
   fallback,
 } as const);
-
-export const manifest = {
-  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v8.schema.json',
-  schemaVersion: 8,
-  id: 'chatroom',
-  name: 'Chatroom',
-  capabilities: [
-    { name: 'agents.create', required: true, scope: {} },
-    { name: 'agents.resume', required: true, scope: {} },
-    { name: 'agents.get', required: true, scope: {} },
-    { name: 'agents.message.submit', required: true, scope: {} },
-    { name: 'agents.message.cancel', required: true, scope: {} },
-    { name: 'sessions.get', required: true, scope: {} },
-    { name: 'sessions.subscribe', required: true, scope: {} },
-    {
-      name: 'approvals.request',
-      required: false,
-      scope: { sessionIds: { kind: 'host-route-param', routeId: 'room-session-detail', param: 'sessionId' } },
-    },
-    {
-      name: 'approvals.answer',
-      required: false,
-      scope: {
-        authorityRequester: {
-          kind: 'approval-authority-requester-route',
-          requester: { kind: 'host-route-param', routeId: 'room-session-detail', param: 'sessionId' },
-        },
-      },
-    },
-  ],
-  services: [],
-} as const satisfies PluginRuntimeManifestV8;
 
 export const inject = [
   'i18n',
@@ -193,13 +162,6 @@ const roomRoute = {
   ...newRoomRoute,
   id: 'room',
   path: '/main/chatroom/:roomId',
-} as const;
-
-/** Host-owned exact Session authority route; ordinary Room navigation remains unchanged. */
-export const roomSessionDetailRoute = {
-  ...newRoomRoute,
-  id: 'room-session-detail',
-  path: '/main/chatroom/:roomId/session/:sessionId',
 } as const;
 
 function agentConfiguration(config: unknown): ChatroomAgentConfiguration {

@@ -9,7 +9,10 @@ test('Chatroom owns its Room page, composer, delivery, and approval seams', asyn
   ]);
 
   assert.match(pluginSource, /new ChatroomPageSource\(controller, agentSession, composerSettings\)/);
-  assert.match(pluginSource, /ctx\.pages\.register\(page, createLazyChatroomPage\(pageSource, product\.sidebarImages\)\)/);
+  assert.match(
+    pluginSource,
+    /ctx\.pages\.register\(page, createLazyChatroomPage\(pageSource, product\.sidebarImages\)\)/,
+  );
   assert.doesNotMatch(pluginSource, /agentConversationShell/);
   assert.doesNotMatch(pluginSource, /registerSourceV[6-9]/);
   assert.doesNotMatch(pluginSource, /conversation\.mount/);

@@ -5,7 +5,7 @@
   "description": "Chatroom Room collaboration plugin for CordisX",
   "license": "MIT",
   "type": "module",
-  "main": "./dist/chatroom.js",
+  "main": "./dist/runtime/chatroom.js",
   "types": "./dist/chatroom.d.ts",
   "files": [
     "dist",
@@ -15,7 +15,7 @@
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/build-runtime-bundle.mjs && node scripts/copy-build-assets.mjs",
+    "build": "node scripts/clean-build-output.mjs && tsc -p tsconfig.json && vite build --config vite.config.mjs && node scripts/verify-runtime-bundle.mjs && node scripts/copy-build-assets.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test test/*.mjs",
     "check": "npm run typecheck && npm run build && npm test",

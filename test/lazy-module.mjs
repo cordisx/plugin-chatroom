@@ -6,7 +6,9 @@ import { loadModuleOnce } from '../dist/lazy-module.js';
 test('defers a module until first demand and reuses the owning loader request', async () => {
   let loads = 0;
   let release;
-  const pending = new Promise(resolve => { release = resolve; });
+  const pending = new Promise(resolve => {
+    release = resolve;
+  });
   const load = loadModuleOnce(async () => {
     loads += 1;
     await pending;

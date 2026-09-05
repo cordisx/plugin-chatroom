@@ -1,6 +1,5 @@
 import { type AgentAvatarRef, cloneAgentAvatarRef } from '@cordisx/protocol/agent-avatar/v1';
 import { type AvatarDefinition, createSeededAvatarDefinition, parseAvatarDefinition } from '@oneworks/avatar';
-import avatarVendorCss from '@oneworks/avatar-react/style.css';
 import React, {
   lazy,
   type ReactNode,
@@ -113,23 +112,6 @@ export function participantInitials(label: string): string {
     ? words.slice(0, 2).map(word => Array.from(word)[0]).join('')
     : Array.from(normalized).slice(0, 2).join('')).toLocaleUpperCase();
 }
-
-const vendorAvatarRules = (avatarVendorCss.match(/\.oneworks-avatar[^{}]*\{[^{}]*\}/gu) ?? [])
-  .slice(0, 6)
-  .map(rule =>
-    rule
-      .replace(/^\.oneworks-avatar/u, '.cx-chatroom-avatar .oneworks-avatar')
-      .replace(/,\.oneworks-avatar-editor(?: \*)?/gu, '')
-  )
-  .join('\n');
-if (
-  avatarVendorCss !== ''
-  && !vendorAvatarRules.includes('.cx-chatroom-avatar .oneworks-avatar>.interactive-avatar')
-) {
-  throw new Error('OneWorks Avatar RC.8 style export is incompatible with Chatroom.');
-}
-
-export const CHATROOM_AVATAR_VENDOR_STYLES = vendorAvatarRules;
 
 interface FailureBoundaryProps {
   readonly resetKey: string;

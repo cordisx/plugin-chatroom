@@ -31,6 +31,8 @@ test('registers one plugin-owned lazy React Room page through public CordisX mod
   assert.match(page, /cx-chatroom-composer/u);
   assert.match(page, /ChatroomAvatar/u);
   assert.match(page, /ChatroomCompositeAvatar/u);
+  assert.match(page, /import '\.\/chatroom-page\.css'/u);
+  assert.doesNotMatch(page, /data-chatroom-page-styles|CHATROOM_AVATAR_VENDOR_STYLES/u);
   assert.match(css, /@media \(max-width: 760px\)/u);
   assert.doesNotMatch(
     `${entry}\n${page}\n${pageSource}`,
@@ -79,31 +81,39 @@ test('publishes only completed generic images to sidebar and semantic icons to M
   assert.doesNotMatch(manager, /avatar-stack|cloneAgentAvatarRef/u);
 });
 
-test('pins OneWorks RC.8, defers its React renderer, and rejects a private React bundle', async () => {
-  const [packageText, entry, avatar, renderer, build, notices] = await Promise.all([
+test('pins OneWorks RC.8 and produces the lazy graph through the public CordisX Vite config', async () => {
+  const [packageText, entry, avatar, renderer, viteConfig, verify, notices] = await Promise.all([
     source('package.json'),
     source('src/chatroom.ts'),
     source('src/avatar.tsx'),
     source('src/avatar-renderer.tsx'),
-    source('scripts/build-runtime-bundle.mjs'),
+    source('vite.config.mjs'),
+    source('scripts/verify-runtime-bundle.mjs'),
     source('THIRD_PARTY_NOTICES.md'),
   ]);
   const packageJson = JSON.parse(packageText);
   assert.equal(packageJson.devDependencies['@oneworks/avatar'], '1.0.0-rc.8');
   assert.equal(packageJson.devDependencies['@oneworks/avatar-react'], '1.0.0-rc.8');
   assert.match(entry, /avatarDevelopmentDependencies/u);
-  assert.match(entry, /import\('@oneworks\/avatar-react'\)/u);
+  assert.match(entry, /import\('@oneworks\/avatar-react\/renderer'\)/u);
   assert.doesNotMatch(avatar, /from '@oneworks\/avatar-react'/u);
   assert.match(avatar, /import\('\.\/avatar-renderer\.js'\)/u);
   assert.match(avatar, /from 'cordisx\/react'/u);
-  assert.match(renderer, /from '@oneworks\/avatar-react'/u);
+  assert.match(renderer, /from '@oneworks\/avatar-react\/renderer'/u);
+  assert.match(renderer, /import '@oneworks\/avatar-react\/renderer\.css'/u);
+  assert.doesNotMatch(renderer, /@oneworks\/avatar-react(?:'|\/style\.css)/u);
   assert.match(renderer, /from 'cordisx\/react'/u);
-  assert.match(build, /private React renderer/u);
-  assert.match(build, /MAX_PLUGIN_RUNTIME_MODULE_BYTES = 24 \* 1024 \* 1024/u);
+  assert.match(viteConfig, /cordisXPluginViteConfig/u);
+  assert.match(viteConfig, /from 'cordisx\/vite'/u);
+  assert.match(viteConfig, /outDir: '\.\/dist\/runtime'/u);
+  assert.match(viteConfig, /entryFileName: 'chatroom\.js'/u);
+  assert.match(verify, /MAX_PLUGIN_RUNTIME_MODULE_BYTES = 24 \* 1024 \* 1024/u);
+  assert.match(verify, /MAX_CHATROOM_INITIAL_GRAPH_BYTES = 2 \* 1024 \* 1024/u);
+  assert.match(verify, /cordisx\.plugin-generation-artifact\/v1/u);
   assert.match(notices, /MIT License/u);
 });
 
-test('keeps the built runtime entry within the Host immutable-module ceiling', async () => {
-  const metadata = await stat(new URL('../dist/chatroom.js', import.meta.url));
-  assert.ok(metadata.size <= 24 * 1024 * 1024, `runtime entry is ${metadata.size} bytes`);
+test('keeps the built runtime root entry within the Chatroom initial-module ceiling', async () => {
+  const metadata = await stat(new URL('../dist/runtime/chatroom.js', import.meta.url));
+  assert.ok(metadata.size <= 2 * 1024 * 1024, `runtime entry is ${metadata.size} bytes`);
 });
