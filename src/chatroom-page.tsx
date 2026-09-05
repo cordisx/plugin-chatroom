@@ -8,7 +8,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'cordisx/react';
-import { Button, EmptyState, MarkdownViewer } from 'cordisx/ui';
+import { AttachmentPlaceholder, Button, EmptyState, MarkdownViewer } from 'cordisx/ui';
 import type { CordisXReactPageProps } from 'cordisx/contracts';
 
 import { ChatroomAvatar } from './avatar.js';
@@ -316,6 +316,7 @@ function Composer({ roomId, source, shortcutPolicy, navigation, signal, t }: {
   };
   return (
     <form className="cx-chatroom-composer" onSubmit={onSubmit}>
+      <AttachmentPlaceholder className="cx-chatroom-composer__attachment" />
       <textarea
         value={draft}
         rows={1}
