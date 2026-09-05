@@ -20,16 +20,28 @@ const result = await build({
       // CordisX's public plugin builder: provide that peer from the shared
       // runtime instead of bundling a second renderer. Plugin source itself
       // imports React and UI only through the public cordisx/* modules.
-      bundle.onResolve({ filter: /^react-dom(?:\/client)?$/ }, args =>
-        args.importer.includes('/@oneworks/avatar-react/')
-          ? { path: args.path, namespace: 'cordisx-shared-react-dom-peer' }
-          : undefined);
+      bundle.onResolve(
+        { filter: /^react-dom(?:\/client)?$/ },
+        args =>
+          args.importer.includes('/@oneworks/avatar-react/')
+            ? { path: args.path, namespace: 'cordisx-shared-react-dom-peer' }
+            : undefined,
+      );
       bundle.onLoad({ filter: /.*/, namespace: 'cordisx-shared-react-dom-peer' }, args => {
         const client = args.path.endsWith('/client');
         const names = client ? ['createRoot', 'hydrateRoot', 'version'] : [
-          'createPortal', 'flushSync', 'prefetchDNS', 'preconnect', 'preinit',
-          'preinitModule', 'preload', 'preloadModule', 'requestFormReset',
-          'useFormState', 'useFormStatus', 'version',
+          'createPortal',
+          'flushSync',
+          'prefetchDNS',
+          'preconnect',
+          'preinit',
+          'preinitModule',
+          'preload',
+          'preloadModule',
+          'requestFormReset',
+          'useFormState',
+          'useFormStatus',
+          'version',
         ];
         return {
           contents: `const current = () => {
@@ -41,7 +53,11 @@ export default new Proxy({}, { get(_target, key) {
   const value = current()[key];
   return typeof value === 'function' ? value.bind(current()) : value;
 } });
-${names.filter(name => name !== 'version').map(name => `export const ${name} = (...args) => current().${name}(...args);`).join('\n')}
+${
+            names.filter(name => name !== 'version').map(name =>
+              `export const ${name} = (...args) => current().${name}(...args);`
+            ).join('\n')
+          }
 export const version = '19.2.8';`,
           loader: 'js',
         };
@@ -74,7 +90,7 @@ if (runtimeMetadata.size > MAX_PLUGIN_RUNTIME_MODULE_BYTES) {
 }
 
 const privateRenderer = Object.keys(result.metafile.inputs).find(input =>
-  /(?:^|\/)node_modules\/(?:react|react-dom)(?:\/|$)/u.test(input.replaceAll('\\', '/')),
+  /(?:^|\/)node_modules\/(?:react|react-dom)(?:\/|$)/u.test(input.replaceAll('\\', '/'))
 );
 if (privateRenderer !== undefined) {
   throw new Error(`Chatroom bundle contains a private React renderer: ${privateRenderer}`);

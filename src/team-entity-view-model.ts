@@ -1,14 +1,5 @@
-import {
-  agentAvatarForDefinition,
-  type AgentDefinition,
-  type AgentDefinitionIdentity,
-} from './agent-definition.js';
-import type {
-  ChatroomRoomRegistry,
-  Room,
-  RoomRun,
-  StoredRoomRunDetailsUrl,
-} from './room.js';
+import { agentAvatarForDefinition, type AgentDefinition, type AgentDefinitionIdentity } from './agent-definition.js';
+import type { ChatroomRoomRegistry, Room, RoomRun, StoredRoomRunDetailsUrl } from './room.js';
 import type { ChatroomAgentConfiguration } from './agent-definition.js';
 
 export type TeamEntityRoleFilter = 'all' | 'leader' | 'member';
@@ -135,17 +126,18 @@ const sameIdentity = (left: AgentDefinitionIdentity, right: AgentDefinitionIdent
 const sorted = (values: readonly string[] | undefined): readonly string[] =>
   Object.freeze([...(values ?? [])].sort((left, right) => left.localeCompare(right)));
 
-const declared = (values: readonly string[] | undefined): readonly string[] =>
-  Object.freeze([...(values ?? [])]);
+const declared = (values: readonly string[] | undefined): readonly string[] => Object.freeze([...(values ?? [])]);
 
 const declaredCapabilitiesFor = (definition: AgentDefinition | undefined): TeamEntityDeclaredCapabilities =>
   Object.freeze({
-    promptSections: Object.freeze((definition?.promptSections ?? []).map(section => Object.freeze({
-      sectionId: section.sectionId,
-      kind: section.kind,
-      text: section.text,
-      provenance: 'direct' as const,
-    }))),
+    promptSections: Object.freeze((definition?.promptSections ?? []).map(section =>
+      Object.freeze({
+        sectionId: section.sectionId,
+        kind: section.kind,
+        text: section.text,
+        provenance: 'direct' as const,
+      })
+    )),
     rules: declared(definition?.rules),
     skills: declared(definition?.skills),
     tools: Object.freeze({
@@ -158,13 +150,15 @@ const declaredCapabilitiesFor = (definition: AgentDefinition | undefined): TeamE
     }),
     runtime: Object.freeze({
       ...(definition?.runtimeDefaults?.adapterId === undefined
-        ? {} : { adapterId: definition.runtimeDefaults.adapterId }),
+        ? {}
+        : { adapterId: definition.runtimeDefaults.adapterId }),
       ...(definition?.runtimeDefaults?.model === undefined ? {} : {
         providerId: definition.runtimeDefaults.model.providerId,
         modelId: definition.runtimeDefaults.model.modelId,
       }),
       ...(definition?.runtimeDefaults?.effort === undefined
-        ? {} : { effort: definition.runtimeDefaults.effort }),
+        ? {}
+        : { effort: definition.runtimeDefaults.effort }),
     }),
     ...(definition === undefined ? {} : {
       inheritance: Object.freeze({
@@ -183,29 +177,37 @@ const activeSessionsFor = (
   memberId: string,
   definition: AgentDefinitionIdentity,
   rooms: readonly Room[],
-): readonly TeamEntityActiveSession[] => Object.freeze(rooms.flatMap(room => {
-  const membership = room.memberships.find(candidate =>
-    candidate.memberId === memberId && sameIdentity(candidate.definition, definition));
-  if (membership === undefined) return [];
-  return room.runs.flatMap(run => {
-    if (run.memberId !== memberId
-      || run.taskBinding?.state !== 'active'
-      || !sameIdentity(run.taskBinding.definition, definition)
-      || run.detailsUrl === undefined
-      || (run.presence.state !== 'joined' && run.presence.state !== 'ready')) return [];
-    return [Object.freeze({
-      roomId: room.id,
-      roomTitle: room.title,
-      participantId: membership.participantId,
-      runId: run.runId,
-      runTitle: run.title,
-      status: run.status,
-      detailsUrl: Object.freeze({ ...run.detailsUrl }),
-    })];
-  });
-}).sort((left, right) => left.roomTitle.localeCompare(right.roomTitle)
-  || left.runTitle.localeCompare(right.runTitle)
-  || left.runId.localeCompare(right.runId)));
+): readonly TeamEntityActiveSession[] =>
+  Object.freeze(
+    rooms.flatMap(room => {
+      const membership = room.memberships.find(candidate =>
+        candidate.memberId === memberId && sameIdentity(candidate.definition, definition)
+      );
+      if (membership === undefined) return [];
+      return room.runs.flatMap(run => {
+        if (
+          run.memberId !== memberId
+          || run.taskBinding?.state !== 'active'
+          || !sameIdentity(run.taskBinding.definition, definition)
+          || run.detailsUrl === undefined
+          || (run.presence.state !== 'joined' && run.presence.state !== 'ready')
+        ) return [];
+        return [Object.freeze({
+          roomId: room.id,
+          roomTitle: room.title,
+          participantId: membership.participantId,
+          runId: run.runId,
+          runTitle: run.title,
+          status: run.status,
+          detailsUrl: Object.freeze({ ...run.detailsUrl }),
+        })];
+      });
+    }).sort((left, right) =>
+      left.roomTitle.localeCompare(right.roomTitle)
+      || left.runTitle.localeCompare(right.runTitle)
+      || left.runId.localeCompare(right.runId)
+    ),
+  );
 
 const relationshipKindFor = (
   memberId: string,
@@ -222,8 +224,9 @@ export function projectTeamEntities(
   configuration: ChatroomAgentConfiguration,
   rooms: readonly Room[],
 ): readonly TeamEntityViewModel[] {
-  const definitions = new Map(configuration.definitions.map(definition =>
-    [identityKey(definition.identity), definition]));
+  const definitions = new Map(
+    configuration.definitions.map(definition => [identityKey(definition.identity), definition]),
+  );
   const seedLeaderIds = new Set(configuration.seedLeaderIds);
   const directReports = new Map<string, string[]>();
   for (const member of configuration.members) {
@@ -255,12 +258,12 @@ export function projectTeamEntities(
           seedLeaderIds,
         ),
         ...(member.reportsToMemberId === undefined
-          ? {} : { reportsToMemberId: member.reportsToMemberId }),
+          ? {}
+          : { reportsToMemberId: member.reportsToMemberId }),
         directReportMemberIds: sorted(directReports.get(member.memberId)),
         relatedMemberIds: sorted(member.relatedMemberIds),
       }),
-      extendsDefinitions: Object.freeze((definition?.extends ?? []).map(identity =>
-        Object.freeze({ ...identity }))),
+      extendsDefinitions: Object.freeze((definition?.extends ?? []).map(identity => Object.freeze({ ...identity }))),
       source: Object.freeze({
         kind: 'agent-configuration' as const,
         ...(definition?.contract === undefined ? {} : { contract: definition.contract }),
@@ -273,31 +276,34 @@ export function projectTeamEntities(
   }));
 }
 
-const searchableTextFor = (entity: TeamEntityViewModel): string => [
-  entity.memberId,
-  entity.label,
-  entity.definitionIdentity.agentId,
-  entity.definitionIdentity.revision,
-  entity.definitionName,
-  entity.description,
-  entity.relationships.reportsToMemberId,
-  ...entity.relationships.directReportMemberIds,
-  ...entity.relationships.relatedMemberIds,
-  ...entity.extendsDefinitions.flatMap(identity => [identity.agentId, identity.revision]),
-  ...entity.declaredCapabilities.rules,
-  ...entity.declaredCapabilities.skills,
-  ...entity.declaredCapabilities.tools.include,
-  ...entity.declaredCapabilities.tools.exclude,
-  ...entity.declaredCapabilities.mcpServers.include,
-  ...entity.declaredCapabilities.mcpServers.exclude,
-].filter((value): value is string => value !== undefined).join('\n').toLocaleLowerCase();
+const searchableTextFor = (entity: TeamEntityViewModel): string =>
+  [
+    entity.memberId,
+    entity.label,
+    entity.definitionIdentity.agentId,
+    entity.definitionIdentity.revision,
+    entity.definitionName,
+    entity.description,
+    entity.relationships.reportsToMemberId,
+    ...entity.relationships.directReportMemberIds,
+    ...entity.relationships.relatedMemberIds,
+    ...entity.extendsDefinitions.flatMap(identity => [identity.agentId, identity.revision]),
+    ...entity.declaredCapabilities.rules,
+    ...entity.declaredCapabilities.skills,
+    ...entity.declaredCapabilities.tools.include,
+    ...entity.declaredCapabilities.tools.exclude,
+    ...entity.declaredCapabilities.mcpServers.include,
+    ...entity.declaredCapabilities.mcpServers.exclude,
+  ].filter((value): value is string => value !== undefined).join('\n').toLocaleLowerCase();
 
 const matchesFilters = (entity: TeamEntityViewModel, filters: TeamEntityFilters): boolean => {
   const query = filters.query?.trim().toLocaleLowerCase();
   if (query !== undefined && query !== '' && !searchableTextFor(entity).includes(query)) return false;
   if (filters.role !== undefined && filters.role !== 'all' && entity.role !== filters.role) return false;
-  if (filters.session !== undefined && filters.session !== 'all'
-    && entity.sessionState !== filters.session) return false;
+  if (
+    filters.session !== undefined && filters.session !== 'all'
+    && entity.sessionState !== filters.session
+  ) return false;
   return filters.relationship === undefined || filters.relationship === 'all'
     || entity.relationships.kind === filters.relationship;
 };
@@ -308,8 +314,10 @@ export function buildTeamArchitectureViewModel(
 ): TeamArchitectureViewModel {
   const entities = projectTeamEntities(snapshot.configuration, snapshot.rooms);
   const byId = new Map(entities.map(entity => [entity.memberId, entity]));
-  const matchedMemberIds = new Set(entities.filter(entity => matchesFilters(entity, filters))
-    .map(entity => entity.memberId));
+  const matchedMemberIds = new Set(
+    entities.filter(entity => matchesFilters(entity, filters))
+      .map(entity => entity.memberId),
+  );
   const children = new Map<string, TeamEntityViewModel[]>();
   for (const entity of entities) {
     const managerId = entity.relationships.reportsToMemberId;

@@ -1,0 +1,24 @@
+name: Formatting
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  formatting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install --global npm@12.0.2 --registry=https://registry.npmjs.org
+      - run: test "$(npm --version)" = "12.0.2"
+      # Permit only the exact Git dependencies declared at the project root.
+      - run: npm ci --ignore-scripts --allow-git=root
+      - run: npm run format:check

@@ -1,8 +1,4 @@
-import type {
-  CordisXI18n,
-  CordisXLocalizedText,
-  CordisXLocalizationSeat,
-} from 'cordisx/contracts';
+import type { CordisXI18n, CordisXLocalizationSeat, CordisXLocalizedText } from 'cordisx/contracts';
 
 export const TALENT_MARKET_LOCALE_NAMESPACE = 'talent-market';
 
@@ -29,7 +25,8 @@ const EN_MESSAGES = {
   'page.title': 'Talent marketplace',
   'page.description': 'Share and discover entities and organizational structures when the talent marketplace launches.',
   'empty.title': 'Coming soon',
-  'empty.description': 'When the talent marketplace launches, you can share and discover entities and organizational structures here.',
+  'empty.description':
+    'When the talent marketplace launches, you can share and discover entities and organizational structures here.',
   'action.back': 'Back',
 } as const satisfies Readonly<Record<keyof TalentMarketMessages, string>>;
 

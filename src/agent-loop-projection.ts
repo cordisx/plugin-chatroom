@@ -1,4 +1,7 @@
-import type { AgentConversationItem, AgentConversationParticipant } from '@cordisx/protocol/agent-conversation-shell/v3';
+import type {
+  AgentConversationItem,
+  AgentConversationParticipant,
+} from '@cordisx/protocol/agent-conversation-shell/v3';
 import type { AgentLoopEvent } from '@cordisx/protocol/agent-loop/v4';
 
 import { projectRoomParticipant, text } from './conversation-model.js';
@@ -17,17 +20,17 @@ import {
 } from './room-agent-operations.js';
 import {
   closeRoomRun,
+  createChatroomOpaqueId,
   createRoom,
   nextRoomTimelineSequence,
   replaceRoomRun,
   replaceRoomRunProjection,
-  roomRunPublicProjectionForItem,
-  roomRunPublicProjectionMatchesItem,
-  roomRunOwnsAgentLoopBinding,
-  createChatroomOpaqueId,
   type Room,
   type RoomImageReference,
+  roomRunOwnsAgentLoopBinding,
   type RoomRunPublicProjection,
+  roomRunPublicProjectionForItem,
+  roomRunPublicProjectionMatchesItem,
   type RoomRunStatus,
 } from './room.js';
 
@@ -40,12 +43,15 @@ const memberParticipant = (room: Room, runId: string): AgentConversationParticip
   const run = room.runs.find(candidate => candidate.runId === runId)!;
   const member = room.memberships.find(candidate => candidate.memberId === run.memberId)!;
   const participant = room.participants.find(candidate => candidate.id === member.participantId);
-  return projectRoomParticipant(participant ?? {
-    id: member.participantId,
-    name: member.label,
-    kind: 'agent',
-    avatar: member.avatar,
-  }, room);
+  return projectRoomParticipant(
+    participant ?? {
+      id: member.participantId,
+      name: member.label,
+      kind: 'agent',
+      avatar: member.avatar,
+    },
+    room,
+  );
 };
 
 const advance = (room: Room, runId: string, eventCursor: number, status?: RoomRunStatus) =>
@@ -56,18 +62,23 @@ const publicEventItemId = (
   runId: string,
   event: AgentLoopEvent,
   semantic: Readonly<Record<string, string | number | boolean | null>>,
-) => createChatroomOpaqueId(namespace, runId, canonicalRoomPayloadHash({
-  type: event.type,
-  turn: event.turn ?? null,
-  operationId: event.causation?.operationId ?? null,
-  ...semantic,
-}));
+) =>
+  createChatroomOpaqueId(
+    namespace,
+    runId,
+    canonicalRoomPayloadHash({
+      type: event.type,
+      turn: event.turn ?? null,
+      operationId: event.causation?.operationId ?? null,
+      ...semantic,
+    }),
+  );
 
 const appendItem = (
   room: Room,
   runId: string,
   eventCursor: number,
-  item: Extract<AgentConversationItem, { kind: 'message' | 'status' }>,
+  item: Extract<AgentConversationItem, { kind: 'message' | 'status'; }>,
   status?: RoomRunStatus,
   images?: readonly RoomImageReference[],
 ) => {
@@ -78,14 +89,17 @@ const appendItem = (
   // replay advances only the new generation's cursor and keeps the first
   // durable public projection unchanged.
   const correlation: RoomRunPublicProjection = roomRunPublicProjectionForItem(item);
-  const compatibleCorrelation = (candidate: RoomRunPublicProjection) => candidate.kind === correlation.kind
+  const compatibleCorrelation = (candidate: RoomRunPublicProjection) =>
+    candidate.kind === correlation.kind
     && candidate.association === correlation.association;
   const run = room.runs.find(candidate => candidate.runId === runId)!;
   const recorded = run.publicProjections?.find(candidate => candidate.itemId === item.itemId);
   if (recorded !== undefined) {
     const visible = room.items.find(candidate => candidate.itemId === item.itemId);
-    if (!compatibleCorrelation(recorded)
-      || (visible !== undefined && !roomRunPublicProjectionMatchesItem(recorded, visible))) {
+    if (
+      !compatibleCorrelation(recorded)
+      || (visible !== undefined && !roomRunPublicProjectionMatchesItem(recorded, visible))
+    ) {
       throw new Error('AgentLoop public projection identity collided with an incompatible Room item.');
     }
     return replaceRoomRunProjection(room, runId, {
@@ -113,7 +127,7 @@ const appendItem = (
   });
 };
 
-function messageProjection(room: Room, runId: string, event: Extract<AgentLoopEvent, { type: 'message' }>): Room {
+function messageProjection(room: Room, runId: string, event: Extract<AgentLoopEvent, { type: 'message'; }>): Room {
   // The private session's echoed user message is not part of the public aggregate.
   if (event.message.role !== 'assistant') return advance(room, runId, event.sequence);
   const itemId = publicEventItemId('agent-message', runId, event, {
@@ -135,10 +149,12 @@ function messageProjection(room: Room, runId: string, event: Extract<AgentLoopEv
     }));
     const label = part.alt?.trim() || 'Image attachment';
     return { kind: 'text' as const, text: text('agent.image.unsupported', `${label} is not supported yet.`) };
-  }) as [{ kind: 'text'; text: ReturnType<typeof text> }, ...{ kind: 'text'; text: ReturnType<typeof text> }[]];
+  }) as [{ kind: 'text'; text: ReturnType<typeof text>; }, ...{ kind: 'text'; text: ReturnType<typeof text>; }[]];
   const participant = memberParticipant(room, runId);
-  if (event.message.purpose === 'member-self-introduction'
-    && (participant.role !== 'agent' || participant.agentIdentity === undefined)) {
+  if (
+    event.message.purpose === 'member-self-introduction'
+    && (participant.role !== 'agent' || participant.agentIdentity === undefined)
+  ) {
     throw new Error('Member self-introduction requires an exact Agent identity.');
   }
   const common = {
@@ -156,27 +172,36 @@ function messageProjection(room: Room, runId: string, event: Extract<AgentLoopEv
     actions: [],
   } as const;
   if (event.message.purpose !== 'member-self-introduction') {
-    const acceptedTurn = room.deliveries.some(candidate => candidate.runId === runId
+    const acceptedTurn = room.deliveries.some(candidate =>
+      candidate.runId === runId
       && candidate.stage === 'send'
       && candidate.state === 'accepted'
       && candidate.acceptance?.kind === 'send'
-      && candidate.acceptance.turn === event.turn);
+      && candidate.acceptance.turn === event.turn
+    );
     if (!acceptedTurn) return advance(room, runId, event.sequence);
-    return appendItem(room, runId, event.sequence, {
-      ...common,
-      author: participant,
-      semantic: {
-        purpose: 'conversation',
-        ...(event.causation === undefined ? {} : { causation: event.causation }),
+    return appendItem(
+      room,
+      runId,
+      event.sequence,
+      {
+        ...common,
+        author: participant,
+        semantic: {
+          purpose: 'conversation',
+          ...(event.causation === undefined ? {} : { causation: event.causation }),
+        },
       },
-    }, 'running', images);
+      'running',
+      images,
+    );
   }
   const introductionEvent = event as typeof event & {
     readonly turn: string;
-    readonly causation: { readonly operationId: string };
+    readonly causation: { readonly operationId: string; };
   };
-  const agentParticipant = participant as Extract<AgentConversationParticipant, { role: 'agent' }> & {
-    readonly agentIdentity: NonNullable<Extract<AgentConversationParticipant, { role: 'agent' }>['agentIdentity']>;
+  const agentParticipant = participant as Extract<AgentConversationParticipant, { role: 'agent'; }> & {
+    readonly agentIdentity: NonNullable<Extract<AgentConversationParticipant, { role: 'agent'; }>['agentIdentity']>;
   };
   const introductionProjection = {
     operationId: introductionEvent.causation.operationId,
@@ -193,30 +218,41 @@ function messageProjection(room: Room, runId: string, event: Extract<AgentLoopEv
   if (!memberSelfIntroductionMatchesProjection(room, runId, introductionProjection)) {
     return advance(room, runId, event.sequence);
   }
-  const projected = appendItem(room, runId, event.sequence, {
-    ...common,
-    author: agentParticipant,
-    semantic: {
-      purpose: 'member-self-introduction',
-      causation: introductionEvent.causation,
-      participantId: agentParticipant.participantId,
-      memberId: room.runs.find(candidate => candidate.runId === runId)!.memberId,
-      runId,
-      binding: event.binding,
-      turn: introductionEvent.turn,
+  const projected = appendItem(
+    room,
+    runId,
+    event.sequence,
+    {
+      ...common,
+      author: agentParticipant,
+      semantic: {
+        purpose: 'member-self-introduction',
+        causation: introductionEvent.causation,
+        participantId: agentParticipant.participantId,
+        memberId: room.runs.find(candidate => candidate.runId === runId)!.memberId,
+        runId,
+        binding: event.binding,
+        turn: introductionEvent.turn,
+      },
     },
-  }, 'running', images);
+    'running',
+    images,
+  );
   return projectMemberSelfIntroduction(projected, runId, introductionProjection);
 }
 
-const approvalItemId = (runId: string, event: Extract<AgentLoopEvent, { type: 'approval' }>) =>
-  createChatroomOpaqueId('agent-approval', runId, canonicalRoomPayloadHash({
-    turn: event.turn,
-    approvalId: event.approval.approvalId,
-    approvalKind: event.approval.kind,
-  }));
+const approvalItemId = (runId: string, event: Extract<AgentLoopEvent, { type: 'approval'; }>) =>
+  createChatroomOpaqueId(
+    'agent-approval',
+    runId,
+    canonicalRoomPayloadHash({
+      turn: event.turn,
+      approvalId: event.approval.approvalId,
+      approvalKind: event.approval.kind,
+    }),
+  );
 
-function projectApproval(room: Room, runId: string, event: Extract<AgentLoopEvent, { type: 'approval' }>): Room {
+function projectApproval(room: Room, runId: string, event: Extract<AgentLoopEvent, { type: 'approval'; }>): Room {
   const run = room.runs.find(candidate => candidate.runId === runId)!;
   const member = room.memberships.find(candidate => candidate.memberId === run.memberId)!;
   const itemId = approvalItemId(runId, event);
@@ -234,7 +270,7 @@ function projectApproval(room: Room, runId: string, event: Extract<AgentLoopEven
     approvalId: event.approval.approvalId,
     approvalKind: event.approval.kind,
   };
-  const next: Extract<AgentConversationItem, { kind: 'approval' }> = event.approval.state === 'pending'
+  const next: Extract<AgentConversationItem, { kind: 'approval'; }> = event.approval.state === 'pending'
     ? {
       ...base,
       state: 'pending',
@@ -245,27 +281,31 @@ function projectApproval(room: Room, runId: string, event: Extract<AgentLoopEven
       ],
     }
     : event.approval.outcome === 'expired'
-      ? {
-        ...base,
-        state: 'failed',
-        actions: [],
-        diagnostic: text('agent.approval.expired', 'Approval expired'),
-      }
-      : { ...base, state: event.approval.outcome, actions: [] };
+    ? {
+      ...base,
+      state: 'failed',
+      actions: [],
+      diagnostic: text('agent.approval.expired', 'Approval expired'),
+    }
+    : { ...base, state: event.approval.outcome, actions: [] };
   const correlation = roomRunPublicProjectionForItem(next);
   const recorded = run.publicProjections?.find(candidate => candidate.itemId === itemId);
-  if (recorded !== undefined && (recorded.kind !== 'approval'
-    || recorded.association !== correlation.association
-    || (current !== undefined && !roomRunPublicProjectionMatchesItem(recorded, current)))) {
+  if (
+    recorded !== undefined && (recorded.kind !== 'approval'
+      || recorded.association !== correlation.association
+      || (current !== undefined && !roomRunPublicProjectionMatchesItem(recorded, current)))
+  ) {
     throw new Error('AgentLoop public projection identity collided with an incompatible Room item.');
   }
   if (current !== undefined && current.kind !== 'approval') {
     throw new Error('AgentLoop public projection identity collided with an incompatible Room item.');
   }
   if (current?.kind === 'approval') {
-    if (current.participantId !== next.participantId || current.memberId !== next.memberId
+    if (
+      current.participantId !== next.participantId || current.memberId !== next.memberId
       || current.runId !== next.runId || current.turn !== next.turn
-      || current.approvalId !== next.approvalId || current.approvalKind !== next.approvalKind) {
+      || current.approvalId !== next.approvalId || current.approvalKind !== next.approvalKind
+    ) {
       throw new Error('AgentLoop approval update changed its exact association.');
     }
     if (current.state !== 'pending' && next.state === 'pending') {
@@ -284,11 +324,13 @@ function projectApproval(room: Room, runId: string, event: Extract<AgentLoopEven
     ...(recorded === undefined ? { publicProjection: correlation } : {}),
   });
   if (event.approval.state === 'resolved' && event.approval.outcome !== 'expired') {
-    const operationId = (event as typeof event & { causation: { operationId: string } }).causation.operationId;
+    const operationId = (event as typeof event & { causation: { operationId: string; }; }).causation.operationId;
     const decision = projected.approvalDecisions.find(candidate => candidate.operationId === operationId);
-    if (decision === undefined || decision.runId !== runId || decision.turn !== event.turn
+    if (
+      decision === undefined || decision.runId !== runId || decision.turn !== event.turn
       || decision.approvalId !== event.approval.approvalId
-      || decision.decision !== event.approval.outcome) {
+      || decision.decision !== event.approval.outcome
+    ) {
       throw new Error('Approval result event did not match its durable decision causation.');
     }
     projected = updateApprovalDecision(projected, operationId, candidate => ({
@@ -323,8 +365,10 @@ function statusProjection(
 /** Projects one run's public events and fences every event by run binding generation and cursor. */
 export function projectAgentLoopEvent(room: Room, runId: string, event: AgentLoopEvent): AgentLoopProjectionResult {
   const run = room.runs.find(candidate => candidate.runId === runId);
-  if (run === undefined || !roomRunOwnsAgentLoopBinding(room, runId, event.binding)
-    || event.sequence <= (run.agentLoopCursor ?? -1)) {
+  if (
+    run === undefined || !roomRunOwnsAgentLoopBinding(room, runId, event.binding)
+    || event.sequence <= (run.agentLoopCursor ?? -1)
+  ) {
     return { accepted: false, room };
   }
   if (event.type === 'message') return { accepted: true, room: messageProjection(room, runId, event) };
@@ -340,12 +384,14 @@ export function projectAgentLoopEvent(room: Room, runId: string, event: AgentLoo
         room: advance(updateCausationAcknowledgement(room, runId, event, 'completed'), runId, event.sequence, 'active'),
       };
     case 'turn.cancelled': {
-      const cancelledEvent = event as typeof event & { causation: { operationId: string } };
+      const cancelledEvent = event as typeof event & { causation: { operationId: string; }; };
       const operationId = cancelledEvent.causation.operationId;
       const current = room.runs.find(candidate => candidate.runId === runId)!;
       const introduction = current.selfIntroduction;
-      if (introduction === undefined || (introduction.operationId !== operationId
-        && introduction.cancellation?.operationId !== operationId)) {
+      if (
+        introduction === undefined || (introduction.operationId !== operationId
+          && introduction.cancellation?.operationId !== operationId)
+      ) {
         throw new Error('Cancelled turn did not match its durable member self-introduction causation.');
       }
       const cancelled = replaceRoomRun(room, runId, {
@@ -357,12 +403,19 @@ export function projectAgentLoopEvent(room: Room, runId: string, event: AgentLoo
     }
     case 'turn.failed': {
       const updated = updateCausationAcknowledgement(
-        room, runId, event, 'failed', event.lifecycle.failure.code,
+        room,
+        runId,
+        event,
+        'failed',
+        event.lifecycle.failure.code,
       );
       const introduction = updated.runs.find(candidate => candidate.runId === runId)!.selfIntroduction;
       const withIntroduction = introduction?.operationId === event.causation?.operationId
         ? requireMemberSelfIntroductionAttention(
-          updated, runId, 'introduction-unavailable', event.lifecycle.failure.code,
+          updated,
+          runId,
+          'introduction-unavailable',
+          event.lifecycle.failure.code,
         )
         : updated;
       return {
@@ -396,23 +449,28 @@ export function projectAgentLoopEvent(room: Room, runId: string, event: AgentLoo
 function updateCausationAcknowledgement(
   room: Room,
   runId: string,
-  event: Extract<AgentLoopEvent, { type: 'lifecycle' }>,
+  event: Extract<AgentLoopEvent, { type: 'lifecycle'; }>,
   state: 'completed' | 'failed',
   failureCode = 'agent-loop-failed',
 ): Room {
   const operationId = event.causation?.operationId;
   const delivery = operationId === undefined
-    ? room.deliveries.find(candidate => candidate.stage === 'send'
+    ? room.deliveries.find(candidate =>
+      candidate.stage === 'send'
       && candidate.runId === runId
       && candidate.state === 'accepted'
       && candidate.acceptance?.kind === 'send'
-      && candidate.acceptance.turn === event.turn)
-    : room.deliveries.find(candidate => candidate.operationId === operationId
-      && candidate.stage === 'send' && candidate.runId === runId);
+      && candidate.acceptance.turn === event.turn
+    )
+    : room.deliveries.find(candidate =>
+      candidate.operationId === operationId
+      && candidate.stage === 'send' && candidate.runId === runId
+    );
   if (delivery?.operation.kind !== 'send') return room;
   const sendOperation = delivery.operation;
   const acknowledgement = room.acknowledgements.find(candidate =>
-    candidate.acknowledgementKey === sendOperation.acknowledgementKey);
+    candidate.acknowledgementKey === sendOperation.acknowledgementKey
+  );
   // Acknowledgement is first-terminal-wins. Replayed or contradictory late
   // lifecycle events may advance the cursor, but cannot replace its outcome.
   if (acknowledgement?.state !== 'pending') return room;
@@ -421,8 +479,10 @@ function updateCausationAcknowledgement(
     : failRoomAcknowledgement(room, sendOperation.acknowledgementKey, failureCode);
   return createRoom({
     ...acknowledged,
-    items: acknowledged.items.map(item => item.kind === 'message' && item.itemId === delivery.userItemId
-      ? { ...item, runState: state === 'completed' ? 'idle' as const : 'failed' as const }
-      : item),
+    items: acknowledged.items.map(item =>
+      item.kind === 'message' && item.itemId === delivery.userItemId
+        ? { ...item, runState: state === 'completed' ? 'idle' as const : 'failed' as const }
+        : item
+    ),
   });
 }

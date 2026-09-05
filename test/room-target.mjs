@@ -8,8 +8,22 @@ const identity = agentId => ({ agentId, revision: 'v1' });
 const memberships = [
   { memberId: 'root-a', label: 'Root A', definition: identity('root-a'), role: 'leader', attentionPolicy: 'ambient' },
   { memberId: 'root-b', label: 'Root B', definition: identity('root-b'), role: 'leader', attentionPolicy: 'ambient' },
-  { memberId: 'review', label: 'Review', definition: identity('review'), role: 'member', attentionPolicy: 'mention-only', reportsToMemberId: 'root-a' },
-  { memberId: 'integrator', label: 'Integrator', definition: identity('integrator'), role: 'member', attentionPolicy: 'mention-only', reportsToMemberId: 'root-a' },
+  {
+    memberId: 'review',
+    label: 'Review',
+    definition: identity('review'),
+    role: 'member',
+    attentionPolicy: 'mention-only',
+    reportsToMemberId: 'root-a',
+  },
+  {
+    memberId: 'integrator',
+    label: 'Integrator',
+    definition: identity('integrator'),
+    role: 'member',
+    attentionPolicy: 'mention-only',
+    reportsToMemberId: 'root-a',
+  },
 ];
 
 test('dispatches ordinary messages to every ambient member, independent of role', () => {
@@ -63,7 +77,9 @@ test('reads back plain, single mention, multiple mentions, and delegation-only r
 
 test('mention-only members receive nothing until mentioned or delegated', () => {
   const room = createRoom({
-    id: 'room', title: 'Room', memberships: memberships.map(member => ({ ...member, attentionPolicy: 'mention-only' })),
+    id: 'room',
+    title: 'Room',
+    memberships: memberships.map(member => ({ ...member, attentionPolicy: 'mention-only' })),
     seedLeaderIds: ['root-a', 'root-b'],
   });
   assert.deepEqual(resolveRoomMessageDispatch(room, 'No target'), { status: 'no-recipients' });

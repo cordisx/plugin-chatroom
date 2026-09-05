@@ -6,14 +6,14 @@ import type {
   AgentLoopTaskDetailsUrl,
 } from '@cordisx/protocol/agent-loop/v4';
 import {
+  type AgentAvatarRef,
   cloneAgentAvatarRef,
   createGeneratedAgentAvatarRef,
-  type AgentAvatarRef,
 } from '@cordisx/protocol/agent-avatar/v1';
 import {
-  CHATROOM_DEFAULT_AGENT_CONFIGURATION,
   agentAvatarForDefinition,
   type AgentDefinitionIdentity,
+  CHATROOM_DEFAULT_AGENT_CONFIGURATION,
   type ChatroomAgentConfiguration,
 } from './agent-definition.js';
 import type { ChatroomAcknowledgeBehavior } from './engagement-config.js';
@@ -27,16 +27,16 @@ export const AGENT_LOOP_TASK_BINDING_CONTRACT = 'cordisx.agent-loop-task-binding
 export const CHATROOM_SHELL_OPAQUE_ID_PATTERN = /^[A-Za-z0-9._~-]+$/;
 const AGENT_LOOP_OPERATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 
-const encodeOpaqueIdPart = (value: string): string => Array.from(value, character =>
-  /^[A-Za-z0-9_-]$/.test(character)
-    ? character
-    : `~${character.codePointAt(0)!.toString(16)}~`).join('');
+const encodeOpaqueIdPart = (value: string): string =>
+  Array.from(value, character =>
+    /^[A-Za-z0-9_-]$/.test(character)
+      ? character
+      : `~${character.codePointAt(0)!.toString(16)}~`).join('');
 
 /** Stable collision-resistant-by-structure ID encoder for formal Shell fields. */
 export function createChatroomOpaqueId(namespace: string, ...parts: readonly string[]): string {
   if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(namespace)) throw new Error('Opaque ID namespace is invalid.');
-  const result = [namespace, ...parts.map(part =>
-    `${Array.from(part).length}.${encodeOpaqueIdPart(part)}`)].join('.');
+  const result = [namespace, ...parts.map(part => `${Array.from(part).length}.${encodeOpaqueIdPart(part)}`)].join('.');
   if (result.length > 512) throw new Error('Opaque ID exceeds the formal Shell limit.');
   return result;
 }
@@ -53,8 +53,7 @@ function requireAgentLoopOperationId(value: string, field: string): void {
   }
 }
 
-export type RoomRunStatus =
-  | 'creating' | 'active' | 'running' | 'waiting' | 'completed' | 'failed' | 'stopped';
+export type RoomRunStatus = 'creating' | 'active' | 'running' | 'waiting' | 'completed' | 'failed' | 'stopped';
 
 /** Persisted formal navigation value returned by accepted create/bind. */
 export type StoredRoomRunDetailsUrl = AgentLoopTaskDetailsUrl;
@@ -73,13 +72,13 @@ export interface RoomRunPresence {
     readonly code: string;
     readonly retryable: boolean;
     readonly diagnostic?: string;
-    readonly retryCommand?: { readonly commandId: string };
+    readonly retryCommand?: { readonly commandId: string; };
   };
 }
 
 export type RoomReactionValue =
-  | { readonly kind: 'emoji'; readonly emoji: string }
-  | { readonly kind: 'semantic'; readonly value: string };
+  | { readonly kind: 'emoji'; readonly emoji: string; }
+  | { readonly kind: 'semantic'; readonly value: string; };
 
 export type RoomAcknowledgementPresentation =
   | {
@@ -97,7 +96,7 @@ export type RoomAcknowledgementPresentation =
     readonly authorMemberId: string;
     readonly text: string;
   }
-  | { readonly kind: 'none'; readonly source: 'chatroom-acknowledgement' };
+  | { readonly kind: 'none'; readonly source: 'chatroom-acknowledgement'; };
 
 export interface RoomAcknowledgement {
   /** Stable across reload and every pending/completed/failed replacement. */
@@ -117,10 +116,9 @@ export interface RoomAcknowledgement {
   readonly failureCode?: string;
 }
 
-export type RoomDeliveryPayload =
-  | null | boolean | number | string
-  | readonly RoomDeliveryPayload[]
-  | { readonly [key: string]: RoomDeliveryPayload };
+export type RoomDeliveryPayload = null | boolean | number | string | readonly RoomDeliveryPayload[] | {
+  readonly [key: string]: RoomDeliveryPayload;
+};
 
 export type RoomDeliveryAttentionCode =
   | 'details-unavailable'
@@ -134,7 +132,7 @@ export type RoomDeliveryAttentionCode =
   | 'send-unavailable';
 
 export type RoomDeliveryOperation =
-  | { readonly kind: 'create'; readonly payload: RoomDeliveryPayload }
+  | { readonly kind: 'create'; readonly payload: RoomDeliveryPayload; }
   | {
     readonly kind: 'send';
     readonly acknowledgementKey: string;
@@ -184,7 +182,7 @@ export interface RoomDelivery {
 export type RoomOutboxStageState = 'planned' | 'sending-unknown' | 'accepted' | 'attention';
 
 export type RoomOutboxCreateStage =
-  | { readonly state: 'not-required' }
+  | { readonly state: 'not-required'; }
   | {
     readonly operationId: string;
     /** Only this delivery plans the shared per-run create command. */
@@ -200,8 +198,8 @@ export interface RoomOutboxDelivery {
   readonly runId: string;
   readonly acknowledgementKey: string;
   readonly create: RoomOutboxCreateStage;
-  readonly acknowledge: { readonly state: 'pending' | 'completed' | 'failed' };
-  readonly send: { readonly operationId: string; readonly state: RoomOutboxStageState };
+  readonly acknowledge: { readonly state: 'pending' | 'completed' | 'failed'; };
+  readonly send: { readonly operationId: string; readonly state: RoomOutboxStageState; };
 }
 
 export interface RoomImageReference {
@@ -215,8 +213,8 @@ export interface RoomImageReference {
 }
 
 /** Connector-issued references stay opaque and are scoped to one member. */
-export type OpaqueConversationHandle = string & { readonly __opaqueConversationHandle: unique symbol };
-export type OpaqueRunHandle = string & { readonly __opaqueRunHandle: unique symbol };
+export type OpaqueConversationHandle = string & { readonly __opaqueConversationHandle: unique symbol; };
+export type OpaqueRunHandle = string & { readonly __opaqueRunHandle: unique symbol; };
 
 interface RoomChannelLinkBase {
   readonly linkId: string;
@@ -226,8 +224,8 @@ interface RoomChannelLinkBase {
 }
 
 export type RoomChannelLink =
-  | (RoomChannelLinkBase & { readonly scope: 'room' })
-  | (RoomChannelLinkBase & { readonly scope: 'member'; readonly memberId: string });
+  | (RoomChannelLinkBase & { readonly scope: 'room'; })
+  | (RoomChannelLinkBase & { readonly scope: 'member'; readonly memberId: string; });
 
 export interface RoomMembership {
   readonly memberId: string;
@@ -273,7 +271,12 @@ export interface RoomRun {
       readonly disposition: 'executed' | 'replayed' | 'reconciled';
     };
     readonly attention?: {
-      readonly code: 'reconciliation-required' | 'operation-conflict' | 'provider-replaced' | 'create-denied' | 'create-unavailable';
+      readonly code:
+        | 'reconciliation-required'
+        | 'operation-conflict'
+        | 'provider-replaced'
+        | 'create-denied'
+        | 'create-unavailable';
       readonly diagnostic?: string;
     };
   };
@@ -394,10 +397,10 @@ export interface RoomPlaygroundAgentEgress {
     readonly task?: string;
     /** Playground-only structured context delivered with the delegated task. */
     readonly context?: {
-      readonly source: { readonly memberId: string; readonly label: string; readonly runId: string };
-      readonly target: { readonly memberId: string; readonly label: string; readonly runId: string };
-      readonly reportsTo?: { readonly memberId: string; readonly label: string };
-      readonly availableTargets: readonly { readonly memberId: string; readonly label: string }[];
+      readonly source: { readonly memberId: string; readonly label: string; readonly runId: string; };
+      readonly target: { readonly memberId: string; readonly label: string; readonly runId: string; };
+      readonly reportsTo?: { readonly memberId: string; readonly label: string; };
+      readonly availableTargets: readonly { readonly memberId: string; readonly label: string; }[];
       readonly communicationMode: 'explicit-mention-required';
       readonly approvalMode: 'reports-to-hierarchy';
     };
@@ -464,7 +467,7 @@ export interface RoomAdmissionMessageLink {
   readonly sessionId: SessionId;
   readonly messageId: MessageId;
   /** Exact Host-stamped plugin provenance expected on the SessionEvent. */
-  readonly owner: { readonly pluginId: string; readonly generation: number };
+  readonly owner: { readonly pluginId: string; readonly generation: number; };
   /**
    * Opaque projection item that was last visible when this later Room message
    * was admitted. It is an ordering fence only: no SessionEvent content,
@@ -481,7 +484,7 @@ export type RoomRunPublicProjection = Readonly<{
 }>;
 
 export function roomRunPublicProjectionForItem(
-  item: Extract<AgentConversationItem, { kind: 'message' | 'status' | 'approval' }>,
+  item: Extract<AgentConversationItem, { kind: 'message' | 'status' | 'approval'; }>,
 ): RoomRunPublicProjection {
   return Object.freeze({
     itemId: item.itemId,
@@ -489,7 +492,8 @@ export function roomRunPublicProjectionForItem(
     association: item.kind === 'message'
       ? `agent:${item.author.participantId}`
       : item.kind === 'approval'
-        ? `approval:${JSON.stringify({
+      ? `approval:${
+        JSON.stringify({
           participantId: item.participantId,
           memberId: item.memberId,
           runId: item.runId,
@@ -497,8 +501,9 @@ export function roomRunPublicProjectionForItem(
           turn: item.turn,
           approvalId: item.approvalId,
           approvalKind: item.approvalKind,
-        })}`
-        : `status:${JSON.stringify({ label: item.label, state: item.state, ariaLive: item.ariaLive })}`,
+        })
+      }`
+      : `status:${JSON.stringify({ label: item.label, state: item.state, ariaLive: item.ariaLive })}`,
   });
 }
 
@@ -506,8 +511,10 @@ export function roomRunPublicProjectionMatchesItem(
   projection: RoomRunPublicProjection,
   item: AgentConversationItem,
 ): boolean {
-  if (projection.kind !== item.kind || (item.kind === 'message'
-    && (item.source !== 'agent-loop' || item.messageId !== projection.itemId || item.author.role !== 'agent'))) {
+  if (
+    projection.kind !== item.kind || (item.kind === 'message'
+      && (item.source !== 'agent-loop' || item.messageId !== projection.itemId || item.author.role !== 'agent'))
+  ) {
     return false;
   }
   return projection.association === roomRunPublicProjectionForItem(item).association;
@@ -521,8 +528,8 @@ export interface RoomParticipant {
 }
 
 export type RoomParticipantPresentation =
-  | { readonly multiParticipant: false; readonly participantPresentation: 'none' }
-  | { readonly multiParticipant: true; readonly participantPresentation: 'none' | 'host-initials' };
+  | { readonly multiParticipant: false; readonly participantPresentation: 'none'; }
+  | { readonly multiParticipant: true; readonly participantPresentation: 'none' | 'host-initials'; };
 
 export interface Room {
   readonly id: string;
@@ -625,21 +632,25 @@ function freezeRun(run: RoomRun, member: RoomMembership): RoomRun {
   }
   for (const projection of publicProjections) {
     requireShellOpaqueId(projection.itemId, 'Room run public projection itemId');
-    if (projection.association.length === 0 || projection.association.length > 1024
+    if (
+      projection.association.length === 0 || projection.association.length > 1024
       || (projection.kind === 'message' && projection.association !== `agent:${member.participantId}`)
       || (projection.kind === 'approval' && !projection.association.startsWith('approval:'))
-      || (projection.kind === 'status' && !projection.association.startsWith('status:'))) {
+      || (projection.kind === 'status' && !projection.association.startsWith('status:'))
+    ) {
       throw new Error('Room run public projection must retain its exact kind/participant association.');
     }
   }
   const frozenPresence = Object.freeze({
     ...presence,
-    ...(presence.failure === undefined ? {} : { failure: Object.freeze({
-      ...presence.failure,
-      ...(presence.failure.retryCommand === undefined ? {} : {
-        retryCommand: Object.freeze({ ...presence.failure.retryCommand }),
+    ...(presence.failure === undefined ? {} : {
+      failure: Object.freeze({
+        ...presence.failure,
+        ...(presence.failure.retryCommand === undefined ? {} : {
+          retryCommand: Object.freeze({ ...presence.failure.retryCommand }),
+        }),
       }),
-    }) }),
+    }),
   });
   if (run.sessionId !== undefined) {
     return Object.freeze({
@@ -658,33 +669,37 @@ function freezeRun(run: RoomRun, member: RoomMembership): RoomRun {
     ...run,
     ...(run.taskBinding === undefined ? {} : { taskBinding: freezeTaskBinding(run.taskBinding) }),
     ...(run.detailsUrl === undefined ? {} : { detailsUrl: Object.freeze({ ...run.detailsUrl }) }),
-    ...(run.rebind === undefined ? {} : { rebind: Object.freeze({
-      ...run.rebind,
-      source: Object.freeze({ ...run.rebind.source }),
-      ...(run.rebind.acceptance === undefined ? {} : { acceptance: Object.freeze({ ...run.rebind.acceptance }) }),
-      ...(run.rebind.attention === undefined ? {} : { attention: Object.freeze({ ...run.rebind.attention }) }),
-    }) }),
-    ...(run.selfIntroduction === undefined ? {} : { selfIntroduction: Object.freeze({
-      ...run.selfIntroduction,
-      binding: freezeTaskBinding(run.selfIntroduction.binding),
-      ...(run.selfIntroduction.acceptance === undefined ? {} : {
-        acceptance: Object.freeze({ ...run.selfIntroduction.acceptance }),
+    ...(run.rebind === undefined ? {} : {
+      rebind: Object.freeze({
+        ...run.rebind,
+        source: Object.freeze({ ...run.rebind.source }),
+        ...(run.rebind.acceptance === undefined ? {} : { acceptance: Object.freeze({ ...run.rebind.acceptance }) }),
+        ...(run.rebind.attention === undefined ? {} : { attention: Object.freeze({ ...run.rebind.attention }) }),
       }),
-      ...(run.selfIntroduction.projection === undefined ? {} : {
-        projection: Object.freeze({ ...run.selfIntroduction.projection }),
-      }),
-      ...(run.selfIntroduction.attention === undefined ? {} : {
-        attention: Object.freeze({ ...run.selfIntroduction.attention }),
-      }),
-      ...(run.selfIntroduction.cancellation === undefined ? {} : {
-        cancellation: Object.freeze({
-          ...run.selfIntroduction.cancellation,
-          ...(run.selfIntroduction.cancellation.attention === undefined ? {} : {
-            attention: Object.freeze({ ...run.selfIntroduction.cancellation.attention }),
+    }),
+    ...(run.selfIntroduction === undefined ? {} : {
+      selfIntroduction: Object.freeze({
+        ...run.selfIntroduction,
+        binding: freezeTaskBinding(run.selfIntroduction.binding),
+        ...(run.selfIntroduction.acceptance === undefined ? {} : {
+          acceptance: Object.freeze({ ...run.selfIntroduction.acceptance }),
+        }),
+        ...(run.selfIntroduction.projection === undefined ? {} : {
+          projection: Object.freeze({ ...run.selfIntroduction.projection }),
+        }),
+        ...(run.selfIntroduction.attention === undefined ? {} : {
+          attention: Object.freeze({ ...run.selfIntroduction.attention }),
+        }),
+        ...(run.selfIntroduction.cancellation === undefined ? {} : {
+          cancellation: Object.freeze({
+            ...run.selfIntroduction.cancellation,
+            ...(run.selfIntroduction.cancellation.attention === undefined ? {} : {
+              attention: Object.freeze({ ...run.selfIntroduction.cancellation.attention }),
+            }),
           }),
         }),
       }),
-    }) }),
+    }),
     presence: frozenPresence,
     publicProjections: Object.freeze(publicProjections.map(projection => Object.freeze({ ...projection }))),
   });
@@ -707,8 +722,10 @@ function freezeAcknowledgement(acknowledgement: RoomAcknowledgement): RoomAcknow
 function freezeDeliveryPayload(value: RoomDeliveryPayload): RoomDeliveryPayload {
   if (Array.isArray(value)) return Object.freeze(value.map(freezeDeliveryPayload));
   if (typeof value === 'object' && value !== null) {
-    return Object.freeze(Object.fromEntries(Object.entries(value)
-      .map(([key, item]) => [key, freezeDeliveryPayload(item)])));
+    return Object.freeze(Object.fromEntries(
+      Object.entries(value)
+        .map(([key, item]) => [key, freezeDeliveryPayload(item)]),
+    ));
   }
   return value;
 }
@@ -736,9 +753,10 @@ function freezeDelivery(delivery: RoomDelivery): RoomDelivery {
 const freezeConfiguredMember = (
   member: ChatroomAgentConfiguration['members'][number],
   configuration: ChatroomAgentConfiguration,
-): RoomMembership => Object.freeze({
-  memberId: member.memberId,
-  participantId: member.participantId ?? member.memberId,
+): RoomMembership =>
+  Object.freeze({
+    memberId: member.memberId,
+    participantId: member.participantId ?? member.memberId,
     label: member.label,
     definition: Object.freeze({ ...member.definition }),
     avatar: agentAvatarForDefinition(member.definition, configuration.definitions),
@@ -777,12 +795,14 @@ export function expandRoomMemberships(
     if (configured.get(seed)?.role !== 'leader') throw new Error('Room seeds must reference configured leaders.');
     visit(seed);
   }
-  const snapshots = configuration.members.filter(member => included.has(member.memberId)).map(member => Object.freeze({
-    ...freezeConfiguredMember(member, configuration),
-    ...(member.reportsToMemberId !== undefined && included.has(member.reportsToMemberId)
-      ? { reportsToMemberId: member.reportsToMemberId }
-      : {}),
-  }));
+  const snapshots = configuration.members.filter(member => included.has(member.memberId)).map(member =>
+    Object.freeze({
+      ...freezeConfiguredMember(member, configuration),
+      ...(member.reportsToMemberId !== undefined && included.has(member.reportsToMemberId)
+        ? { reportsToMemberId: member.reportsToMemberId }
+        : {}),
+    })
+  );
   const [first, ...rest] = snapshots;
   if (first === undefined) throw new Error('Room membership expansion is empty.');
   return Object.freeze([first, ...rest]);
@@ -794,19 +814,21 @@ export function createRoom(input: CreateRoomInput): Room {
     ? expandRoomMemberships(CHATROOM_DEFAULT_AGENT_CONFIGURATION)
     : input.memberships;
   if (rawMemberships.length === 0) throw new Error('Room requires at least one Agent membership.');
-  const memberships = Object.freeze(rawMemberships.map(member => Object.freeze({
-    memberId: member.memberId,
-    participantId: member.participantId ?? member.memberId,
-    label: member.label,
-    definition: Object.freeze({ ...member.definition }),
-    avatar: member.avatar === undefined
-      ? createGeneratedAgentAvatarRef({ namespace: 'agent-definition', agentId: member.definition.agentId })
-      : cloneAgentAvatarRef(member.avatar),
-    role: member.role,
-    attentionPolicy: member.attentionPolicy,
-    ...(member.reportsToMemberId === undefined ? {} : { reportsToMemberId: member.reportsToMemberId }),
-    ...(member.preferredRunId === undefined ? {} : { preferredRunId: member.preferredRunId }),
-  }))) as readonly [RoomMembership, ...RoomMembership[]];
+  const memberships = Object.freeze(rawMemberships.map(member =>
+    Object.freeze({
+      memberId: member.memberId,
+      participantId: member.participantId ?? member.memberId,
+      label: member.label,
+      definition: Object.freeze({ ...member.definition }),
+      avatar: member.avatar === undefined
+        ? createGeneratedAgentAvatarRef({ namespace: 'agent-definition', agentId: member.definition.agentId })
+        : cloneAgentAvatarRef(member.avatar),
+      role: member.role,
+      attentionPolicy: member.attentionPolicy,
+      ...(member.reportsToMemberId === undefined ? {} : { reportsToMemberId: member.reportsToMemberId }),
+      ...(member.preferredRunId === undefined ? {} : { preferredRunId: member.preferredRunId }),
+    })
+  )) as readonly [RoomMembership, ...RoomMembership[]];
   if (new Set(memberships.map(member => member.memberId)).size !== memberships.length) {
     throw new Error('Room member ids must be unique.');
   }
@@ -827,16 +849,20 @@ export function createRoom(input: CreateRoomInput): Room {
     const member = membershipById.get(memberId)!;
     visiting.add(memberId);
     if (member.reportsToMemberId !== undefined) {
-      if (!membershipById.has(member.reportsToMemberId)) throw new Error('reportsToMemberId must reference a Room membership.');
+      if (!membershipById.has(member.reportsToMemberId)) {
+        throw new Error('reportsToMemberId must reference a Room membership.');
+      }
       visit(member.reportsToMemberId);
     }
     visiting.delete(memberId);
     visited.add(memberId);
   };
   for (const member of memberships) visit(member.memberId);
-  const seedLeaderIds = Object.freeze([...(input.seedLeaderIds ?? memberships
-    .filter(member => member.role === 'leader' && member.reportsToMemberId === undefined)
-    .map(member => member.memberId))]);
+  const seedLeaderIds = Object.freeze([
+    ...(input.seedLeaderIds ?? memberships
+      .filter(member => member.role === 'leader' && member.reportsToMemberId === undefined)
+      .map(member => member.memberId)),
+  ]);
   for (const seed of seedLeaderIds) {
     if (membershipById.get(seed)?.role !== 'leader') throw new Error('Room seeds must reference leader memberships.');
   }
@@ -861,12 +887,14 @@ export function createRoom(input: CreateRoomInput): Room {
     if (run.taskBinding !== undefined && !sameIdentity(member.definition, run.taskBinding.definition)) {
       throw new Error('TaskBinding Agent identity does not match the Room member.');
     }
-    if (run.sessionId !== undefined && (run.sessionId.trim() === ''
-      || run.taskBinding !== undefined
-      || run.detailsUrl !== undefined
-      || run.rebind !== undefined
-      || run.selfIntroduction !== undefined
-      || (run.publicProjections?.length ?? 0) !== 0)) {
+    if (
+      run.sessionId !== undefined && (run.sessionId.trim() === ''
+        || run.taskBinding !== undefined
+        || run.detailsUrl !== undefined
+        || run.rebind !== undefined
+        || run.selfIntroduction !== undefined
+        || (run.publicProjections?.length ?? 0) !== 0)
+    ) {
       throw new Error('Session-backed Room runs cannot retain AgentLoop runtime truth.');
     }
     if (run.sessionSelfIntroduction !== undefined) {
@@ -880,21 +908,26 @@ export function createRoom(input: CreateRoomInput): Room {
     if (run.detailsUrl !== undefined && run.taskBinding === undefined) {
       throw new Error('Run details URL requires a persisted TaskBinding.');
     }
-    if (run.detailsUrl !== undefined && (run.detailsUrl.url.trim() === ''
-      || (run.detailsUrl.target !== 'host' && run.detailsUrl.target !== 'external'))) {
+    if (
+      run.detailsUrl !== undefined && (run.detailsUrl.url.trim() === ''
+        || (run.detailsUrl.target !== 'host' && run.detailsUrl.target !== 'external'))
+    ) {
       throw new Error('Run details URL is invalid.');
     }
-    if (run.presence.eventKey !== presenceEventKey(member.participantId, run.memberId, run.runId)
+    if (
+      run.presence.eventKey !== presenceEventKey(member.participantId, run.memberId, run.runId)
       || run.presence.participantId !== member.participantId
       || run.presence.memberId !== run.memberId
-      || run.presence.runId !== run.runId) {
+      || run.presence.runId !== run.runId
+    ) {
       throw new Error('Run presence event key does not match the run.');
     }
     if (!Number.isSafeInteger(run.presence.attempt) || run.presence.attempt < 1) {
       throw new Error('Run presence attempt must be a positive integer.');
     }
     if (run.rebind !== undefined) {
-      if (!Number.isSafeInteger(run.rebind.cycle)
+      if (
+        !Number.isSafeInteger(run.rebind.cycle)
         || run.rebind.cycle < 1
         || run.rebind.operationId.trim() === ''
         || !Number.isFinite(Date.parse(run.rebind.issuedAt))
@@ -902,15 +935,18 @@ export function createRoom(input: CreateRoomInput): Room {
         || run.rebind.source.task.trim() === ''
         || run.rebind.source.bindingId.trim() === ''
         || !Number.isSafeInteger(run.rebind.source.generation)
-        || run.rebind.source.generation < 1) {
+        || run.rebind.source.generation < 1
+      ) {
         throw new Error('Run rebind recovery correlation is invalid.');
       }
       if (run.rebind.state === 'attention' && run.rebind.attention === undefined) {
         throw new Error('Run rebind attention requires a diagnostic state.');
       }
-      if (run.rebind.state === 'accepted'
+      if (
+        run.rebind.state === 'accepted'
         && (run.rebind.acceptance === undefined
-          || !Number.isFinite(Date.parse(run.rebind.acceptance.firstObservedAt)))) {
+          || !Number.isFinite(Date.parse(run.rebind.acceptance.firstObservedAt)))
+      ) {
         throw new Error('Accepted run rebind requires provider observation metadata.');
       }
     }
@@ -923,7 +959,8 @@ export function createRoom(input: CreateRoomInput): Room {
           'Member self-introduction cancellation operationId',
         );
       }
-      if (introduction.participantId !== member.participantId
+      if (
+        introduction.participantId !== member.participantId
         || introduction.memberId !== member.memberId
         || introduction.runId !== run.runId
         || run.taskBinding === undefined
@@ -932,45 +969,58 @@ export function createRoom(input: CreateRoomInput): Room {
         || (introduction.state === 'accepted' && introduction.acceptance === undefined)
         || (introduction.state === 'completed'
           && introduction.acceptance === undefined && introduction.projection === undefined)
-        || (introduction.state === 'attention' && introduction.attention === undefined)) {
+        || (introduction.state === 'attention' && introduction.attention === undefined)
+      ) {
         throw new Error('Member self-introduction must retain its exact operation/member/run/binding correlation.');
       }
-      if (introduction.acceptance !== undefined && introduction.projection !== undefined
+      if (
+        introduction.acceptance !== undefined && introduction.projection !== undefined
         && (introduction.acceptance.turn !== introduction.projection.turn
-          || introduction.acceptance.messageId !== introduction.projection.messageId)) {
+          || introduction.acceptance.messageId !== introduction.projection.messageId)
+      ) {
         throw new Error('Member self-introduction result and projected message correlation must match.');
       }
-      if (introduction.cancellation?.state === 'accepted'
-        && introduction.cancellation.disposition === undefined) {
+      if (
+        introduction.cancellation?.state === 'accepted'
+        && introduction.cancellation.disposition === undefined
+      ) {
         throw new Error('Accepted member self-introduction cancellation requires delivery disposition.');
       }
-      if (introduction.cancellation?.state === 'attention'
-        && introduction.cancellation.attention === undefined) {
+      if (
+        introduction.cancellation?.state === 'attention'
+        && introduction.cancellation.attention === undefined
+      ) {
         throw new Error('Member self-introduction cancellation attention requires a diagnostic state.');
       }
     }
-    if ((run.presence.state === 'joined' || run.presence.state === 'ready')
+    if (
+      (run.presence.state === 'joined' || run.presence.state === 'ready')
       && run.sessionId === undefined
-      && (run.taskBinding === undefined || run.detailsUrl === undefined)) {
+      && (run.taskBinding === undefined || run.detailsUrl === undefined)
+    ) {
       throw new Error('Joined/ready member presence requires a Session or persisted binding and details URL.');
     }
   }
   for (const member of memberships) {
-    if (member.preferredRunId !== undefined
-      && !runs.some(run => run.runId === member.preferredRunId && run.memberId === member.memberId)) {
+    if (
+      member.preferredRunId !== undefined
+      && !runs.some(run => run.runId === member.preferredRunId && run.memberId === member.memberId)
+    ) {
       throw new Error('Preferred run must belong to its Room member.');
     }
   }
-  const items: readonly AgentConversationItem[] = Object.freeze([...(input.items ?? [])].slice(-500).map(item => {
-    const candidate = item as AgentConversationItem & { readonly semantic?: { readonly purpose: string } };
-    if (candidate.kind !== 'message' || candidate.semantic !== undefined) return item;
-    // Consumer-owned migration for durable Shell v2 Room snapshots. It does
-    // not infer introductions: only legacy visible conversation/ack messages
-    // receive their exact predecessor semantics.
-    return candidate.source === 'chatroom-acknowledgement'
-      ? { ...candidate, semantic: { purpose: 'chatroom-acknowledgement' as const } } as AgentConversationItem
-      : { ...candidate, semantic: { purpose: 'conversation' as const } } as AgentConversationItem;
-  }));
+  const items: readonly AgentConversationItem[] = Object.freeze(
+    [...(input.items ?? [])].slice(-500).map(item => {
+      const candidate = item as AgentConversationItem & { readonly semantic?: { readonly purpose: string; }; };
+      if (candidate.kind !== 'message' || candidate.semantic !== undefined) return item;
+      // Consumer-owned migration for durable Shell v2 Room snapshots. It does
+      // not infer introductions: only legacy visible conversation/ack messages
+      // receive their exact predecessor semantics.
+      return candidate.source === 'chatroom-acknowledgement'
+        ? { ...candidate, semantic: { purpose: 'chatroom-acknowledgement' as const } } as AgentConversationItem
+        : { ...candidate, semantic: { purpose: 'conversation' as const } } as AgentConversationItem;
+    }),
+  );
   if (new Set(items.map(item => item.itemId)).size !== items.length) {
     throw new Error('Room public timeline item ids must be unique.');
   }
@@ -1000,15 +1050,20 @@ export function createRoom(input: CreateRoomInput): Room {
   // useful only while that item remains displayable, so trim orphaned links
   // together with the bounded Room window rather than retaining a shadow
   // message history.
-  const admissionMessageLinks = Object.freeze([...(input.admissionMessageLinks ?? [])]
-    .filter(link => itemById.has(link.itemId))
-    .slice(-CHATROOM_MAX_ADMISSION_MESSAGE_LINKS)
-    .map(link => Object.freeze({
-      ...link,
-      owner: Object.freeze({ ...link.owner }),
-    })));
+  const admissionMessageLinks = Object.freeze(
+    [...(input.admissionMessageLinks ?? [])]
+      .filter(link => itemById.has(link.itemId))
+      .slice(-CHATROOM_MAX_ADMISSION_MESSAGE_LINKS)
+      .map(link =>
+        Object.freeze({
+          ...link,
+          owner: Object.freeze({ ...link.owner }),
+        })
+      ),
+  );
   const admissionMessageKeys = admissionMessageLinks.map(link =>
-    `${link.sessionId.length}:${link.sessionId}${link.messageId.length}:${link.messageId}`);
+    `${link.sessionId.length}:${link.sessionId}${link.messageId.length}:${link.messageId}`
+  );
   if (new Set(admissionMessageKeys).size !== admissionMessageKeys.length) {
     throw new Error('Room admission Session/message links must be unique.');
   }
@@ -1029,7 +1084,8 @@ export function createRoom(input: CreateRoomInput): Room {
     const member = membershipById.get(link.memberId);
     const run = runs.find(candidate => candidate.runId === link.runId);
     const item = itemById.get(link.itemId);
-    if (link.roomId !== input.id
+    if (
+      link.roomId !== input.id
       || member?.participantId !== link.participantId
       || run?.memberId !== link.memberId
       || run.sessionId !== link.sessionId
@@ -1038,7 +1094,8 @@ export function createRoom(input: CreateRoomInput): Room {
       || item.semantic.purpose !== 'conversation'
       || link.owner.pluginId.trim() === ''
       || !Number.isSafeInteger(link.owner.generation)
-      || link.owner.generation < 0) {
+      || link.owner.generation < 0
+    ) {
       throw new Error('Room admission link must retain its exact Room/item/member/run/Session/owner identity.');
     }
   }
@@ -1071,40 +1128,51 @@ export function createRoom(input: CreateRoomInput): Room {
     requireShellOpaqueId(acknowledgement.runId, 'Room acknowledgement runId');
     const run = runs.find(candidate => candidate.runId === acknowledgement.runId);
     const member = membershipById.get(acknowledgement.memberId);
-    if (run?.memberId !== acknowledgement.memberId
-      || member?.participantId !== acknowledgement.participantId) {
+    if (
+      run?.memberId !== acknowledgement.memberId
+      || member?.participantId !== acknowledgement.participantId
+    ) {
       throw new Error('Room acknowledgement must reference its exact member run.');
     }
-    if (acknowledgement.presentation.kind === 'canned-message'
+    if (
+      acknowledgement.presentation.kind === 'canned-message'
       && (acknowledgement.presentation.authorParticipantId !== acknowledgement.participantId
-        || acknowledgement.presentation.authorMemberId !== acknowledgement.memberId)) {
+        || acknowledgement.presentation.authorMemberId !== acknowledgement.memberId)
+    ) {
       throw new Error('Canned acknowledgement author must match its participant/member.');
     }
     if (acknowledgement.presentation.kind === 'canned-message') {
-      requireShellOpaqueId(acknowledgement.presentation.authorParticipantId,
-        'Canned acknowledgement author participantId');
-      requireShellOpaqueId(acknowledgement.presentation.authorMemberId,
-        'Canned acknowledgement author memberId');
+      requireShellOpaqueId(
+        acknowledgement.presentation.authorParticipantId,
+        'Canned acknowledgement author participantId',
+      );
+      requireShellOpaqueId(acknowledgement.presentation.authorMemberId, 'Canned acknowledgement author memberId');
     }
-    if (acknowledgement.presentation.kind === 'reaction'
+    if (
+      acknowledgement.presentation.kind === 'reaction'
       && (acknowledgement.presentation.reactionId
           !== createChatroomOpaqueId('reaction', acknowledgement.acknowledgementKey)
         || acknowledgement.presentation.actorParticipantId !== acknowledgement.participantId
-        || acknowledgement.presentation.state !== acknowledgement.state)) {
+        || acknowledgement.presentation.state !== acknowledgement.state)
+    ) {
       throw new Error('Reaction acknowledgement identity/state does not match its delivery.');
     }
     if (acknowledgement.presentation.kind === 'reaction') {
       requireShellOpaqueId(acknowledgement.presentation.reactionId, 'Acknowledgement reactionId');
-      requireShellOpaqueId(acknowledgement.presentation.actorParticipantId,
-        'Acknowledgement reaction actorParticipantId');
+      requireShellOpaqueId(
+        acknowledgement.presentation.actorParticipantId,
+        'Acknowledgement reaction actorParticipantId',
+      );
     }
   }
-  const outbox = Object.freeze([...(input.outbox ?? [])].map(item => Object.freeze({
-    ...item,
-    create: Object.freeze({ ...item.create }),
-    acknowledge: Object.freeze({ ...item.acknowledge }),
-    send: Object.freeze({ ...item.send }),
-  })));
+  const outbox = Object.freeze([...(input.outbox ?? [])].map(item =>
+    Object.freeze({
+      ...item,
+      create: Object.freeze({ ...item.create }),
+      acknowledge: Object.freeze({ ...item.acknowledge }),
+      send: Object.freeze({ ...item.send }),
+    })
+  ));
   if (new Set(outbox.map(item => item.deliveryId)).size !== outbox.length) {
     throw new Error('Room outbox delivery ids must be unique.');
   }
@@ -1126,21 +1194,27 @@ export function createRoom(input: CreateRoomInput): Room {
   for (const item of outbox) {
     const member = membershipById.get(item.memberId);
     const run = runs.find(candidate => candidate.runId === item.runId);
-    const acknowledgement = acknowledgements.find(candidate => candidate.acknowledgementKey === item.acknowledgementKey);
-    if (member?.participantId !== item.participantId || run?.memberId !== item.memberId
+    const acknowledgement = acknowledgements.find(candidate =>
+      candidate.acknowledgementKey === item.acknowledgementKey
+    );
+    if (
+      member?.participantId !== item.participantId || run?.memberId !== item.memberId
       || acknowledgement?.participantId !== item.participantId
       || acknowledgement.memberId !== item.memberId || acknowledgement.runId !== item.runId
       || acknowledgement.userItemId !== item.userItemId
-      || acknowledgement.state !== item.acknowledge.state) {
+      || acknowledgement.state !== item.acknowledge.state
+    ) {
       throw new Error('Room outbox must retain its exact participant/member/run/user correlation.');
     }
     if (item.create.state !== 'not-required') {
       const create = item.create;
       const owner = outbox.find(candidate => candidate.deliveryId === create.ownerDeliveryId);
-      if (owner?.create.state === 'not-required'
+      if (
+        owner?.create.state === 'not-required'
         || owner?.create.operationId !== create.operationId
         || owner.participantId !== item.participantId
-        || owner.memberId !== item.memberId || owner.runId !== item.runId) {
+        || owner.memberId !== item.memberId || owner.runId !== item.runId
+      ) {
         throw new Error('Shared create operation must retain one exact per-run owner delivery.');
       }
     }
@@ -1161,51 +1235,67 @@ export function createRoom(input: CreateRoomInput): Room {
     if (delivery.state === 'accepted' && delivery.acceptance === undefined) {
       throw new Error('Accepted Room delivery requires its acceptance.');
     }
-    if (delivery.state === 'closed'
+    if (
+      delivery.state === 'closed'
       && (delivery.closedBy === undefined || delivery.closedAt === undefined
-        || !Number.isFinite(Date.parse(delivery.closedAt)))) {
+        || !Number.isFinite(Date.parse(delivery.closedAt)))
+    ) {
       throw new Error('Closed Room delivery requires Host/provider closedAt.');
     }
-    if (delivery.acceptance !== undefined
+    if (
+      delivery.acceptance !== undefined
       && (!Number.isFinite(Date.parse(delivery.acceptance.firstObservedAt))
         || delivery.acceptance.kind !== delivery.stage
         || (delivery.acceptance.kind === 'send'
           && (delivery.acceptance.messageId.trim() === ''
-            || delivery.acceptance.turn.trim() === '')))) {
+            || delivery.acceptance.turn.trim() === '')))
+    ) {
       throw new Error('Room delivery acceptance requires provider-observed result identity.');
     }
     const aggregate = outbox.find(item => item.deliveryId === delivery.deliveryId);
     const aggregateStage = delivery.stage === 'send'
       ? aggregate?.send
-      : aggregate?.create.state === 'not-required' ? undefined : aggregate?.create;
-    if (aggregate?.participantId !== delivery.participantId
+      : aggregate?.create.state === 'not-required'
+      ? undefined
+      : aggregate?.create;
+    if (
+      aggregate?.participantId !== delivery.participantId
       || aggregate.memberId !== delivery.memberId || aggregate.runId !== delivery.runId
       || aggregate.userItemId !== delivery.userItemId
       || aggregateStage?.operationId !== delivery.operationId
       || (delivery.stage === 'create' && aggregate?.create.state !== 'not-required'
-        && aggregate.create.ownerDeliveryId !== delivery.deliveryId)) {
+        && aggregate.create.ownerDeliveryId !== delivery.deliveryId)
+    ) {
       throw new Error('Room delivery operation must belong to its exact outbox recipient aggregate.');
     }
     if (delivery.state !== 'closed' && aggregateStage?.state !== delivery.state) {
       throw new Error('Room delivery operation state must match its outbox stage.');
     }
-    if (delivery.operation.kind !== delivery.stage) throw new Error('Room delivery stage does not match its operation.');
+    if (delivery.operation.kind !== delivery.stage) {
+      throw new Error('Room delivery stage does not match its operation.');
+    }
     if (delivery.operation.kind === 'send') {
       const operation = delivery.operation;
-      if (!acknowledgements.some(item => item.acknowledgementKey === operation.acknowledgementKey
+      if (
+        !acknowledgements.some(item =>
+          item.acknowledgementKey === operation.acknowledgementKey
           && item.userItemId === delivery.userItemId
           && item.participantId === delivery.participantId
           && item.memberId === delivery.memberId && item.runId === delivery.runId
-          && item.dispatchState === 'accepted')) {
+          && item.dispatchState === 'accepted'
+        )
+      ) {
         throw new Error('Send delivery requires its exact acknowledgement correlation.');
       }
     }
   }
-  const approvalDecisions = Object.freeze([...(input.approvalDecisions ?? [])].map(decision => Object.freeze({
-    ...decision,
-    binding: freezeTaskBinding(decision.binding),
-    ...(decision.attention === undefined ? {} : { attention: Object.freeze({ ...decision.attention }) }),
-  })));
+  const approvalDecisions = Object.freeze([...(input.approvalDecisions ?? [])].map(decision =>
+    Object.freeze({
+      ...decision,
+      binding: freezeTaskBinding(decision.binding),
+      ...(decision.attention === undefined ? {} : { attention: Object.freeze({ ...decision.attention }) }),
+    })
+  ));
   if (approvalDecisions.length > CHATROOM_MAX_APPROVAL_DECISIONS) {
     throw new Error(`Room exceeds its ${CHATROOM_MAX_APPROVAL_DECISIONS}-approval decision recovery limit.`);
   }
@@ -1219,7 +1309,8 @@ export function createRoom(input: CreateRoomInput): Room {
     if (decision.requestOperationId !== undefined) {
       requireAgentLoopOperationId(decision.requestOperationId, 'Room approval decision requestOperationId');
     }
-    if (run?.memberId !== decision.memberId
+    if (
+      run?.memberId !== decision.memberId
       || member?.participantId !== decision.participantId
       || run.taskBinding === undefined
       || ((decision.state === 'planned' || decision.state === 'sending-unknown')
@@ -1228,44 +1319,50 @@ export function createRoom(input: CreateRoomInput): Room {
       || decision.turn.trim() === ''
       || decision.approvalId.trim() === ''
       || (decision.state === 'accepted' && decision.disposition === undefined)
-      || (decision.state === 'attention' && decision.attention === undefined)) {
+      || (decision.state === 'attention' && decision.attention === undefined)
+    ) {
       throw new Error('Room approval decision must retain its exact operation/member/run/binding correlation.');
     }
   }
   const approvalRequestOperationIds = approvalDecisions.flatMap(decision =>
-    decision.requestOperationId === undefined ? [] : [decision.requestOperationId]);
+    decision.requestOperationId === undefined ? [] : [decision.requestOperationId]
+  );
   if (new Set(approvalRequestOperationIds).size !== approvalRequestOperationIds.length) {
     throw new Error('Room approval decision request operation ids must be unique.');
   }
   const playgroundAgentEgresses = Object.freeze([...(input.playgroundAgentEgresses ?? [])]
-    .map(egress => Object.freeze({
-      ...egress,
-      ...(egress.delegation === undefined ? {} : {
-        delegation: Object.freeze({
-          ...egress.delegation,
-          ...(egress.delegation.context === undefined ? {} : {
-            context: Object.freeze({
-              ...egress.delegation.context,
-              source: Object.freeze({ ...egress.delegation.context.source }),
-              target: Object.freeze({ ...egress.delegation.context.target }),
-              ...(egress.delegation.context.reportsTo === undefined ? {} : {
-                reportsTo: Object.freeze({ ...egress.delegation.context.reportsTo }),
+    .map(egress =>
+      Object.freeze({
+        ...egress,
+        ...(egress.delegation === undefined ? {} : {
+          delegation: Object.freeze({
+            ...egress.delegation,
+            ...(egress.delegation.context === undefined ? {} : {
+              context: Object.freeze({
+                ...egress.delegation.context,
+                source: Object.freeze({ ...egress.delegation.context.source }),
+                target: Object.freeze({ ...egress.delegation.context.target }),
+                ...(egress.delegation.context.reportsTo === undefined ? {} : {
+                  reportsTo: Object.freeze({ ...egress.delegation.context.reportsTo }),
+                }),
+                availableTargets: Object.freeze(egress.delegation.context.availableTargets
+                  .map(target => Object.freeze({ ...target }))),
               }),
-              availableTargets: Object.freeze(egress.delegation.context.availableTargets
-                .map(target => Object.freeze({ ...target }))),
             }),
           }),
         }),
-      }),
-      ...(egress.recipients === undefined ? {} : {
-        recipients: Object.freeze(egress.recipients.map(recipient => Object.freeze({ ...recipient }))),
-      }),
-    })));
+        ...(egress.recipients === undefined ? {} : {
+          recipients: Object.freeze(egress.recipients.map(recipient => Object.freeze({ ...recipient }))),
+        }),
+      })
+    ));
   if (playgroundAgentEgresses.length > CHATROOM_MAX_PLAYGROUND_AGENT_EGRESSES) {
     throw new Error(`Room exceeds its ${CHATROOM_MAX_PLAYGROUND_AGENT_EGRESSES}-Agent egress recovery limit.`);
   }
-  if (new Set(playgroundAgentEgresses.map(egress => egress.operationId)).size
-    !== playgroundAgentEgresses.length) {
+  if (
+    new Set(playgroundAgentEgresses.map(egress => egress.operationId)).size
+      !== playgroundAgentEgresses.length
+  ) {
     throw new Error('Playground Agent egress operation ids must be unique.');
   }
   for (const egress of playgroundAgentEgresses) {
@@ -1273,15 +1370,19 @@ export function createRoom(input: CreateRoomInput): Room {
     const member = membershipById.get(egress.memberId);
     const item = itemById.get(egress.itemId);
     const projection = run?.publicProjections?.find(candidate => candidate.itemId === egress.itemId);
-    const delegationTarget = egress.delegation === undefined ? undefined
+    const delegationTarget = egress.delegation === undefined
+      ? undefined
       : membershipById.get(egress.delegation.targetMemberId);
-    const delegationRun = egress.delegation === undefined ? undefined
+    const delegationRun = egress.delegation === undefined
+      ? undefined
       : runs.find(candidate => candidate.runId === egress.delegation!.targetRunId);
     const recipientsValid = egress.recipients === undefined || (
       egress.recipients.length > 0
-      && new Set(egress.recipients.map(recipient =>
-        `${recipient.targetMemberId.length}:${recipient.targetMemberId}${recipient.targetRunId.length}:${recipient.targetRunId}`,
-      )).size === egress.recipients.length
+      && new Set(
+          egress.recipients.map(recipient =>
+            `${recipient.targetMemberId.length}:${recipient.targetMemberId}${recipient.targetRunId.length}:${recipient.targetRunId}`
+          ),
+        ).size === egress.recipients.length
       && egress.recipients.every(recipient => {
         const target = membershipById.get(recipient.targetMemberId);
         const targetRun = runs.find(candidate => candidate.runId === recipient.targetRunId);
@@ -1296,7 +1397,8 @@ export function createRoom(input: CreateRoomInput): Room {
     requireAgentLoopOperationId(egress.operationId, 'Playground Agent egress operationId');
     requireShellOpaqueId(egress.itemId, 'Playground Agent egress itemId');
     requireShellOpaqueId(egress.messageId, 'Playground Agent egress messageId');
-    if (run?.memberId !== egress.memberId
+    if (
+      run?.memberId !== egress.memberId
       || member?.participantId !== egress.participantId
       || egress.shellBindingId.trim() === ''
       || egress.ownerGeneration.trim() === ''
@@ -1324,7 +1426,8 @@ export function createRoom(input: CreateRoomInput): Room {
         ))
       ))
       || [egress.turnId, egress.sourceMessageId, egress.inReplyToMessageId].some(value =>
-        value !== undefined && (value.trim() === '' || value.length > 512))
+        value !== undefined && (value.trim() === '' || value.length > 512)
+      )
       || projection?.kind !== 'message'
       || projection.association !== `agent:${egress.participantId}`
       || (item !== undefined && (item.kind !== 'message'
@@ -1343,36 +1446,46 @@ export function createRoom(input: CreateRoomInput): Room {
           : !((item.deliveryState === 'delivered' && item.runState === 'idle')
             || (item.deliveryState === 'sent'
               && (item.runState === 'running' || item.runState === 'idle' || item.runState === 'failed'))
-            || (item.deliveryState === 'failed' && item.runState === 'failed')))))) {
+            || (item.deliveryState === 'failed' && item.runState === 'failed')))))
+    ) {
       throw new Error('Playground Agent egress must retain its exact operation/member/run/projection correlation.');
     }
     const collidesWithDelivery = deliveries.some(delivery => delivery.operationId === egress.operationId)
-      || outbox.some(delivery => delivery.send.operationId === egress.operationId
+      || outbox.some(delivery =>
+        delivery.send.operationId === egress.operationId
         || (delivery.create.state !== 'not-required'
-          && delivery.create.operationId === egress.operationId));
+          && delivery.create.operationId === egress.operationId)
+      );
     const collidesWithAgentOperation = approvalDecisions.some(decision =>
-      decision.operationId === egress.operationId || decision.requestOperationId === egress.operationId)
-      || runs.some(candidate => candidate.rebind?.operationId === egress.operationId
+      decision.operationId === egress.operationId || decision.requestOperationId === egress.operationId
+    )
+      || runs.some(candidate =>
+        candidate.rebind?.operationId === egress.operationId
         || candidate.selfIntroduction?.operationId === egress.operationId
-        || candidate.selfIntroduction?.cancellation?.operationId === egress.operationId);
+        || candidate.selfIntroduction?.cancellation?.operationId === egress.operationId
+      );
     if (collidesWithDelivery || collidesWithAgentOperation) {
       throw new Error('Playground Agent egress operation collides with another Room operation.');
     }
   }
   const playgroundAgentApprovals = Object.freeze([...(input.playgroundAgentApprovals ?? [])]
-    .map(approval => Object.freeze({
-      ...approval,
-      decisionAttempts: Object.freeze(approval.decisionAttempts.map(attempt => Object.freeze({ ...attempt }))),
-    })));
+    .map(approval =>
+      Object.freeze({
+        ...approval,
+        decisionAttempts: Object.freeze(approval.decisionAttempts.map(attempt => Object.freeze({ ...attempt }))),
+      })
+    ));
   if (playgroundAgentApprovals.length > CHATROOM_MAX_PLAYGROUND_AGENT_APPROVALS) {
     throw new Error(`Room exceeds its ${CHATROOM_MAX_PLAYGROUND_AGENT_APPROVALS}-Agent approval recovery limit.`);
   }
-  if (new Set(playgroundAgentApprovals.map(approval => approval.operationId)).size
-    !== playgroundAgentApprovals.length
+  if (
+    new Set(playgroundAgentApprovals.map(approval => approval.operationId)).size
+      !== playgroundAgentApprovals.length
     || new Set(playgroundAgentApprovals.map(approval => approval.approvalId)).size
       !== playgroundAgentApprovals.length
     || new Set(playgroundAgentApprovals.map(approval => approval.itemId)).size
-      !== playgroundAgentApprovals.length) {
+      !== playgroundAgentApprovals.length
+  ) {
     throw new Error('Playground Agent approval request/item identities must be unique.');
   }
   const playgroundApprovalDecisionOperationIds: string[] = [];
@@ -1385,9 +1498,11 @@ export function createRoom(input: CreateRoomInput): Room {
     requireShellOpaqueId(approval.itemId, 'Playground Agent approval itemId');
     requireShellOpaqueId(approval.turnId, 'Playground Agent approval turnId');
     requireShellOpaqueId(approval.approvalId, 'Playground Agent approval approvalId');
-    if (approval.decisionAttempts.length > CHATROOM_MAX_PLAYGROUND_APPROVAL_DECISION_ATTEMPTS
+    if (
+      approval.decisionAttempts.length > CHATROOM_MAX_PLAYGROUND_APPROVAL_DECISION_ATTEMPTS
       || new Set(approval.decisionAttempts.map(attempt => attempt.operationId)).size
-        !== approval.decisionAttempts.length) {
+        !== approval.decisionAttempts.length
+    ) {
       throw new Error('Playground Agent approval decision attempts are invalid.');
     }
     for (const attempt of approval.decisionAttempts) {
@@ -1398,7 +1513,8 @@ export function createRoom(input: CreateRoomInput): Room {
       playgroundApprovalDecisionOperationIds.push(attempt.operationId);
     }
     const terminalDecision = approval.state === 'pending' ? undefined : approval.state;
-    if (run?.memberId !== approval.memberId
+    if (
+      run?.memberId !== approval.memberId
       || member?.participantId !== approval.participantId
       || approval.shellBindingId.trim() === ''
       || approval.ownerGeneration.trim() === ''
@@ -1426,36 +1542,52 @@ export function createRoom(input: CreateRoomInput): Room {
         || item.rationale?.fallback !== approval.reason
         || item.state !== approval.state
         || (approval.state === 'pending' ? item.actions.length !== 3 : item.actions.length !== 0)
-        || !roomRunPublicProjectionMatchesItem(projection, item)))) {
+        || !roomRunPublicProjectionMatchesItem(projection, item)))
+    ) {
       throw new Error('Playground Agent approval must retain its exact operation/member/run/card correlation.');
     }
     const requestCollides = deliveries.some(delivery => delivery.operationId === approval.operationId)
-      || outbox.some(delivery => delivery.send.operationId === approval.operationId
+      || outbox.some(delivery =>
+        delivery.send.operationId === approval.operationId
         || (delivery.create.state !== 'not-required'
-          && delivery.create.operationId === approval.operationId))
-      || approvalDecisions.some(decision => decision.operationId === approval.operationId
-        || decision.requestOperationId === approval.operationId)
-      || runs.some(candidate => candidate.rebind?.operationId === approval.operationId
+          && delivery.create.operationId === approval.operationId)
+      )
+      || approvalDecisions.some(decision =>
+        decision.operationId === approval.operationId
+        || decision.requestOperationId === approval.operationId
+      )
+      || runs.some(candidate =>
+        candidate.rebind?.operationId === approval.operationId
         || candidate.selfIntroduction?.operationId === approval.operationId
-        || candidate.selfIntroduction?.cancellation?.operationId === approval.operationId)
+        || candidate.selfIntroduction?.cancellation?.operationId === approval.operationId
+      )
       || playgroundAgentEgresses.some(egress => egress.operationId === approval.operationId);
     if (requestCollides) {
       throw new Error('Playground Agent approval operation collides with another Room operation.');
     }
   }
-  if (new Set(playgroundApprovalDecisionOperationIds).size
-    !== playgroundApprovalDecisionOperationIds.length) {
+  if (
+    new Set(playgroundApprovalDecisionOperationIds).size
+      !== playgroundApprovalDecisionOperationIds.length
+  ) {
     throw new Error('Playground Agent approval decision operation ids must be unique.');
   }
   const playgroundApprovalOperationIds = new Set(playgroundAgentApprovals.map(approval => approval.operationId));
-  if (playgroundApprovalDecisionOperationIds.some(operationId =>
-    playgroundApprovalOperationIds.has(operationId)
-    || deliveries.some(delivery => delivery.operationId === operationId)
-    || outbox.some(delivery => delivery.send.operationId === operationId
-      || (delivery.create.state !== 'not-required' && delivery.create.operationId === operationId))
-    || approvalDecisions.some(decision => decision.operationId === operationId
-      || decision.requestOperationId === operationId)
-    || playgroundAgentEgresses.some(egress => egress.operationId === operationId))) {
+  if (
+    playgroundApprovalDecisionOperationIds.some(operationId =>
+      playgroundApprovalOperationIds.has(operationId)
+      || deliveries.some(delivery => delivery.operationId === operationId)
+      || outbox.some(delivery =>
+        delivery.send.operationId === operationId
+        || (delivery.create.state !== 'not-required' && delivery.create.operationId === operationId)
+      )
+      || approvalDecisions.some(decision =>
+        decision.operationId === operationId
+        || decision.requestOperationId === operationId
+      )
+      || playgroundAgentEgresses.some(egress => egress.operationId === operationId)
+    )
+  ) {
     throw new Error('Playground Agent approval decision collides with another Room operation.');
   }
   return Object.freeze({
@@ -1496,7 +1628,8 @@ export function createRoom(input: CreateRoomInput): Room {
 const sameAdmissionMessageLink = (
   left: RoomAdmissionMessageLink,
   right: RoomAdmissionMessageLink,
-): boolean => left.roomId === right.roomId
+): boolean =>
+  left.roomId === right.roomId
   && left.itemId === right.itemId
   && left.participantId === right.participantId
   && left.memberId === right.memberId
@@ -1517,7 +1650,8 @@ export function recordRoomAdmissionMessageLink(
   link: RoomAdmissionMessageLink,
 ): Room {
   const existing = room.admissionMessageLinks?.find(candidate =>
-    candidate.sessionId === link.sessionId && candidate.messageId === link.messageId);
+    candidate.sessionId === link.sessionId && candidate.messageId === link.messageId
+  );
   if (existing !== undefined) {
     if (!sameAdmissionMessageLink(existing, link)) {
       throw new Error('Room admission Session/message identity was reused with a different correlation.');
@@ -1536,8 +1670,7 @@ export function roomAdmissionMessageLinkFor(
   sessionId: SessionId,
   messageId: MessageId,
 ): RoomAdmissionMessageLink | undefined {
-  return room.admissionMessageLinks?.find(link =>
-    link.sessionId === sessionId && link.messageId === messageId);
+  return room.admissionMessageLinks?.find(link => link.sessionId === sessionId && link.messageId === messageId);
 }
 
 export function addRoomRun(
@@ -1547,7 +1680,9 @@ export function addRoomRun(
     readonly presence?: RoomRunPresence;
   },
 ): Room {
-  if (!room.memberships.some(member => member.memberId === run.memberId)) throw new Error('Room run must reference a member.');
+  if (!room.memberships.some(member => member.memberId === run.memberId)) {
+    throw new Error('Room run must reference a member.');
+  }
   if (room.runs.some(candidate => candidate.runId === run.runId)) throw new Error('Room run id already exists.');
   const presenceSequence = run.presence?.sequence ?? nextRoomTimelineSequence(room);
   return createRoom({
@@ -1584,9 +1719,11 @@ export function bindRoomRun(room: Room, runId: string, binding: AgentLoopTaskBin
     if (sameBinding(run.taskBinding, binding) && run.taskBinding.state === binding.state) return room;
     throw new Error('Room run is already isolated to a different TaskBinding.');
   }
-  const memberships = room.memberships.map(candidate => candidate.memberId === member.memberId
-    ? { ...candidate, preferredRunId: runId }
-    : candidate);
+  const memberships = room.memberships.map(candidate =>
+    candidate.memberId === member.memberId
+      ? { ...candidate, preferredRunId: runId }
+      : candidate
+  );
   return createRoom({
     ...replaceRoomRun(room, runId, { ...run, status: 'active', taskBinding: binding }),
     memberships,
@@ -1641,8 +1778,10 @@ export function recordRoomSessionSelfIntroduction(
   const run = room.runs.find(candidate => candidate.runId === runId);
   if (run?.sessionId === undefined) throw new Error('Session-backed Room run is unavailable.');
   const prior = run.sessionSelfIntroduction;
-  if (prior !== undefined && (prior.requestMessageId !== introduction.requestMessageId
-    || prior.correlationId !== introduction.correlationId)) {
+  if (
+    prior !== undefined && (prior.requestMessageId !== introduction.requestMessageId
+      || prior.correlationId !== introduction.correlationId)
+  ) {
     throw new Error('Room Session self-introduction identity changed.');
   }
   return prior === undefined
@@ -1672,9 +1811,11 @@ export function approvalAuthorityMemberIds(room: Room, memberId: string): readon
 export function closeRoomRun(room: Room, runId: string, binding: AgentLoopTaskBinding['binding']): Room {
   const run = room.runs.find(candidate => candidate.runId === runId);
   const current = run?.taskBinding;
-  if (run === undefined || current === undefined
+  if (
+    run === undefined || current === undefined
     || current.binding.bindingId !== binding.bindingId
-    || current.binding.generation !== binding.generation) {
+    || current.binding.generation !== binding.generation
+  ) {
     throw new Error('TaskBinding does not belong to the Room run.');
   }
   if (current.state === 'closed') return room;
@@ -1688,7 +1829,7 @@ export function closeRoomRun(room: Room, runId: string, binding: AgentLoopTaskBi
 export function roomRunOwnsAgentLoopBinding(
   room: Room,
   runId: string,
-  binding: Readonly<{ bindingId: string; generation: number }>,
+  binding: Readonly<{ bindingId: string; generation: number; }>,
 ): boolean {
   const current = room.runs.find(run => run.runId === runId)?.taskBinding;
   return current?.state === 'active'
@@ -1720,8 +1861,10 @@ export function replaceRoomRunProjection(
   if (run === undefined) throw new Error('Room run is unavailable.');
   const items = input.items === undefined ? room.items : input.items.slice(-500);
   const publicProjections = run.publicProjections ?? [];
-  if (input.publicProjection !== undefined
-    && publicProjections.length >= CHATROOM_MAX_RUN_PUBLIC_PROJECTIONS) {
+  if (
+    input.publicProjection !== undefined
+    && publicProjections.length >= CHATROOM_MAX_RUN_PUBLIC_PROJECTIONS
+  ) {
     throw new Error(`Room run exceeds its ${CHATROOM_MAX_RUN_PUBLIC_PROJECTIONS}-projection replay limit.`);
   }
   return createRoom({
@@ -1729,19 +1872,25 @@ export function replaceRoomRunProjection(
     items,
     timelineSequence: Math.max(room.timelineSequence, ...items.map(item => item.sequence)),
     imageReferences: input.imageReferences ?? room.imageReferences,
-    runs: room.runs.map(candidate => candidate.runId === runId ? {
-      ...run,
-      agentLoopCursor: input.eventCursor,
-      ...(input.status === undefined ? {} : { status: input.status }),
-      ...(input.taskBinding === undefined ? {} : { taskBinding: input.taskBinding }),
-      publicProjections: input.publicProjection === undefined
-        ? publicProjections
-        : [...publicProjections, input.publicProjection],
-    } : candidate),
+    runs: room.runs.map(candidate =>
+      candidate.runId === runId
+        ? {
+          ...run,
+          agentLoopCursor: input.eventCursor,
+          ...(input.status === undefined ? {} : { status: input.status }),
+          ...(input.taskBinding === undefined ? {} : { taskBinding: input.taskBinding }),
+          publicProjections: input.publicProjection === undefined
+            ? publicProjections
+            : [...publicProjections, input.publicProjection],
+        }
+        : candidate
+    ),
   });
 }
 
-export function nextRoomTimelineSequence(room: Room): number { return room.timelineSequence + 1; }
+export function nextRoomTimelineSequence(room: Room): number {
+  return room.timelineSequence + 1;
+}
 
 export class ChatroomRoomRegistry {
   private readonly rooms = new Map<string, Room>();
@@ -1751,8 +1900,12 @@ export class ChatroomRoomRegistry {
     for (const room of initialRooms) this.rooms.set(room.id, room);
   }
 
-  get(roomId: string): Room | undefined { return this.rooms.get(roomId); }
-  snapshot(): readonly Room[] { return [...this.rooms.values()]; }
+  get(roomId: string): Room | undefined {
+    return this.rooms.get(roomId);
+  }
+  snapshot(): readonly Room[] {
+    return [...this.rooms.values()];
+  }
 
   upsert(room: Room): void {
     this.rooms.set(room.id, room);

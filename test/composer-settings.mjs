@@ -4,8 +4,8 @@ import test from 'node:test';
 import {
   CHATROOM_DEFAULT_COMPOSER_SHORTCUT_POLICY,
   ChatroomComposerSettings,
-  Config,
   composerShortcutPolicyFromConfig,
+  Config,
   configApplies,
 } from '../dist/composer-settings.js';
 import { CHATROOM_MANAGER_CONTENT_DECLARATIONS } from '../dist/manager-chat.js';
@@ -29,7 +29,9 @@ function settingsFixture(initial) {
       value = next;
       for (const listener of listeners) listener(next);
     },
-    get disposed() { return disposed; },
+    get disposed() {
+      return disposed;
+    },
   };
 }
 
@@ -68,7 +70,8 @@ test('Config declares one live closed shortcut setting with the accepted default
 test('Manager settings is a Host-owned v5 form with missing-only default materialization', () => {
   const settings = CHATROOM_MANAGER_CONTENT_DECLARATIONS.find(item => item.id === 'settings');
   assert.deepEqual(settings, {
-    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/manager-content-navigation.v5.schema.json',
+    $schema:
+      'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/manager-content-navigation.v5.schema.json',
     schemaVersion: 5,
     id: 'settings',
     route: { id: 'manager-chat-settings' },

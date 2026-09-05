@@ -27,9 +27,7 @@ import type {
   ApprovalRequestResolverHandle,
   ApprovalService as ApprovalServiceV3,
 } from '@cordisx/protocol/approval/v3';
-import type {
-  AgentConversationShellCommandContext,
-} from '@cordisx/protocol/agent-conversation-shell/v7';
+import type { AgentConversationShellCommandContext } from '@cordisx/protocol/agent-conversation-shell/v7';
 import type {
   AgentAdmissionTarget,
   AgentAdmissionTargetOriginService,
@@ -60,12 +58,10 @@ import {
   type ProjectedItem,
 } from './agent-session-projection.js';
 import { ChatroomRoomStoreError, type DurableChatroomRoomStore } from './room-store.js';
+import { failRoomRunPresence } from './room-engagement.js';
 import {
-  failRoomRunPresence,
-} from './room-engagement.js';
-import {
-  approvalAuthorityMemberIds,
   addRoomRun,
+  approvalAuthorityMemberIds,
   bindRoomRunSession,
   createChatroomOpaqueId,
   recordRoomAdmissionMessageLink,
@@ -76,9 +72,9 @@ import {
 } from './room.js';
 import { resolveExplicitRoomAgentDispatch } from './room-target.js';
 import {
+  type ChatroomApprovalRequestExecution,
   requestChatroomApproval,
   routeChatroomDriverApproval,
-  type ChatroomApprovalRequestExecution,
 } from './approval-bubble.js';
 import { submitChatroomAgentAdmissionV3 } from './agent-admission-v3.js';
 import {
@@ -149,7 +145,7 @@ export function assertChatroomAdmissionDeliveriesAccepted(
 
 type ChatroomApprovalCommandContext = Extract<
   AgentConversationShellCommandContext,
-  { readonly scope: 'approval' }
+  { readonly scope: 'approval'; }
 >;
 
 export type ChatroomAgentSessionOutcome =
@@ -174,8 +170,8 @@ interface RuntimeOwner {
 }
 
 type ApprovalAuthorityWarmup =
-  | { readonly status: 'not-required' | 'ready' }
-  | { readonly status: 'unavailable'; readonly code: string };
+  | { readonly status: 'not-required' | 'ready'; }
+  | { readonly status: 'unavailable'; readonly code: string; };
 
 interface RuntimeSubscription {
   readonly sessionId: string;
@@ -205,15 +201,15 @@ export interface ChatroomRoomSessionProjectionV6 {
 }
 
 type RuntimeAcquireResult = EntityAgentAcquireResult | CordisXAgentSessionLegacyAcquireResultV1;
-type RuntimeAcquireFailure = Exclude<EntityAgentAcquireResult, { readonly status: 'accepted' }>
-  | Exclude<CordisXAgentSessionLegacyAcquireResultV1, { readonly status: 'accepted' }>;
+type RuntimeAcquireFailure =
+  | Exclude<EntityAgentAcquireResult, { readonly status: 'accepted'; }>
+  | Exclude<CordisXAgentSessionLegacyAcquireResultV1, { readonly status: 'accepted'; }>;
 
-const runKey = (roomId: string, runId: string) =>
-  `${roomId.length}:${roomId}${runId.length}:${runId}`;
+const runKey = (roomId: string, runId: string) => `${roomId.length}:${roomId}${runId.length}:${runId}`;
 
 const admissionLinkOrder = (
-  left: { readonly memberId: string; readonly runId: string; readonly sessionId: string; readonly messageId: string },
-  right: { readonly memberId: string; readonly runId: string; readonly sessionId: string; readonly messageId: string },
+  left: { readonly memberId: string; readonly runId: string; readonly sessionId: string; readonly messageId: string; },
+  right: { readonly memberId: string; readonly runId: string; readonly sessionId: string; readonly messageId: string; },
 ): number => {
   for (const key of ['memberId', 'runId', 'sessionId', 'messageId'] as const) {
     if (left[key] < right[key]) return -1;
@@ -225,7 +221,8 @@ const admissionLinkOrder = (
 const acquisitionMutationId = (operation: 'create' | 'resume' | 'migrate', roomId: string, runId: string) =>
   createChatroomOpaqueId(`agent-${operation}`, roomId, runId);
 
-const replacementAdmission = (result: AgentAdmission): boolean => result.status === 'unavailable'
+const replacementAdmission = (result: AgentAdmission): boolean =>
+  result.status === 'unavailable'
   && (result.code === 'agent-replaced'
     || result.code === 'plugin-generation-replaced'
     || result.code === 'connection-replaced');
@@ -277,9 +274,13 @@ export class ChatroomAgentSessionController {
     this.presentationSequence = Math.max(0, ...this.rooms.snapshot().map(room => room.timelineSequence));
   }
 
-  get rooms() { return this.store.rooms; }
+  get rooms() {
+    return this.store.rooms;
+  }
 
-  get ownerHandleCount(): number { return this.owners.size; }
+  get ownerHandleCount(): number {
+    return this.owners.size;
+  }
 
   subscribeProjection(listener: (roomId: string) => void): () => void {
     this.projectionListeners.add(listener);
@@ -316,11 +317,15 @@ export class ChatroomAgentSessionController {
     }
     const items = [...unlinked, ...[...linkedByItemId.values()].map(entry => entry.item)]
       .sort((left, right) => left.sequence - right.sequence);
-    const admissionAppendAnchors = Object.freeze([...linkedByItemId.values()]
-      .flatMap(({ item, link }) => link.appendAfterItemId === undefined
-        ? []
-        : [{ itemId: item.itemId, appendAfterItemId: link.appendAfterItemId }])
-      .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0));
+    const admissionAppendAnchors = Object.freeze(
+      [...linkedByItemId.values()]
+        .flatMap(({ item, link }) =>
+          link.appendAfterItemId === undefined
+            ? []
+            : [{ itemId: item.itemId, appendAfterItemId: link.appendAfterItemId }]
+        )
+        .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0),
+    );
     return Object.freeze({
       activeRuns: Object.freeze(projectors.map(projector => projector.activeRun())),
       // One Room human item may be admitted to N exact targets. Keep every
@@ -335,9 +340,11 @@ export class ChatroomAgentSessionController {
     const projection = this.projectionForRoom(roomId);
     return Object.freeze({
       activeRuns: projection.activeRuns,
-      items: Object.freeze(projection.items.flatMap(item => item.kind === 'approval' && 'requester' in item
-        ? []
-        : [item])),
+      items: Object.freeze(projection.items.flatMap(item =>
+        item.kind === 'approval' && 'requester' in item
+          ? []
+          : [item]
+      )),
     });
   }
 
@@ -351,17 +358,21 @@ export class ChatroomAgentSessionController {
         if (outcome !== 'allowed-once' && outcome !== 'rejected') return false;
         const key = this.authorityApprovalKey(item.sessionId, item.approvalId);
         const pending = this.pendingAuthorityApprovals.get(key);
-        if (pending === undefined
+        if (
+          pending === undefined
           || pending.question.requester.agentGeneration !== item.agentGeneration
           || pending.question.authority.agentId !== item.authorityBinding.agentId
           || pending.question.authority.sessionId !== item.authorityBinding.sessionId
-          || pending.question.authority.agentGeneration !== item.authorityBinding.agentGeneration) return false;
+          || pending.question.authority.agentGeneration !== item.authorityBinding.agentGeneration
+        ) return false;
         this.pendingAuthorityApprovals.delete(key);
         pending.resolve(outcome);
         return true;
       }
       const resolve = this.pendingApprovals.get(this.approvalKey(
-        item.sessionId, item.agentGeneration, item.approvalId,
+        item.sessionId,
+        item.agentGeneration,
+        item.approvalId,
       ));
       if (resolve === undefined) return false;
       this.pendingApprovals.delete(this.approvalKey(item.sessionId, item.agentGeneration, item.approvalId));
@@ -378,7 +389,8 @@ export class ChatroomAgentSessionController {
     for (const run of room.runs) {
       const item = this.projectors.get(runKey(roomId, run.runId))?.approvalItem(context.itemId);
       if (item === undefined || item.state !== 'pending' || !('authorityBinding' in item)) continue;
-      if (item.sessionId !== context.approval.sessionId
+      if (
+        item.sessionId !== context.approval.sessionId
         || item.approvalId !== context.approval.approvalId
         || item.requester.agentId !== context.approval.requester.agentId
         || item.requester.revision !== context.approval.requester.revision
@@ -386,7 +398,8 @@ export class ChatroomAgentSessionController {
         || item.authorityBinding.sessionId !== context.approval.authority.sessionId
         || item.authorityBinding.agentGeneration !== context.approval.authority.agentGeneration
         || item.authorityBinding.definition.agentId !== context.approval.authority.definition.agentId
-        || item.authorityBinding.definition.revision !== context.approval.authority.definition.revision) return false;
+        || item.authorityBinding.definition.revision !== context.approval.authority.definition.revision
+      ) return false;
       return this.answerApprovalItem(roomId, context.itemId, outcome);
     }
     return false;
@@ -527,12 +540,16 @@ export class ChatroomAgentSessionController {
       return { status: acquired.status, roomId, runId, code: acquireErrorCode(acquired) };
     }
     const current = this.requireRun(this.requireRoom(roomId), runId);
-    if (current.sessionSelfIntroduction === undefined
+    if (
+      current.sessionSelfIntroduction === undefined
       || !this.observedMessageIds.get(acquired.handle.agent.session.id)
-        ?.has(current.sessionSelfIntroduction.requestMessageId)) {
+        ?.has(current.sessionSelfIntroduction.requestMessageId)
+    ) {
       const introduction = await this.requestMemberSelfIntroduction(roomId, runId);
-      if (introduction.status !== 'accepted'
-        && !this.owners.has(runKey(roomId, runId))) return introduction;
+      if (
+        introduction.status !== 'accepted'
+        && !this.owners.has(runKey(roomId, runId))
+      ) return introduction;
     }
     const messageId = createChatroomOpaqueId('room-session-message', userItemId, runId);
     const message = this.userMessage(
@@ -552,7 +569,10 @@ export class ChatroomAgentSessionController {
       return { status: admission.status, roomId, runId, code: admission.code };
     }
     return {
-      status: 'accepted', roomId, runId, messageId,
+      status: 'accepted',
+      roomId,
+      runId,
+      messageId,
       sessionId: acquired.handle.agent.session.id,
       disposition: acquired.disposition,
     };
@@ -575,13 +595,21 @@ export class ChatroomAgentSessionController {
   ): Promise<readonly ChatroomAgentAdmissionDeliveryOutcome[]> {
     this.assertUsable();
     if (text.trim() === '') throw new Error('Room message must not be empty.');
-    return await Promise.all(deliveries.map(async delivery => Object.freeze({
-      memberId: delivery.memberId,
-      runId: delivery.runId,
-      outcome: await this.submitDeliveryViaAdmissionV3(
-        roomId, delivery, userItemId, origin, text, origins, reservations,
-      ),
-    })));
+    return await Promise.all(deliveries.map(async delivery =>
+      Object.freeze({
+        memberId: delivery.memberId,
+        runId: delivery.runId,
+        outcome: await this.submitDeliveryViaAdmissionV3(
+          roomId,
+          delivery,
+          userItemId,
+          origin,
+          text,
+          origins,
+          reservations,
+        ),
+      })
+    ));
   }
 
   /**
@@ -600,13 +628,20 @@ export class ChatroomAgentSessionController {
   ): Promise<readonly ChatroomAgentAdmissionDeliveryOutcome[]> {
     this.assertUsable();
     if (text.trim() === '') throw new Error('Room message must not be empty.');
-    return await Promise.all(deliveries.map(async delivery => Object.freeze({
-      memberId: delivery.memberId,
-      runId: delivery.runId,
-      outcome: await this.submitDeliveryViaAdmissionV4(
-        roomId, delivery, origin, text, targets, reservations,
-      ),
-    })));
+    return await Promise.all(deliveries.map(async delivery =>
+      Object.freeze({
+        memberId: delivery.memberId,
+        runId: delivery.runId,
+        outcome: await this.submitDeliveryViaAdmissionV4(
+          roomId,
+          delivery,
+          origin,
+          text,
+          targets,
+          reservations,
+        ),
+      })
+    ));
   }
 
   /**
@@ -626,9 +661,11 @@ export class ChatroomAgentSessionController {
     await this.mutateRoom(roomId, room => {
       const run = this.requireRun(room, delivery.runId);
       const member = this.requireMember(room, delivery.memberId);
-      if (run.memberId !== delivery.memberId
+      if (
+        run.memberId !== delivery.memberId
         || member.memberId !== delivery.memberId
-        || run.sessionId !== handle.agent.session.id) {
+        || run.sessionId !== handle.agent.session.id
+      ) {
         throw new Error('Accepted Chatroom admission no longer matches its exact Room target.');
       }
       const existingForItem = room.admissionMessageLinks?.find(link => link.itemId === userItemId);
@@ -668,10 +705,13 @@ export class ChatroomAgentSessionController {
     const itemIndex = room.items.findIndex(item => item.itemId === userItemId);
     if (itemIndex < 0) throw new Error('Accepted Chatroom admission Room item is unavailable.');
     const hasEarlierHumanMessage = room.items.slice(0, itemIndex).some(item =>
-      item.kind === 'message' && item.author.role === 'human' && item.semantic.purpose === 'conversation');
+      item.kind === 'message' && item.author.role === 'human' && item.semantic.purpose === 'conversation'
+    );
     const items = this.projectionForRoom(roomId).items;
-    if (!hasEarlierHumanMessage
-      || !items.some(item => item.kind === 'approval' && item.state === 'pending')) return undefined;
+    if (
+      !hasEarlierHumanMessage
+      || !items.some(item => item.kind === 'approval' && item.state === 'pending')
+    ) return undefined;
     return items.length === 0 ? undefined : items[items.length - 1].itemId;
   }
 
@@ -685,7 +725,7 @@ export class ChatroomAgentSessionController {
       if (projector === undefined) continue;
       if (projector.reconcileAdmissionLinks(room, run).length > 0) changed = true;
     }
-    if (changed) for (const listener of this.projectionListeners) listener(roomId);
+    if (changed) { for (const listener of this.projectionListeners) listener(roomId); }
   }
 
   private async submitDeliveryViaAdmissionV4(
@@ -760,7 +800,10 @@ export class ChatroomAgentSessionController {
       return { status: 'denied', roomId, runId: delivery.runId, code: result.code };
     }
     return {
-      status: 'accepted', roomId, runId: delivery.runId, messageId: result.admission.messageId,
+      status: 'accepted',
+      roomId,
+      runId: delivery.runId,
+      messageId: result.admission.messageId,
       sessionId: acquired.handle.agent.session.id,
       disposition: acquired.disposition,
     };
@@ -824,10 +867,17 @@ export class ChatroomAgentSessionController {
       return { status: 'denied', roomId, runId: delivery.runId, code: result.code };
     }
     await this.recordAdmissionMessageLink(
-      roomId, userItemId, delivery, acquired.handle, result.admission.messageId,
+      roomId,
+      userItemId,
+      delivery,
+      acquired.handle,
+      result.admission.messageId,
     );
     return {
-      status: 'accepted', roomId, runId: delivery.runId, messageId: result.admission.messageId,
+      status: 'accepted',
+      roomId,
+      runId: delivery.runId,
+      messageId: result.admission.messageId,
       sessionId: acquired.handle.agent.session.id,
       disposition: acquired.disposition,
     };
@@ -881,7 +931,8 @@ export class ChatroomAgentSessionController {
     const currentRun = this.requireRun(current, authorityRun.runId);
     const currentMember = this.requireMember(current, authorityMember.memberId);
     const answerer = this.approvalAuthorityAnswerers.get(runKey(roomId, authorityRun.runId));
-    if (currentRun.memberId !== authorityMember.memberId
+    if (
+      currentRun.memberId !== authorityMember.memberId
       || currentRun.sessionId !== acquired.handle.agent.session.id
       || currentMember.definition.agentId !== authorityMember.definition.agentId
       || currentMember.definition.revision !== authorityMember.definition.revision
@@ -890,7 +941,8 @@ export class ChatroomAgentSessionController {
       || answerer.authority.sessionId !== acquired.handle.agent.session.id
       || answerer.authority.agentGeneration !== acquired.handle.agent.generation
       || answerer.authority.definition.agentId !== authorityMember.definition.agentId
-      || answerer.authority.definition.revision !== authorityMember.definition.revision) {
+      || answerer.authority.definition.revision !== authorityMember.definition.revision
+    ) {
       return { status: 'unavailable', code: 'authority-agent-unavailable' };
     }
     return { status: 'ready' };
@@ -910,24 +962,32 @@ export class ChatroomAgentSessionController {
     let run = this.requireRun(room, runId);
     const member = this.requireMember(room, run.memberId);
     const correlationId = createChatroomOpaqueId(
-      'self-introduction', roomId, member.memberId, runId,
+      'self-introduction',
+      roomId,
+      member.memberId,
+      runId,
     );
     const messageId = run.sessionSelfIntroduction?.requestMessageId
       ?? createChatroomOpaqueId('self-introduction-message', roomId, member.memberId, runId);
     if (run.sessionSelfIntroduction === undefined) {
-      await this.mutateRoom(roomId, current => recordRoomSessionSelfIntroduction(current, runId, {
-        requestMessageId: messageId,
-        correlationId,
-        requestedAt: this.now(),
-      }));
+      await this.mutateRoom(roomId, current =>
+        recordRoomSessionSelfIntroduction(current, runId, {
+          requestMessageId: messageId,
+          correlationId,
+          requestedAt: this.now(),
+        }));
       room = this.requireRoom(roomId);
       run = this.requireRun(room, runId);
     }
-    if (this.admittedMessageIds.has(run.sessionSelfIntroduction!.requestMessageId)
+    if (
+      this.admittedMessageIds.has(run.sessionSelfIntroduction!.requestMessageId)
       || this.observedMessageIds.get(acquired.handle.agent.session.id)
-        ?.has(run.sessionSelfIntroduction!.requestMessageId)) {
+        ?.has(run.sessionSelfIntroduction!.requestMessageId)
+    ) {
       return {
-        status: 'accepted', roomId, runId,
+        status: 'accepted',
+        roomId,
+        runId,
         messageId: run.sessionSelfIntroduction!.requestMessageId,
         sessionId: acquired.handle.agent.session.id,
         disposition: acquired.disposition,
@@ -951,7 +1011,10 @@ export class ChatroomAgentSessionController {
     }
     this.admittedMessageIds.add(messageId);
     return {
-      status: 'accepted', roomId, runId, messageId,
+      status: 'accepted',
+      roomId,
+      runId,
+      messageId,
       sessionId: acquired.handle.agent.session.id,
       disposition: acquired.disposition,
     };
@@ -970,7 +1033,8 @@ export class ChatroomAgentSessionController {
     const acquired = await this.ensureOwner(roomId, runId);
     if (!('handle' in acquired)) {
       const envelope = {
-        $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-message-cancellation-result.v1.schema.json',
+        $schema:
+          'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-message-cancellation-result.v1.schema.json',
         contract: 'cordisx.agent-message-cancellation-result/v1',
         schemaVersion: 1,
         messageId: run.sessionSelfIntroduction.requestMessageId,
@@ -980,10 +1044,12 @@ export class ChatroomAgentSessionController {
         : { ...envelope, status: 'unavailable', code: 'host-unavailable' };
     }
     const result = await acquired.handle.agent.discard(run.sessionSelfIntroduction.requestMessageId);
-    if (result.status === 'unavailable'
+    if (
+      result.status === 'unavailable'
       && (result.code === 'agent-replaced'
         || result.code === 'plugin-generation-replaced'
-        || result.code === 'connection-replaced')) {
+        || result.code === 'connection-replaced')
+    ) {
       await this.detachRuntime(roomId, runId);
     }
     return result;
@@ -998,7 +1064,8 @@ export class ChatroomAgentSessionController {
     const acquired = await this.ensureOwner(roomId, runId);
     if (!('handle' in acquired)) {
       const envelope = {
-        $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-mutation-result.v1.schema.json',
+        $schema:
+          'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-mutation-result.v1.schema.json',
         contract: 'cordisx.agent-mutation-result/v1',
         schemaVersion: 1,
         operation: 'cancel',
@@ -1011,10 +1078,12 @@ export class ChatroomAgentSessionController {
     const result = await acquired.handle.agent.cancel(cause, {
       mutationId: createChatroomOpaqueId('agent-cancel', roomId, runId),
     });
-    if (result.status === 'unavailable'
+    if (
+      result.status === 'unavailable'
       && (result.code === 'agent-replaced'
         || result.code === 'plugin-generation-replaced'
-        || result.code === 'connection-replaced')) {
+        || result.code === 'connection-replaced')
+    ) {
       await this.detachRuntime(roomId, runId);
     }
     return result;
@@ -1088,14 +1157,14 @@ export class ChatroomAgentSessionController {
         mutationId: acquisitionMutationId('resume', roomId, runId),
       })
       : run.taskBinding !== undefined
-        ? await this.runtime.agents.acquireLegacyTaskBinding({
-          $schema: CORDISX_AGENT_SESSION_LEGACY_ACQUIRE_SCHEMA_V1,
-          contract: CORDISX_AGENT_SESSION_LEGACY_ACQUIRE_CONTRACT_V1,
-          schemaVersion: 1,
-          binding: run.taskBinding,
-          mutationId: acquisitionMutationId('migrate', roomId, runId),
-        })
-        : await this.runtime.agents.create({
+      ? await this.runtime.agents.acquireLegacyTaskBinding({
+        $schema: CORDISX_AGENT_SESSION_LEGACY_ACQUIRE_SCHEMA_V1,
+        contract: CORDISX_AGENT_SESSION_LEGACY_ACQUIRE_CONTRACT_V1,
+        schemaVersion: 1,
+        binding: run.taskBinding,
+        mutationId: acquisitionMutationId('migrate', roomId, runId),
+      })
+      : await this.runtime.agents.create({
         definition: member.definition,
         mutationId: acquisitionMutationId('create', roomId, runId),
       });
@@ -1106,10 +1175,12 @@ export class ChatroomAgentSessionController {
       await this.disposeOwner(runKey(roomId, runId), result.handle);
       throw new Error('Chatroom Agent/Session controller was replaced during acquisition.');
     }
-    if (result.handle.agent.id !== result.sessionId
+    if (
+      result.handle.agent.id !== result.sessionId
       || result.handle.agent.session.id !== result.sessionId
       || result.handle.agent.generation !== result.agentGeneration
-      || result.handle.agent.session.generation !== result.sessionGeneration) {
+      || result.handle.agent.session.generation !== result.sessionGeneration
+    ) {
       throw new Error('Agent acquisition violated the Agent/Session identity contract.');
     }
     const key = runKey(roomId, runId);
@@ -1174,15 +1245,16 @@ export class ChatroomAgentSessionController {
     const existing = this.subscriptions.get(key);
     if (existing?.sessionId === session.id && existing.sessionGeneration === session.generation) {
       const existingProjector = this.projectors.get(key);
-      if (existingProjector !== undefined
-        && (existingProjector.agentGeneration !== undefined || agentFacts.generation === undefined)) {
+      if (
+        existingProjector !== undefined
+        && (existingProjector.agentGeneration !== undefined || agentFacts.generation === undefined)
+      ) {
         existingProjector.updateAgentFacts(agentFacts);
         return;
       }
       this.subscriptions.delete(key);
       await existing.subscription.unsubscribe();
-    }
-    else if (existing !== undefined) await existing.subscription.unsubscribe();
+    } else if (existing !== undefined) await existing.subscription.unsubscribe();
     // A permission lease can be replaced while a terminal SessionEvent page is
     // already projected.  Retain that exact, replayable Session projection
     // until a replacement subscription has actually been accepted.  It is not
@@ -1211,9 +1283,11 @@ export class ChatroomAgentSessionController {
         return;
       }
       const operation = observationTail.then(async () => {
-        if (active === undefined
+        if (
+          active === undefined
           || this.subscriptions.get(key) !== active
-          || !this.isCurrent(generation)) return;
+          || !this.isCurrent(generation)
+        ) return;
         this.validateSessionPage(active, page);
         const currentRoom = this.requireRoom(roomId);
         projector.updateDomain(currentRoom, this.requireRun(currentRoom, runId));
@@ -1255,16 +1329,17 @@ export class ChatroomAgentSessionController {
     this.localUnavailableRuns.delete(key);
     for (const page of pendingPages) await observePage(page);
     for (const listener of this.projectionListeners) listener(roomId);
-    void result.subscription.closed.then(closed =>
-      this.handleSessionSubscriptionClosed(roomId, key, active!, closed));
+    void result.subscription.closed.then(closed => this.handleSessionSubscriptionClosed(roomId, key, active!, closed));
   }
 
   private validateSessionPage(active: RuntimeSubscription, page: SessionSubscriptionPage): void {
-    if (page.sessionId !== active.sessionId
+    if (
+      page.sessionId !== active.sessionId
       || page.sessionGeneration !== active.sessionGeneration
       || page.subscriptionGeneration !== active.subscription.subscriptionGeneration
       || page.replayThrough !== active.subscription.replayThrough
-      || (active.phase === 'live' && page.phase !== 'live')) {
+      || (active.phase === 'live' && page.phase !== 'live')
+    ) {
       throw new Error('Session subscription page crossed its identity or replay/live fence.');
     }
     for (const event of page.events) {
@@ -1288,10 +1363,12 @@ export class ChatroomAgentSessionController {
     active: RuntimeSubscription,
     closed: SessionSubscriptionClosed,
   ): Promise<void> {
-    if (this.subscriptions.get(key) !== active
+    if (
+      this.subscriptions.get(key) !== active
       || closed.sessionId !== active.sessionId
       || closed.sessionGeneration !== active.sessionGeneration
-      || closed.subscriptionGeneration !== active.subscription.subscriptionGeneration) return;
+      || closed.subscriptionGeneration !== active.subscription.subscriptionGeneration
+    ) return;
     this.subscriptions.delete(key);
     // `permission-revoked` and a same-Session `route-replaced` fence the live
     // owner and its answerers, not the durable SessionEvent facts. Keep that
@@ -1331,9 +1408,11 @@ export class ChatroomAgentSessionController {
   private async openApprovalAnswerer(roomId: string, runId: string, agent: Agent): Promise<void> {
     const key = runKey(roomId, runId);
     const existing = this.approvalAnswerers.get(key);
-    if (existing !== undefined
+    if (
+      existing !== undefined
       && existing.agentId === agent.id
-      && existing.agentGeneration === agent.generation) return;
+      && existing.agentGeneration === agent.generation
+    ) return;
     if (existing !== undefined) await existing.dispose();
     const answerer = await this.runtime.approvals.registerAnswerer(agent, async question => {
       const room = this.requireRoom(roomId);
@@ -1360,11 +1439,13 @@ export class ChatroomAgentSessionController {
   ): Promise<void> {
     const key = runKey(roomId, runId);
     const existing = this.approvalAuthorityAnswerers.get(key);
-    if (existing !== undefined
+    if (
+      existing !== undefined
       && existing.authority.agentId === agent.id
       && existing.authority.agentGeneration === agent.generation
       && existing.authority.definition.agentId === member.definition.agentId
-      && existing.authority.definition.revision === member.definition.revision) return;
+      && existing.authority.definition.revision === member.definition.revision
+    ) return;
     if (existing !== undefined) await existing.dispose();
     const answerer = await this.runtime.approvals.registerAuthorityAnswerer(
       { agent, definition: member.definition },
@@ -1373,17 +1454,21 @@ export class ChatroomAgentSessionController {
         const authorityRun = this.requireRun(room, runId);
         const authorityMember = this.requireMember(room, authorityRun.memberId);
         const requesterRuns = room.runs.filter(candidate => candidate.sessionId === question.requester.sessionId);
-        if (requesterRuns.length !== 1
+        if (
+          requesterRuns.length !== 1
           || question.authority.agentId !== agent.id
           || question.authority.sessionId !== agent.session.id
           || question.authority.agentGeneration !== agent.generation
           || question.authority.definition.agentId !== authorityMember.definition.agentId
-          || question.authority.definition.revision !== authorityMember.definition.revision) return 'unavailable';
+          || question.authority.definition.revision !== authorityMember.definition.revision
+        ) return 'unavailable';
         const requesterRun = requesterRuns[0];
         const requesterMember = this.requireMember(room, requesterRun.memberId);
-        if (requesterMember.definition.agentId !== question.requester.definition.agentId
+        if (
+          requesterMember.definition.agentId !== question.requester.definition.agentId
           || requesterMember.definition.revision !== question.requester.definition.revision
-          || approvalAuthorityMemberIds(room, requesterMember.memberId)[0] !== authorityMember.memberId) {
+          || approvalAuthorityMemberIds(room, requesterMember.memberId)[0] !== authorityMember.memberId
+        ) {
           return 'unavailable';
         }
         const pendingKey = this.authorityApprovalKey(question.requester.sessionId, question.id);
@@ -1411,20 +1496,24 @@ export class ChatroomAgentSessionController {
     // is mounted.
     if (typeof register !== 'function') return;
     const existing = this.approvalRequestResolvers.get(key);
-    if (existing !== undefined
+    if (
+      existing !== undefined
       && existing.registration.requester.agentId === agent.id
       && existing.registration.requester.sessionId === agent.session.id
       && existing.registration.requester.agentGeneration === agent.generation
       && existing.registration.requester.definition.agentId === member.definition.agentId
-      && existing.registration.requester.definition.revision === member.definition.revision) return;
+      && existing.registration.requester.definition.revision === member.definition.revision
+    ) return;
     if (existing !== undefined) await existing.dispose();
-    const registered = await register.call(this.runtime.approvals,
+    const registered = await register.call(
+      this.runtime.approvals,
       { agent, definition: member.definition },
-      async question => routeChatroomDriverApproval({
-        room: this.requireRoom(roomId),
-        question,
-        liveAgentForRun: candidateRunId => this.owners.get(runKey(roomId, candidateRunId))?.handle.agent,
-      }),
+      async question =>
+        routeChatroomDriverApproval({
+          room: this.requireRoom(roomId),
+          question,
+          liveAgentForRun: candidateRunId => this.owners.get(runKey(roomId, candidateRunId))?.handle.agent,
+        }),
     );
     if (registered.status !== 'registered') {
       throw new Error(`Chatroom approval request resolver was not registered: ${registered.code}`);
@@ -1511,26 +1600,33 @@ export class ChatroomAgentSessionController {
     if (value === '') return;
     let room = this.requireRoom(roomId);
     const sourceRun = this.requireRun(room, sourceRunId);
-    const unavailable = new Set(room.runs
-      .filter(run => this.isRunLocallyUnavailable(roomId, run.runId))
-      .map(run => run.runId));
+    const unavailable = new Set(
+      room.runs
+        .filter(run => this.isRunLocallyUnavailable(roomId, run.runId))
+        .map(run => run.runId),
+    );
     const dispatch = resolveExplicitRoomAgentDispatch(room, value, sourceRun.memberId, unavailable);
     if (dispatch.status !== 'resolved') return;
     for (const recipient of dispatch.recipients) {
       let targetRunId = recipient.runId;
       if (recipient.createRun) {
         targetRunId = createChatroomOpaqueId(
-          'session-delegation-run', roomId, sourceRunId, String(eventSeq), recipient.memberId,
+          'session-delegation-run',
+          roomId,
+          sourceRunId,
+          String(eventSeq),
+          recipient.memberId,
         );
         const nextRunId = targetRunId;
-        await this.mutateRoom(roomId, current => current.runs.some(run => run.runId === nextRunId)
-          ? current
-          : addRoomRun(current, {
-            runId: nextRunId,
-            memberId: recipient.memberId,
-            title: this.requireMember(current, recipient.memberId).label,
-            status: 'creating',
-          }));
+        await this.mutateRoom(roomId, current =>
+          current.runs.some(run => run.runId === nextRunId)
+            ? current
+            : addRoomRun(current, {
+              runId: nextRunId,
+              memberId: recipient.memberId,
+              title: this.requireMember(current, recipient.memberId).label,
+              status: 'creating',
+            }));
         room = this.requireRoom(roomId);
       }
       if (targetRunId === undefined) continue;
@@ -1541,7 +1637,11 @@ export class ChatroomAgentSessionController {
         await this.requestMemberSelfIntroduction(roomId, targetRunId);
       }
       const messageId = createChatroomOpaqueId(
-        'session-delegation-message', roomId, sourceRunId, String(eventSeq), targetRunId,
+        'session-delegation-message',
+        roomId,
+        sourceRunId,
+        String(eventSeq),
+        targetRunId,
       );
       const message = this.userMessage(
         acquired.handle,
@@ -1621,7 +1721,9 @@ export class ChatroomAgentSessionController {
         }
       }
       throw new ChatroomRoomStoreError(
-        'conflict', 'Room registry kept changing during Agent/Session mutation.', true,
+        'conflict',
+        'Room registry kept changing during Agent/Session mutation.',
+        true,
       );
     });
     const settled = operation.then(() => {}, () => {});

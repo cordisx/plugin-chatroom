@@ -1,12 +1,9 @@
-import type {
-  EntityRecord,
-  EntityRegistrySnapshot,
-} from '@cordisx/protocol/entities/v1';
+import type { EntityRecord, EntityRegistrySnapshot } from '@cordisx/protocol/entities/v1';
 
 import {
-  parseChatroomAgentConfiguration,
   type AgentDefinitionIdentity,
   type ChatroomAgentConfiguration,
+  parseChatroomAgentConfiguration,
 } from './agent-definition.js';
 
 const identityKey = (identity: AgentDefinitionIdentity): string =>
@@ -15,7 +12,8 @@ const identityKey = (identity: AgentDefinitionIdentity): string =>
 const sameOwner = (
   record: EntityRecord,
   snapshot: EntityRegistrySnapshot,
-): boolean => record.owner.profileId === snapshot.binding.profileId
+): boolean =>
+  record.owner.profileId === snapshot.binding.profileId
   && record.owner.installationId === snapshot.binding.installationId
   && record.owner.pluginId === snapshot.binding.pluginId;
 

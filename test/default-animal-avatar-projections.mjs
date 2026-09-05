@@ -34,7 +34,8 @@ const expectedAvatars = Object.freeze([
   Object.freeze({
     kind: 'asset',
     ref: 'oneworks-avatar:asset.5089b05857414a4c9f2bf1c0c5079edc.v1',
-    revision: 'oneworks-avatar:editor-asian-small-clawed-otter-4ceef0184bd3d2fd6a469b20decf1d0dd3cd726bbeaf3d07c43389ba5b2bab6f',
+    revision:
+      'oneworks-avatar:editor-asian-small-clawed-otter-4ceef0184bd3d2fd6a469b20decf1d0dd3cd726bbeaf3d07c43389ba5b2bab6f',
   }),
   Object.freeze({
     kind: 'asset',
@@ -72,21 +73,37 @@ async function importCurrentSources() {
 }
 
 const userMessage = Object.freeze({
-  kind: 'message', itemId: 'user-message', messageId: 'user-message', sequence: 1,
-  source: 'agent-loop', semantic: { purpose: 'conversation' },
+  kind: 'message',
+  itemId: 'user-message',
+  messageId: 'user-message',
+  sequence: 1,
+  source: 'agent-loop',
+  semantic: { purpose: 'conversation' },
   author: { participantId: 'user', role: 'human', displayName: { fallback: 'You' } },
   body: [{ kind: 'text', text: { fallback: 'Please verify the release.' } }],
-  reactions: [], timestamp: '2026-09-02T00:00:00.000Z', deliveryState: 'delivered',
-  runState: 'idle', ariaLive: 'off', actions: [],
+  reactions: [],
+  timestamp: '2026-09-02T00:00:00.000Z',
+  deliveryState: 'delivered',
+  runState: 'idle',
+  ariaLive: 'off',
+  actions: [],
 });
 
 const qaMessage = Object.freeze({
-  kind: 'message', itemId: 'qa-message', messageId: 'qa-message', sequence: 2,
-  source: 'agent-loop', semantic: { purpose: 'conversation' },
+  kind: 'message',
+  itemId: 'qa-message',
+  messageId: 'qa-message',
+  sequence: 2,
+  source: 'agent-loop',
+  semantic: { purpose: 'conversation' },
   author: { participantId: 'qa', role: 'agent', displayName: { fallback: 'QA' } },
   body: [{ kind: 'text', text: { fallback: 'Verified.' } }],
-  reactions: [], timestamp: '2026-09-02T00:00:01.000Z', deliveryState: 'delivered',
-  runState: 'idle', ariaLive: 'off', actions: [],
+  reactions: [],
+  timestamp: '2026-09-02T00:00:01.000Z',
+  deliveryState: 'delivered',
+  runState: 'idle',
+  ariaLive: 'off',
+  actions: [],
 });
 
 test('keeps five default animal AvatarRefs stable across Room, message, reaction, Team, and detail projections', async () => {
@@ -106,16 +123,25 @@ test('keeps five default animal AvatarRefs stable across Room, message, reaction
       })),
     ];
     let room = modules.room.createRoom({
-      id: 'animal-room', title: 'Animal avatars', memberships,
-      seedLeaderIds: configuration.seedLeaderIds, participants,
-      items: [userMessage, qaMessage], timelineSequence: 2,
+      id: 'animal-room',
+      title: 'Animal avatars',
+      memberships,
+      seedLeaderIds: configuration.seedLeaderIds,
+      participants,
+      items: [userMessage, qaMessage],
+      timelineSequence: 2,
       participantPresentation: { multiParticipant: true, participantPresentation: 'host-initials' },
     });
     room = modules.room.addRoomRun(room, {
-      runId: 'integrator-run', memberId: 'integrator', title: 'Integrator', status: 'creating',
+      runId: 'integrator-run',
+      memberId: 'integrator',
+      title: 'Integrator',
+      status: 'creating',
     });
     room = modules.engagement.prepareRoomAcknowledgement(room, configuration, {
-      userItemId: 'user-message', memberId: 'integrator', runId: 'integrator-run',
+      userItemId: 'user-message',
+      memberId: 'integrator',
+      runId: 'integrator-run',
     }).room;
 
     const defaultRefs = configuration.definitions.map(definition => definition.avatar);
@@ -125,40 +151,52 @@ test('keeps five default animal AvatarRefs stable across Room, message, reaction
     assert.equal(defaultRefs.every(avatar => avatar.kind === 'asset' && Object.isFrozen(avatar)), true);
     assert.deepEqual(memberships.map(member => member.avatar), expectedAvatars);
     assert.deepEqual(room.memberships.map(member => member.avatar), expectedAvatars);
-    assert.deepEqual(room.participants.filter(participant => participant.kind === 'agent')
-      .map(participant => participant.avatar), expectedAvatars);
+    assert.deepEqual(
+      room.participants.filter(participant => participant.kind === 'agent')
+        .map(participant => participant.avatar),
+      expectedAvatars,
+    );
 
     const model = modules.conversationModel.createRoomConversationModel(room);
     assert.equal(model.selection.kind, 'room');
     const agents = model.selection.participants.filter(participant => participant.role === 'agent');
     assert.deepEqual(agents.map(participant => participant.avatar), expectedAvatars);
-    assert.deepEqual(agents.map(participant => participant.agentIdentity),
-      configuration.members.map(member => member.definition));
+    assert.deepEqual(
+      agents.map(participant => participant.agentIdentity),
+      configuration.members.map(member => member.definition),
+    );
 
     const teamEntities = modules.team.projectTeamEntities(configuration, [room]);
     assert.deepEqual(teamEntities.map(entity => entity.avatar), expectedAvatars);
-    assert.deepEqual(teamEntities.map(entity => entity.definitionIdentity),
-      agents.map(participant => participant.agentIdentity));
+    assert.deepEqual(
+      teamEntities.map(entity => entity.definitionIdentity),
+      agents.map(participant => participant.agentIdentity),
+    );
 
-    const projectedQaMessage = model.items.find(item => item.kind === 'message'
-      && item.author.participantId === 'qa');
+    const projectedQaMessage = model.items.find(item =>
+      item.kind === 'message'
+      && item.author.participantId === 'qa'
+    );
     assert.deepEqual(projectedQaMessage.author.avatar, expectedAvatars[4]);
-    assert.deepEqual(projectedQaMessage.author,
-      agents.find(participant => participant.participantId === 'qa'));
+    assert.deepEqual(projectedQaMessage.author, agents.find(participant => participant.participantId === 'qa'));
 
-    const projectedUserMessage = model.items.find(item => item.kind === 'message'
-      && item.author.participantId === 'user');
+    const projectedUserMessage = model.items.find(item =>
+      item.kind === 'message'
+      && item.author.participantId === 'user'
+    );
     assert.equal(projectedUserMessage.reactions[0].actorParticipantId, 'integrator');
     assert.deepEqual(
-      agents.find(participant =>
-        participant.participantId === projectedUserMessage.reactions[0].actorParticipantId).avatar,
+      agents.find(participant => participant.participantId === projectedUserMessage.reactions[0].actorParticipantId)
+        .avatar,
       expectedAvatars[2],
     );
 
     const refreshed = modules.room.createRoom({
-      id: 'animal-room-refreshed', title: 'Animal avatars refreshed',
+      id: 'animal-room-refreshed',
+      title: 'Animal avatars refreshed',
       memberships: modules.room.expandRoomMemberships(configuration),
-      seedLeaderIds: configuration.seedLeaderIds, participants,
+      seedLeaderIds: configuration.seedLeaderIds,
+      participants,
     });
     assert.deepEqual(refreshed.memberships.map(member => member.avatar), expectedAvatars);
   } finally {

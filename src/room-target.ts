@@ -8,9 +8,9 @@ export interface RoomDispatchRecipient {
 }
 
 export type RoomDispatchResolution =
-  | { readonly status: 'empty' | 'no-recipients' }
-  | { readonly status: 'missing' | 'ambiguous'; readonly mention: string }
-  | { readonly status: 'empty-targeted-message'; readonly mention: string }
+  | { readonly status: 'empty' | 'no-recipients'; }
+  | { readonly status: 'missing' | 'ambiguous'; readonly mention: string; }
+  | { readonly status: 'empty-targeted-message'; readonly mention: string; }
   | {
     readonly status: 'resolved';
     readonly content: string;
@@ -18,8 +18,8 @@ export type RoomDispatchResolution =
   };
 
 export type ExplicitRoomAgentDispatchResolution =
-  | { readonly status: 'room-only'; readonly content: string }
-  | { readonly status: 'missing' | 'ambiguous' | 'empty-targeted-message' | 'self-target'; readonly mention: string }
+  | { readonly status: 'room-only'; readonly content: string; }
+  | { readonly status: 'missing' | 'ambiguous' | 'empty-targeted-message' | 'self-target'; readonly mention: string; }
   | {
     readonly status: 'resolved';
     readonly content: string;
@@ -33,8 +33,10 @@ const matchingMembers = (room: Room, alias: string) =>
   room.memberships.filter(member => aliases(member.memberId, member.label).has(normalize(alias)));
 
 const matchingRuns = (room: Room, member: RoomMembership, alias: string) =>
-  room.runs.filter(run => run.memberId === member.memberId
-    && aliases(run.runId, run.title).has(normalize(alias)));
+  room.runs.filter(run =>
+    run.memberId === member.memberId
+    && aliases(run.runId, run.title).has(normalize(alias))
+  );
 
 const reusableRun = (
   room: Room,
@@ -43,16 +45,26 @@ const reusableRun = (
 ): RoomRun | undefined => {
   const memberRuns = room.runs.filter(run => run.memberId === member.memberId);
   const ownsRuntime = (run: RoomRun) => run.sessionId !== undefined || run.taskBinding?.state === 'active';
-  return memberRuns.find(run => !locallyUnavailableRunIds.has(run.runId)
-      && run.status === 'waiting' && ownsRuntime(run))
-    ?? memberRuns.find(run => !locallyUnavailableRunIds.has(run.runId)
-      && run.status === 'active' && ownsRuntime(run))
-    ?? memberRuns.find(run => !locallyUnavailableRunIds.has(run.runId)
-      && run.status === 'running' && ownsRuntime(run))
-    ?? memberRuns.find(run => !locallyUnavailableRunIds.has(run.runId)
-      && run.status === 'completed' && ownsRuntime(run))
-    ?? memberRuns.find(run => run.status === 'creating'
-      && run.taskBinding === undefined && run.rebind === undefined);
+  return memberRuns.find(run =>
+    !locallyUnavailableRunIds.has(run.runId)
+    && run.status === 'waiting' && ownsRuntime(run)
+  )
+    ?? memberRuns.find(run =>
+      !locallyUnavailableRunIds.has(run.runId)
+      && run.status === 'active' && ownsRuntime(run)
+    )
+    ?? memberRuns.find(run =>
+      !locallyUnavailableRunIds.has(run.runId)
+      && run.status === 'running' && ownsRuntime(run)
+    )
+    ?? memberRuns.find(run =>
+      !locallyUnavailableRunIds.has(run.runId)
+      && run.status === 'completed' && ownsRuntime(run)
+    )
+    ?? memberRuns.find(run =>
+      run.status === 'creating'
+      && run.taskBinding === undefined && run.rebind === undefined
+    );
 };
 
 const mailboxRecipient = (
@@ -76,8 +88,9 @@ interface ExplicitTarget {
 }
 
 function parseLeadingTargets(room: Room, value: string):
-  | { readonly status: 'resolved'; readonly content: string; readonly targets: readonly ExplicitTarget[] }
-  | { readonly status: 'missing' | 'ambiguous' | 'empty-targeted-message'; readonly mention: string } {
+  | { readonly status: 'resolved'; readonly content: string; readonly targets: readonly ExplicitTarget[]; }
+  | { readonly status: 'missing' | 'ambiguous' | 'empty-targeted-message'; readonly mention: string; }
+{
   let remaining = value.trimStart();
   const targets: ExplicitTarget[] = [];
   while (remaining.startsWith('@')) {
@@ -180,15 +193,17 @@ export function resolveExplicitRoomAgentDispatch(
   if (parsed.targets.length === 0) return { status: 'room-only', content: parsed.content };
   const self = parsed.targets.find(target => target.member.memberId === sourceMemberId);
   if (self !== undefined) return { status: 'self-target', mention: `@${self.member.label}` };
-  const recipients = parsed.targets.map(target => target.run === undefined
+  const recipients = parsed.targets.map(target =>
+    target.run === undefined
       || locallyUnavailableRunIds.has(target.run.runId)
-    ? mailboxRecipient(room, target.member, 'mention', locallyUnavailableRunIds)
-    : {
-      memberId: target.member.memberId,
-      runId: target.run.runId,
-      createRun: false,
-      reason: 'mention' as const,
-    });
+      ? mailboxRecipient(room, target.member, 'mention', locallyUnavailableRunIds)
+      : {
+        memberId: target.member.memberId,
+        runId: target.run.runId,
+        createRun: false,
+        reason: 'mention' as const,
+      }
+  );
   const deduped = [...new Map(recipients.map(recipient => [
     `${recipient.memberId.length}:${recipient.memberId}${recipient.runId?.length ?? -1}:${recipient.runId ?? ''}`,
     recipient,

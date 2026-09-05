@@ -1,12 +1,12 @@
 import type {
-  AgentConversationActiveRunDescriptor,
   AgentConversationAction,
+  AgentConversationActiveRunDescriptor,
   AgentConversationItem,
+  AgentConversationParticipant,
   AgentConversationReaction,
   AgentConversationSelection,
   AgentConversationShellBinding,
   AgentConversationShellSnapshot,
-  AgentConversationParticipant,
   LocalizedText,
 } from '@cordisx/protocol/agent-conversation-shell/v3';
 
@@ -27,31 +27,34 @@ export interface ChatroomConversationModel {
 }
 
 export const text = (key: string, fallback: string): LocalizedText => ({
-  namespace: 'chatroom', key, fallback,
+  namespace: 'chatroom',
+  key,
+  fallback,
 });
 
 /** Project immutable Room identity data; Host owns Avatar rendering and fallback. */
 export const projectRoomParticipant = (
   participant: RoomParticipant,
   room?: Room,
-): AgentConversationParticipant => participant.kind === 'agent'
-  ? {
-    participantId: participant.id,
-    role: 'agent',
-    displayName: text('participant.name', participant.name),
-    ...(participant.avatar === undefined ? {} : { avatar: participant.avatar }),
-    ...(room?.memberships.find(member => member.participantId === participant.id)?.definition === undefined
-      ? {}
-      : {
-        agentIdentity: room.memberships.find(member => member.participantId === participant.id)!.definition,
-      }),
-  }
-  : {
-    participantId: participant.id,
-    role: participant.kind,
-    displayName: text('participant.name', participant.name),
-    ...(participant.avatar === undefined ? {} : { avatar: participant.avatar }),
-  };
+): AgentConversationParticipant =>
+  participant.kind === 'agent'
+    ? {
+      participantId: participant.id,
+      role: 'agent',
+      displayName: text('participant.name', participant.name),
+      ...(participant.avatar === undefined ? {} : { avatar: participant.avatar }),
+      ...(room?.memberships.find(member => member.participantId === participant.id)?.definition === undefined
+        ? {}
+        : {
+          agentIdentity: room.memberships.find(member => member.participantId === participant.id)!.definition,
+        }),
+    }
+    : {
+      participantId: participant.id,
+      role: participant.kind,
+      displayName: text('participant.name', participant.name),
+      ...(participant.avatar === undefined ? {} : { avatar: participant.avatar }),
+    };
 
 /**
  * The default is intentionally data-only and connection-free. Host owns the
@@ -89,8 +92,10 @@ export function createRoomConversationModel(
       if (author !== undefined) {
         const reactions: AgentConversationReaction[] = room.acknowledgements
           .flatMap(acknowledgement => {
-            if (acknowledgement.userItemId !== item.itemId
-              || acknowledgement.presentation.kind !== 'reaction') return [];
+            if (
+              acknowledgement.userItemId !== item.itemId
+              || acknowledgement.presentation.kind !== 'reaction'
+            ) return [];
             const presentation = acknowledgement.presentation;
             return [{
               reactionId: presentation.reactionId,
@@ -128,8 +133,7 @@ export function createRoomConversationModel(
       memberId: member.memberId,
       runId: run.runId,
       ...(run.presence.failure === undefined ? {} : {
-        diagnostic: text('member.presence.failure',
-          run.presence.failure.diagnostic ?? run.presence.failure.code),
+        diagnostic: text('member.presence.failure', run.presence.failure.diagnostic ?? run.presence.failure.code),
       }),
     } as const;
     if (isRunLocallyUnavailable(run.runId)) {
@@ -170,8 +174,11 @@ export function createRoomConversationModel(
       body: [{ kind: 'text', text: text('acknowledgement.message', acknowledgement.presentation.text) }],
       reactions: [],
       timestamp: acknowledgement.timestamp,
-      deliveryState: acknowledgement.dispatchState === 'accepted' ? 'delivered'
-        : acknowledgement.dispatchState === 'failed' ? 'failed' : 'pending',
+      deliveryState: acknowledgement.dispatchState === 'accepted'
+        ? 'delivered'
+        : acknowledgement.dispatchState === 'failed'
+        ? 'failed'
+        : 'pending',
       runState: acknowledgement.state === 'failed' ? 'failed' : 'idle',
       ariaLive: 'polite',
       actions: [],
@@ -179,12 +186,18 @@ export function createRoomConversationModel(
   }
   const activeRuns: AgentConversationActiveRunDescriptor[] = room.runs.flatMap(run => {
     const member = room.memberships.find(candidate => candidate.memberId === run.memberId)!;
-    if (isRunLocallyUnavailable(run.runId)
+    if (
+      isRunLocallyUnavailable(run.runId)
       || run.taskBinding?.state !== 'active' || run.detailsUrl === undefined
-      || (run.presence.state !== 'joined' && run.presence.state !== 'ready')) return [];
-    const phase = run.status === 'running' ? 'running'
-      : run.status === 'waiting' ? 'waiting'
-        : run.status === 'failed' ? 'attention' : 'active';
+      || (run.presence.state !== 'joined' && run.presence.state !== 'ready')
+    ) return [];
+    const phase = run.status === 'running'
+      ? 'running'
+      : run.status === 'waiting'
+      ? 'waiting'
+      : run.status === 'failed'
+      ? 'attention'
+      : 'active';
     return [{
       participantId: member.participantId,
       memberId: member.memberId,

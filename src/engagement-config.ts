@@ -10,13 +10,15 @@ export interface ChatroomAcknowledgeBehavior {
 
 export type ChatroomAcknowledgeOverride = Partial<ChatroomAcknowledgeBehavior>;
 
-export const CHATROOM_DEFAULT_ACKNOWLEDGE_BEHAVIOR = Object.freeze({
-  mode: 'reaction',
-  pendingReaction: '👀',
-  completedReaction: '✅',
-  failedReaction: '⚠️',
-  messageTemplate: 'I’ll take a look.',
-} as const satisfies ChatroomAcknowledgeBehavior);
+export const CHATROOM_DEFAULT_ACKNOWLEDGE_BEHAVIOR = Object.freeze(
+  {
+    mode: 'reaction',
+    pendingReaction: '👀',
+    completedReaction: '✅',
+    failedReaction: '⚠️',
+    messageTemplate: 'I’ll take a look.',
+  } as const satisfies ChatroomAcknowledgeBehavior,
+);
 
 const modes = new Set<ChatroomAcknowledgeMode>(['reaction', 'message', 'none']);
 

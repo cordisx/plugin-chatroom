@@ -4,15 +4,15 @@
  */
 export type {
   AgentConversationShellBinding,
-  AgentConversationShellSnapshot,
-  AgentConversationShellSubscription,
-  AgentConversationShellPage,
-  AgentConversationShellUpdate,
-  AgentConversationShellSource,
   AgentConversationShellBindRequest,
   AgentConversationShellBindResult,
-  AgentConversationShellResult,
-  AgentConversationShellSubscribeRuntimeResult,
-  AgentConversationShellSubscriptionHandle,
   AgentConversationShellCommandContext,
+  AgentConversationShellPage,
+  AgentConversationShellResult,
+  AgentConversationShellSnapshot,
+  AgentConversationShellSource,
+  AgentConversationShellSubscribeRuntimeResult,
+  AgentConversationShellSubscription,
+  AgentConversationShellSubscriptionHandle,
+  AgentConversationShellUpdate,
 } from '@cordisx/protocol/agent-conversation-shell/v3';

@@ -4,8 +4,8 @@ import type {
   AgentLoopCommand,
   AgentLoopContentPart,
   AgentLoopEventPage,
-  AgentLoopResult,
   AgentLoopRequestMemberSelfIntroductionResult,
+  AgentLoopResult,
   AgentLoopSubscribeRuntimeResult,
   AgentLoopTaskBinding,
   BoundAgentLoopClient,
@@ -46,11 +46,11 @@ import { ChatroomRoomStoreError, DurableChatroomRoomStore } from './room-store.j
 import {
   createRoom,
   replaceRoomRun,
-  roomRunOwnsAgentLoopBinding,
   type Room,
   type RoomDeliveryPayload,
   type RoomMemberSelfIntroductionAttentionCode,
   type RoomRun,
+  roomRunOwnsAgentLoopBinding,
 } from './room.js';
 
 const COMMAND_SCHEMA =
@@ -58,12 +58,18 @@ const COMMAND_SCHEMA =
 const COMMAND_CONTRACT = 'cordisx.agent-loop-command/v4' as const;
 
 export type ChatroomAgentLoopOutcome =
-  | { readonly status: 'accepted'; readonly roomId: string; readonly runId: string; readonly bindingCreated: boolean }
-  | { readonly status: 'denied' | 'unavailable'; readonly roomId: string; readonly runId: string; readonly bindingCreated: boolean; readonly code: string };
+  | { readonly status: 'accepted'; readonly roomId: string; readonly runId: string; readonly bindingCreated: boolean; }
+  | {
+    readonly status: 'denied' | 'unavailable';
+    readonly roomId: string;
+    readonly runId: string;
+    readonly bindingCreated: boolean;
+    readonly code: string;
+  };
 
 export type ChatroomApprovalDecisionOutcome =
-  | { readonly status: 'accepted'; readonly operationId: string }
-  | { readonly status: 'conflict' | 'denied' | 'unavailable'; readonly operationId: string; readonly code: string };
+  | { readonly status: 'accepted'; readonly operationId: string; }
+  | { readonly status: 'conflict' | 'denied' | 'unavailable'; readonly operationId: string; readonly code: string; };
 
 interface ActiveSubscription {
   readonly bindingId: string;
@@ -83,12 +89,12 @@ type LocalHydratedRunState =
   };
 
 type CreateBindingOutcome =
-  | { readonly status: 'accepted'; readonly binding: AgentLoopTaskBinding }
-  | { readonly status: 'denied' | 'unavailable'; readonly code: string };
+  | { readonly status: 'accepted'; readonly binding: AgentLoopTaskBinding; }
+  | { readonly status: 'denied' | 'unavailable'; readonly code: string; };
 
 type CreateOrSendFailure = Exclude<
-  Extract<AgentLoopResult, { type: 'create-or-bind' | 'send' }>,
-  { status: 'accepted' }
+  Extract<AgentLoopResult, { type: 'create-or-bind' | 'send'; }>,
+  { status: 'accepted'; }
 >;
 
 const stablePart = (value: string) => `${value.length}:${value}`;
@@ -98,37 +104,45 @@ const operationId = (
   runId: string,
   userItemId?: string,
   runtimeGeneration?: string,
-) => `chatroom-${kind}-${canonicalRoomPayloadHash({
-  roomId,
-  runId,
-  ...(userItemId === undefined ? {} : { userItemId }),
-  ...(runtimeGeneration === undefined ? {} : { runtimeGeneration }),
-}).slice('sha256.'.length)}`;
+) =>
+  `chatroom-${kind}-${
+    canonicalRoomPayloadHash({
+      roomId,
+      runId,
+      ...(userItemId === undefined ? {} : { userItemId }),
+      ...(runtimeGeneration === undefined ? {} : { runtimeGeneration }),
+    }).slice('sha256.'.length)
+  }`;
 const bindingOperationId = (
   kind: 'bind' | 'rebind',
   roomId: string,
   runId: string,
   binding: AgentLoopTaskBinding,
   logicalAttempt: string,
-) => `chatroom-${kind}-${canonicalRoomPayloadHash({
-  roomId, runId, task: binding.task, bindingId: binding.binding.bindingId,
-  generation: binding.binding.generation, logicalAttempt,
-}).slice('sha256.'.length)}`;
+) =>
+  `chatroom-${kind}-${
+    canonicalRoomPayloadHash({
+      roomId,
+      runId,
+      task: binding.task,
+      bindingId: binding.binding.bindingId,
+      generation: binding.binding.generation,
+      logicalAttempt,
+    }).slice('sha256.'.length)
+  }`;
 const deliveryId = (roomId: string, runId: string, userItemId: string) =>
   `chatroom:delivery:${stablePart(roomId)}${stablePart(runId)}${stablePart(userItemId)}`;
 
-const payloadFor = (command: AgentLoopCommand): RoomDeliveryPayload =>
-  command as unknown as RoomDeliveryPayload;
+const payloadFor = (command: AgentLoopCommand): RoomDeliveryPayload => command as unknown as RoomDeliveryPayload;
 
-const resultCode = (result: Exclude<AgentLoopResult, { status: 'accepted' }>): string =>
+const resultCode = (result: Exclude<AgentLoopResult, { status: 'accepted'; }>): string =>
   'code' in result ? result.code : result.authorization.code;
 const introductionResultCode = (
   result: Exclude<
-    Extract<AgentLoopResult, { type: 'request-member-self-introduction' | 'cancel-member-self-introduction' }>,
-    { status: 'accepted' }
+    Extract<AgentLoopResult, { type: 'request-member-self-introduction' | 'cancel-member-self-introduction'; }>,
+    { status: 'accepted'; }
   >,
-): RoomMemberSelfIntroductionAttentionCode =>
-  ('code' in result ? result.code : result.authorization.code);
+): RoomMemberSelfIntroductionAttentionCode => ('code' in result ? result.code : result.authorization.code);
 
 const sameBinding = (left: AgentLoopTaskBinding, right: AgentLoopTaskBinding) =>
   left.binding.bindingId === right.binding.bindingId
@@ -151,7 +165,7 @@ export class ChatroomAgentLoopController {
   private readonly projections = new Set<Promise<void>>();
   private readonly localHydratedRuns = new Map<string, LocalHydratedRunState>();
   private mutationTail: Promise<void> = Promise.resolve();
-  private projectionFailure: Readonly<{ generation: number; error: unknown }> | undefined;
+  private projectionFailure: Readonly<{ generation: number; error: unknown; }> | undefined;
 
   constructor(
     private readonly client: BoundAgentLoopClient,
@@ -160,7 +174,9 @@ export class ChatroomAgentLoopController {
     private readonly now: () => string = () => new Date().toISOString(),
   ) {}
 
-  get rooms() { return this.store.rooms; }
+  get rooms() {
+    return this.store.rooms;
+  }
 
   isRunLocallyUnavailable(roomId: string, runId: string): boolean {
     return this.localHydratedRunState(roomId, runId)?.status === 'unavailable';
@@ -177,10 +193,13 @@ export class ChatroomAgentLoopController {
     this.assertUsable();
     const controllerGeneration = this.controllerGeneration;
     const existingDecision = this.requireRoom(roomId).approvalDecisions.find(candidate =>
-      candidate.runId === runId && candidate.turn === turn && candidate.approvalId === approvalId);
-    const requestCollision = requestOperationId === undefined ? undefined
+      candidate.runId === runId && candidate.turn === turn && candidate.approvalId === approvalId
+    );
+    const requestCollision = requestOperationId === undefined
+      ? undefined
       : this.requireRoom(roomId).approvalDecisions.find(candidate =>
-        candidate.requestOperationId === requestOperationId);
+        candidate.requestOperationId === requestOperationId
+      );
     if (requestCollision !== undefined && requestCollision !== existingDecision) {
       return {
         status: 'conflict',
@@ -195,50 +214,61 @@ export class ChatroomAgentLoopController {
         code: 'approval-conflict',
       };
     }
-    if (existingDecision?.requestOperationId !== undefined
+    if (
+      existingDecision?.requestOperationId !== undefined
       && requestOperationId !== undefined
-      && existingDecision.requestOperationId !== requestOperationId) {
+      && existingDecision.requestOperationId !== requestOperationId
+    ) {
       return {
         status: 'conflict',
         operationId: existingDecision.operationId,
         code: 'operation-conflict',
       };
     }
-    await this.mutateRoom(roomId, room => planApprovalDecision(room, {
-      runId, turn, approvalId, decision,
-      ...(requestOperationId === undefined ? {} : { requestOperationId }),
-    }), controllerGeneration);
+    await this.mutateRoom(roomId, room =>
+      planApprovalDecision(room, {
+        runId,
+        turn,
+        approvalId,
+        decision,
+        ...(requestOperationId === undefined ? {} : { requestOperationId }),
+      }), controllerGeneration);
     if (!this.isCurrentGeneration(controllerGeneration)) {
       return {
-        status: 'unavailable', operationId: approvalDecisionOperationId(roomId, runId, turn, approvalId, decision),
+        status: 'unavailable',
+        operationId: approvalDecisionOperationId(roomId, runId, turn, approvalId, decision),
         code: 'controller-replaced',
       };
     }
     let room = this.requireRoom(roomId);
-    let planned = room.approvalDecisions.find(candidate => candidate.runId === runId
-      && candidate.turn === turn && candidate.approvalId === approvalId)!;
+    let planned = room.approvalDecisions.find(candidate =>
+      candidate.runId === runId
+      && candidate.turn === turn && candidate.approvalId === approvalId
+    )!;
     if (planned.state === 'accepted' || planned.state === 'completed') {
       return { status: 'accepted', operationId: planned.operationId };
     }
     if (planned.state === 'attention') {
       return {
-        status: 'unavailable', operationId: planned.operationId,
+        status: 'unavailable',
+        operationId: planned.operationId,
         code: planned.attention?.code ?? 'reconciliation-required',
       };
     }
     if (planned.state === 'planned') {
-      await this.mutateRoom(roomId, current => updateApprovalDecision(
-        current,
-        planned.operationId,
-        candidate => ({ ...candidate, state: 'sending-unknown' }),
-      ), controllerGeneration);
+      await this.mutateRoom(roomId, current =>
+        updateApprovalDecision(
+          current,
+          planned.operationId,
+          candidate => ({ ...candidate, state: 'sending-unknown' }),
+        ), controllerGeneration);
       if (!this.isCurrentGeneration(controllerGeneration)) {
         return { status: 'unavailable', operationId: planned.operationId, code: 'controller-replaced' };
       }
       room = this.requireRoom(roomId);
       planned = room.approvalDecisions.find(candidate => candidate.operationId === planned.operationId)!;
     }
-    const command: Extract<AgentLoopCommand, { type: 'approval-decision' }> = {
+    const command: Extract<AgentLoopCommand, { type: 'approval-decision'; }> = {
       $schema: COMMAND_SCHEMA,
       contract: COMMAND_CONTRACT,
       schemaVersion: 4,
@@ -258,27 +288,29 @@ export class ChatroomAgentLoopController {
     }
     if (result.status !== 'accepted') {
       const code = resultCode(result);
-      await this.mutateRoom(roomId, current => updateApprovalDecision(
-        current,
-        planned.operationId,
-        candidate => ({ ...candidate, state: 'attention', attention: { code, diagnostic: code } }),
-      ), controllerGeneration);
+      await this.mutateRoom(roomId, current =>
+        updateApprovalDecision(
+          current,
+          planned.operationId,
+          candidate => ({ ...candidate, state: 'attention', attention: { code, diagnostic: code } }),
+        ), controllerGeneration);
       if (!this.isCurrentGeneration(controllerGeneration)) {
         return { status: 'unavailable', operationId: planned.operationId, code: 'controller-replaced' };
       }
       return { status: result.status, operationId: planned.operationId, code };
     }
     this.assertApprovalDecisionResult(command, result);
-    await this.mutateRoom(roomId, current => updateApprovalDecision(
-      current,
-      planned.operationId,
-      candidate => ({
-        ...candidate,
-        state: candidate.state === 'completed' ? 'completed' : 'accepted',
-        disposition: result.delivery.disposition,
-        attention: undefined,
-      }),
-    ), controllerGeneration);
+    await this.mutateRoom(roomId, current =>
+      updateApprovalDecision(
+        current,
+        planned.operationId,
+        candidate => ({
+          ...candidate,
+          state: candidate.state === 'completed' ? 'completed' : 'accepted',
+          disposition: result.delivery.disposition,
+          attention: undefined,
+        }),
+      ), controllerGeneration);
     if (!this.isCurrentGeneration(controllerGeneration)) {
       return { status: 'unavailable', operationId: planned.operationId, code: 'controller-replaced' };
     }
@@ -319,7 +351,8 @@ export class ChatroomAgentLoopController {
     }
     if (introduction.cancellation?.state === 'attention') {
       return {
-        status: 'unavailable', operationId: operationIdValue,
+        status: 'unavailable',
+        operationId: operationIdValue,
         code: introduction.cancellation.attention?.code ?? 'reconciliation-required',
       };
     }
@@ -341,7 +374,7 @@ export class ChatroomAgentLoopController {
       run = this.requireRun(room, runId);
       introduction = run.selfIntroduction!;
     }
-    const command: Extract<AgentLoopCommand, { type: 'cancel-member-self-introduction' }> = {
+    const command: Extract<AgentLoopCommand, { type: 'cancel-member-self-introduction'; }> = {
       $schema: COMMAND_SCHEMA,
       contract: COMMAND_CONTRACT,
       schemaVersion: 4,
@@ -381,7 +414,8 @@ export class ChatroomAgentLoopController {
       }
       return { status: result.status, operationId: operationIdValue, code };
     }
-    if (result.commandId !== command.commandId
+    if (
+      result.commandId !== command.commandId
       || result.causation.operationId !== command.commandId
       || result.requestOperationId !== command.requestOperationId
       || result.participantId !== command.participantId
@@ -390,7 +424,8 @@ export class ChatroomAgentLoopController {
       || (introduction.acceptance !== undefined
         && (result.turn !== introduction.acceptance.turn
           || result.messageId !== introduction.acceptance.messageId))
-      || !sameBinding(result.binding, command.binding)) {
+      || !sameBinding(result.binding, command.binding)
+    ) {
       throw new Error('Accepted introduction cancellation did not match its exact command.');
     }
     await this.mutateRoom(roomId, current => {
@@ -427,9 +462,17 @@ export class ChatroomAgentLoopController {
     const controllerGeneration = this.controllerGeneration;
     const operationKey = stablePart(roomId);
     const previous = this.operations.get(operationKey) ?? Promise.resolve();
-    const operation = previous.catch(() => {}).then(() => this.sendToRunNow(
-      roomId, runId, userItemId, content, runtimeGeneration, controllerGeneration, sendOperationId,
-    ));
+    const operation = previous.catch(() => {}).then(() =>
+      this.sendToRunNow(
+        roomId,
+        runId,
+        userItemId,
+        content,
+        runtimeGeneration,
+        controllerGeneration,
+        sendOperationId,
+      )
+    );
     const settled = operation.then(() => {}, () => {});
     this.operations.set(operationKey, settled);
     return operation.finally(() => {
@@ -463,17 +506,25 @@ export class ChatroomAgentLoopController {
   async hydrate(): Promise<void> {
     this.assertUsable();
     const controllerGeneration = this.controllerGeneration;
-    const staleActiveRuns = this.rooms.snapshot().flatMap(room => room.runs.flatMap(run =>
-      run.taskBinding?.state === 'active'
-        && (run.presence.state === 'joined' || run.presence.state === 'ready')
-        ? [{ roomId: room.id, runId: run.runId, binding: run.taskBinding }]
-        : []));
+    const staleActiveRuns = this.rooms.snapshot().flatMap(room =>
+      room.runs.flatMap(run =>
+        run.taskBinding?.state === 'active'
+          && (run.presence.state === 'joined' || run.presence.state === 'ready')
+          ? [{ roomId: room.id, runId: run.runId, binding: run.taskBinding }]
+          : []
+      )
+    );
     for (const stale of staleActiveRuns) {
       const current = this.rooms.get(stale.roomId)?.runs.find(run => run.runId === stale.runId);
-      if (current?.taskBinding?.binding.bindingId !== stale.binding.binding.bindingId
-        || current.taskBinding.binding.generation !== stale.binding.binding.generation) continue;
+      if (
+        current?.taskBinding?.binding.bindingId !== stale.binding.binding.bindingId
+        || current.taskBinding.binding.generation !== stale.binding.binding.generation
+      ) continue;
       await this.probeHydratedRun(
-        stale.roomId, stale.runId, stale.binding, controllerGeneration,
+        stale.roomId,
+        stale.runId,
+        stale.binding,
+        controllerGeneration,
       );
       if (!this.isCurrentGeneration(controllerGeneration)) return;
     }
@@ -494,24 +545,32 @@ export class ChatroomAgentLoopController {
     } catch {
       if (this.isCurrentGeneration(controllerGeneration)) {
         this.localHydratedRuns.set(this.localRunKey(roomId, runId), {
-          status: 'unavailable', source, code: 'task-unavailable',
+          status: 'unavailable',
+          source,
+          code: 'task-unavailable',
         });
       }
       return;
     }
     if (!this.isCurrentGeneration(controllerGeneration)) {
       if (result.status === 'accepted') {
-        try { result.handle.unsubscribe(); } catch { /* retired probe */ }
+        try {
+          result.handle.unsubscribe();
+        } catch { /* retired probe */ }
       }
       return;
     }
     if (result.status !== 'accepted') {
       this.localHydratedRuns.set(this.localRunKey(roomId, runId), {
-        status: 'unavailable', source, code: result.authorization.code,
+        status: 'unavailable',
+        source,
+        code: result.authorization.code,
       });
       return;
     }
-    try { result.handle.unsubscribe(); } catch { /* a probe never owns the runtime stream */ }
+    try {
+      result.handle.unsubscribe();
+    } catch { /* a probe never owns the runtime stream */ }
     this.localHydratedRuns.set(this.localRunKey(roomId, runId), {
       status: 'available',
       source,
@@ -549,7 +608,9 @@ export class ChatroomAgentLoopController {
       const currentRun = this.requireRun(next, runId);
       member = current.memberships.find(candidate => candidate.memberId === currentRun.memberId)!;
       const acknowledgement = prepareRoomAcknowledgement(next, this.configuration, {
-        userItemId, memberId: member.memberId, runId,
+        userItemId,
+        memberId: member.memberId,
+        runId,
       });
       acknowledgementKey = acknowledgement.acknowledgement.acknowledgementKey;
       next = markRoomAcknowledgementSent(acknowledgement.room, acknowledgementKey);
@@ -562,7 +623,7 @@ export class ChatroomAgentLoopController {
         memberId: member.memberId,
         runId,
         ...(currentRun.presence.state === 'ready'
-          && currentRun.taskBinding?.state === 'active' && currentRun.detailsUrl !== undefined
+            && currentRun.taskBinding?.state === 'active' && currentRun.detailsUrl !== undefined
           ? {}
           : { createOperationId: createCommandId }),
         sendOperationId: sendCommandId,
@@ -578,17 +639,28 @@ export class ChatroomAgentLoopController {
     let run = this.requireRun(room, runId);
     let binding = this.requireRun(room, runId).taskBinding;
     let bindingCreated = false;
-    if (run.presence.state !== 'ready'
-      || binding?.state !== 'active' || run.detailsUrl === undefined) {
+    if (
+      run.presence.state !== 'ready'
+      || binding?.state !== 'active' || run.detailsUrl === undefined
+    ) {
       const created = await this.createOrReplayBinding(
-        roomId, runId, aggregateDeliveryId, member.definition, controllerGeneration,
+        roomId,
+        runId,
+        aggregateDeliveryId,
+        member.definition,
+        controllerGeneration,
       );
       if (!this.isCurrentGeneration(controllerGeneration)) {
         return { status: 'unavailable', roomId, runId, bindingCreated: false, code: 'controller-replaced' };
       }
       if (created.status !== 'accepted') {
         await this.failMessage(
-          roomId, runId, userItemId, acknowledgementKey, created.code, controllerGeneration,
+          roomId,
+          runId,
+          userItemId,
+          acknowledgementKey,
+          created.code,
+          controllerGeneration,
         );
         if (!this.isCurrentGeneration(controllerGeneration)) {
           return { status: 'unavailable', roomId, runId, bindingCreated: false, code: 'controller-replaced' };
@@ -610,7 +682,7 @@ export class ChatroomAgentLoopController {
         return { status: 'unavailable', roomId, runId, bindingCreated, code: 'controller-replaced' };
       }
     }
-    const command: Extract<AgentLoopCommand, { type: 'send' }> = {
+    const command: Extract<AgentLoopCommand, { type: 'send'; }> = {
       $schema: COMMAND_SCHEMA,
       contract: COMMAND_CONTRACT,
       schemaVersion: 4,
@@ -651,7 +723,10 @@ export class ChatroomAgentLoopController {
     const plannedAttentionCode = durablePlan.attention?.code;
     if (plannedState === 'attention' || plannedState === 'closed') {
       return {
-        status: 'unavailable', roomId, runId, bindingCreated,
+        status: 'unavailable',
+        roomId,
+        runId,
+        bindingCreated,
         code: plannedAttentionCode ?? 'reconciliation-required',
       };
     }
@@ -675,8 +750,7 @@ export class ChatroomAgentLoopController {
       if (!this.isCurrentGeneration(controllerGeneration)) {
         return { status: 'unavailable', roomId, runId, bindingCreated, code: 'controller-replaced' };
       }
-      await this.failMessage(roomId, runId, userItemId, acknowledgementKey,
-        resultCode(result), controllerGeneration);
+      await this.failMessage(roomId, runId, userItemId, acknowledgementKey, resultCode(result), controllerGeneration);
       if (!this.isCurrentGeneration(controllerGeneration)) {
         return { status: 'unavailable', roomId, runId, bindingCreated, code: 'controller-replaced' };
       }
@@ -697,11 +771,20 @@ export class ChatroomAgentLoopController {
       return { status: 'unavailable', roomId, runId, bindingCreated, code: 'controller-replaced' };
     }
     const subscriptionFailure = await this.ensureSubscribed(
-      this.requireRoom(roomId), runId, binding, controllerGeneration,
+      this.requireRoom(roomId),
+      runId,
+      binding,
+      controllerGeneration,
     );
     if (subscriptionFailure !== undefined) {
-      await this.failMessage(roomId, runId, userItemId, acknowledgementKey,
-        subscriptionFailure.code, controllerGeneration);
+      await this.failMessage(
+        roomId,
+        runId,
+        userItemId,
+        acknowledgementKey,
+        subscriptionFailure.code,
+        controllerGeneration,
+      );
       if (!this.isCurrentGeneration(controllerGeneration)) {
         return { status: 'unavailable', roomId, runId, bindingCreated, code: 'controller-replaced' };
       }
@@ -724,7 +807,10 @@ export class ChatroomAgentLoopController {
     if (!this.isCurrentGeneration(controllerGeneration)) return;
     for (const pending of recovered.subscriptions) {
       await this.ensureSubscribed(
-        this.requireRoom(pending.roomId), pending.runId, pending.binding, controllerGeneration,
+        this.requireRoom(pending.roomId),
+        pending.runId,
+        pending.binding,
+        controllerGeneration,
       );
       if (!this.isCurrentGeneration(controllerGeneration)) return;
     }
@@ -733,14 +819,17 @@ export class ChatroomAgentLoopController {
   private async recoverUnknownDeliveries(
     roomId: string,
     controllerGeneration: number,
-  ): Promise<Readonly<{
-    refreshedRuns: ReadonlySet<string>;
-    subscriptions: readonly Readonly<{ roomId: string; runId: string; binding: AgentLoopTaskBinding }>[];
-  }>> {
+  ): Promise<
+    Readonly<{
+      refreshedRuns: ReadonlySet<string>;
+      subscriptions: readonly Readonly<{ roomId: string; runId: string; binding: AgentLoopTaskBinding; }>[];
+    }>
+  > {
     const refreshedRuns = new Set<string>();
-    const subscriptions: Array<Readonly<{ roomId: string; runId: string; binding: AgentLoopTaskBinding }>> = [];
+    const subscriptions: Array<Readonly<{ roomId: string; runId: string; binding: AgentLoopTaskBinding; }>> = [];
     const hydrated = hydrateRoomDeliveries(this.requireRoom(roomId), {
-      now: this.now(), durableApiAvailable: true,
+      now: this.now(),
+      durableApiAvailable: true,
     });
     if (hydrated.room !== this.requireRoom(roomId)) {
       await this.commit(hydrated.room, controllerGeneration);
@@ -789,15 +878,21 @@ export class ChatroomAgentLoopController {
     const target = targetValue?.mode === 'create'
       ? { mode: 'create' as const }
       : targetValue?.mode === 'bind' && typeof targetValue.task === 'string'
-        ? { mode: 'bind' as const, task: targetValue.task }
-        : undefined;
+      ? { mode: 'bind' as const, task: targetValue.task }
+      : undefined;
     if (target === undefined) {
-      await this.commit(requireRoomDeliveryAttention(
-        room, operationIdValue, 'reconciliation-required', 'Durable create target cannot be reconstructed.',
-      ), controllerGeneration);
+      await this.commit(
+        requireRoomDeliveryAttention(
+          room,
+          operationIdValue,
+          'reconciliation-required',
+          'Durable create target cannot be reconstructed.',
+        ),
+        controllerGeneration,
+      );
       return undefined;
     }
-    const command: Extract<AgentLoopCommand, { type: 'create-or-bind' }> = {
+    const command: Extract<AgentLoopCommand, { type: 'create-or-bind'; }> = {
       $schema: COMMAND_SCHEMA,
       contract: COMMAND_CONTRACT,
       schemaVersion: 4,
@@ -808,12 +903,15 @@ export class ChatroomAgentLoopController {
       target,
     };
     if (delivery.canonicalPayload !== this.createCanonicalPayload(command)) {
-      await this.commit(requireRoomDeliveryAttention(
-        room,
-        operationIdValue,
-        'reconciliation-required',
-        'The current Agent catalog no longer reproduces the durable command hash.',
-      ), controllerGeneration);
+      await this.commit(
+        requireRoomDeliveryAttention(
+          room,
+          operationIdValue,
+          'reconciliation-required',
+          'The current Agent catalog no longer reproduces the durable command hash.',
+        ),
+        controllerGeneration,
+      );
       return undefined;
     }
     if (delivery.state === 'planned') {
@@ -832,38 +930,51 @@ export class ChatroomAgentLoopController {
     if (result.status !== 'accepted') {
       await this.recordFailure(roomId, operationIdValue, result, controllerGeneration);
       if (!this.isCurrentGeneration(controllerGeneration)) return undefined;
-      await this.commit(failRoomRunPresence(this.requireRoom(roomId), run.runId, {
-        code: resultCode(result), retryable: result.status === 'unavailable',
-      }), controllerGeneration);
+      await this.commit(
+        failRoomRunPresence(this.requireRoom(roomId), run.runId, {
+          code: resultCode(result),
+          retryable: result.status === 'unavailable',
+        }),
+        controllerGeneration,
+      );
       return undefined;
     }
     if (target.mode === 'bind' && result.binding.task !== target.task) {
-      await this.commit(requireRoomDeliveryAttention(
-        this.requireRoom(roomId),
-        operationIdValue,
-        'provider-replaced',
-        'Provider returned a different task for the durable bind operation.',
-      ), controllerGeneration);
+      await this.commit(
+        requireRoomDeliveryAttention(
+          this.requireRoom(roomId),
+          operationIdValue,
+          'provider-replaced',
+          'Provider returned a different task for the durable bind operation.',
+        ),
+        controllerGeneration,
+      );
       return undefined;
     }
-    await this.mutateRoom(roomId, current => acceptRoomDelivery(current, operationIdValue, {
-      kind: 'create',
-      disposition: result.delivery.disposition,
-      firstObservedAt: this.now(),
-      binding: result.binding,
-      detailsUrl: createStoredRoomRunDetailsUrl(result.detailsUrl),
-    }), controllerGeneration);
+    await this.mutateRoom(roomId, current =>
+      acceptRoomDelivery(current, operationIdValue, {
+        kind: 'create',
+        disposition: result.delivery.disposition,
+        firstObservedAt: this.now(),
+        binding: result.binding,
+        detailsUrl: createStoredRoomRunDetailsUrl(result.detailsUrl),
+      }), controllerGeneration);
     if (!this.isCurrentGeneration(controllerGeneration)) return undefined;
     let activeBinding = result.binding;
     if (target.mode === 'create' && result.delivery.disposition === 'replayed') {
       const rebound = await this.rebindHydratedRun(
-        roomId, run.runId, result.binding, controllerGeneration,
+        roomId,
+        run.runId,
+        result.binding,
+        controllerGeneration,
       );
       if (!this.isCurrentGeneration(controllerGeneration) || rebound === undefined) return undefined;
       activeBinding = rebound;
     }
-    if (target.mode === 'create'
-      && !await this.requestMemberSelfIntroduction(roomId, run.runId, activeBinding)) return undefined;
+    if (
+      target.mode === 'create'
+      && !await this.requestMemberSelfIntroduction(roomId, run.runId, activeBinding)
+    ) return undefined;
     return activeBinding;
   }
 
@@ -887,10 +998,10 @@ export class ChatroomAgentLoopController {
     const cycle = existing === undefined
       ? 1
       : sameSource && (existing.state === 'planned' || existing.state === 'sending-unknown')
-        ? existing.cycle
-        : existing.cycle + 1;
+      ? existing.cycle
+      : existing.cycle + 1;
     const commandId = bindingOperationId('rebind', roomId, runId, staleBinding, String(cycle));
-    const command: Extract<AgentLoopCommand, { type: 'create-or-bind' }> = {
+    const command: Extract<AgentLoopCommand, { type: 'create-or-bind'; }> = {
       $schema: COMMAND_SCHEMA,
       contract: COMMAND_CONTRACT,
       schemaVersion: 4,
@@ -1030,7 +1141,10 @@ export class ChatroomAgentLoopController {
     // fresh bind instead of returning another historical acceptance.
     if (result.delivery.disposition === 'replayed') {
       return await this.rebindHydratedRun(
-        roomId, runId, result.binding, controllerGeneration,
+        roomId,
+        runId,
+        result.binding,
+        controllerGeneration,
       );
     }
     return result.binding;
@@ -1054,7 +1168,7 @@ export class ChatroomAgentLoopController {
     }
     const createOwnerDeliveryId = aggregate.create.ownerDeliveryId;
     const commandId = aggregate.create.operationId;
-    const command: Extract<AgentLoopCommand, { type: 'create-or-bind' }> = {
+    const command: Extract<AgentLoopCommand, { type: 'create-or-bind'; }> = {
       $schema: COMMAND_SCHEMA,
       contract: COMMAND_CONTRACT,
       schemaVersion: 4,
@@ -1137,7 +1251,8 @@ export class ChatroomAgentLoopController {
         return { status: 'unavailable', code: 'controller-replaced' };
       }
       const failed = failRoomRunPresence(this.requireRoom(roomId), runId, {
-        code: resultCode(result), retryable: result.status === 'unavailable',
+        code: resultCode(result),
+        retryable: result.status === 'unavailable',
       });
       await this.commit(failed, controllerGeneration);
       if (!this.isCurrentGeneration(controllerGeneration)) {
@@ -1158,13 +1273,14 @@ export class ChatroomAgentLoopController {
       }
       return { status: 'unavailable', code: 'provider-replaced' };
     }
-    await this.mutateRoom(roomId, current => acceptRoomDelivery(current, commandId, {
-      kind: 'create',
-      disposition: result.delivery.disposition,
-      firstObservedAt: this.now(),
-      binding: result.binding,
-      detailsUrl: createStoredRoomRunDetailsUrl(result.detailsUrl),
-    }), controllerGeneration);
+    await this.mutateRoom(roomId, current =>
+      acceptRoomDelivery(current, commandId, {
+        kind: 'create',
+        disposition: result.delivery.disposition,
+        firstObservedAt: this.now(),
+        binding: result.binding,
+        detailsUrl: createStoredRoomRunDetailsUrl(result.detailsUrl),
+      }), controllerGeneration);
     if (!this.isCurrentGeneration(controllerGeneration)) {
       return { status: 'unavailable', code: 'controller-replaced' };
     }
@@ -1175,7 +1291,10 @@ export class ChatroomAgentLoopController {
     // fresh Playground session cannot reuse a closed Simulator binding.
     if (command.target.mode === 'create' && result.delivery.disposition === 'replayed') {
       const rebound = await this.rebindHydratedRun(
-        roomId, runId, result.binding, controllerGeneration,
+        roomId,
+        runId,
+        result.binding,
+        controllerGeneration,
       );
       if (!this.isCurrentGeneration(controllerGeneration)) {
         return { status: 'unavailable', code: 'controller-replaced' };
@@ -1210,15 +1329,18 @@ export class ChatroomAgentLoopController {
     let room = this.requireRoom(roomId);
     let run = this.requireRun(room, runId);
     let introduction = run.selfIntroduction!;
-    if (introduction.state === 'accepted' || introduction.state === 'completed'
-      || introduction.state === 'cancelled' || introduction.state === 'attention') return true;
+    if (
+      introduction.state === 'accepted' || introduction.state === 'completed'
+      || introduction.state === 'cancelled' || introduction.state === 'attention'
+    ) return true;
     if (!sameBinding(introduction.binding, binding)) {
-      await this.mutateRoom(roomId, current => requireMemberSelfIntroductionAttention(
-        current,
-        runId,
-        'binding-conflict',
-        'The introduction request belongs to a retired binding generation.',
-      ), controllerGeneration);
+      await this.mutateRoom(roomId, current =>
+        requireMemberSelfIntroductionAttention(
+          current,
+          runId,
+          'binding-conflict',
+          'The introduction request belongs to a retired binding generation.',
+        ), controllerGeneration);
       return this.isCurrentGeneration(controllerGeneration);
     }
     if (introduction.state === 'planned') {
@@ -1232,7 +1354,7 @@ export class ChatroomAgentLoopController {
       run = this.requireRun(room, runId);
       introduction = run.selfIntroduction!;
     }
-    const command: Extract<AgentLoopCommand, { type: 'request-member-self-introduction' }> = {
+    const command: Extract<AgentLoopCommand, { type: 'request-member-self-introduction'; }> = {
       $schema: COMMAND_SCHEMA,
       contract: COMMAND_CONTRACT,
       schemaVersion: 4,
@@ -1253,54 +1375,63 @@ export class ChatroomAgentLoopController {
     if (!this.isCurrentGeneration(controllerGeneration)) return false;
     if (result.status !== 'accepted') {
       const code = introductionResultCode(result);
-      await this.mutateRoom(roomId, current => requireMemberSelfIntroductionAttention(
-        current, runId, code, code,
-      ), controllerGeneration);
+      await this.mutateRoom(roomId, current =>
+        requireMemberSelfIntroductionAttention(
+          current,
+          runId,
+          code,
+          code,
+        ), controllerGeneration);
       return this.isCurrentGeneration(controllerGeneration);
     }
     this.assertMemberSelfIntroductionResult(command, result);
-    await this.mutateRoom(roomId, current => acceptMemberSelfIntroduction(current, runId, {
-      operationId: result.causation.operationId,
-      binding: result.binding,
-      participantId: result.participantId,
-      memberId: result.memberId,
-      turn: result.turn,
-      messageId: result.messageId,
-      disposition: result.delivery.disposition,
-    }), controllerGeneration);
+    await this.mutateRoom(roomId, current =>
+      acceptMemberSelfIntroduction(current, runId, {
+        operationId: result.causation.operationId,
+        binding: result.binding,
+        participantId: result.participantId,
+        memberId: result.memberId,
+        turn: result.turn,
+        messageId: result.messageId,
+        disposition: result.delivery.disposition,
+      }), controllerGeneration);
     return this.isCurrentGeneration(controllerGeneration);
   }
 
   private assertMemberSelfIntroductionResult(
-    command: Extract<AgentLoopCommand, { type: 'request-member-self-introduction' }>,
-    result: Extract<AgentLoopRequestMemberSelfIntroductionResult, { status: 'accepted' }>,
+    command: Extract<AgentLoopCommand, { type: 'request-member-self-introduction'; }>,
+    result: Extract<AgentLoopRequestMemberSelfIntroductionResult, { status: 'accepted'; }>,
   ): void {
-    if (result.commandId !== command.commandId
+    if (
+      result.commandId !== command.commandId
       || result.causation.operationId !== command.commandId
       || result.participantId !== command.participantId
       || result.memberId !== command.memberId
       || result.runId !== command.runId
-      || !sameBinding(result.binding, command.binding)) {
+      || !sameBinding(result.binding, command.binding)
+    ) {
       throw new Error('Accepted member self-introduction did not match its exact command.');
     }
   }
 
   private assertApprovalDecisionResult(
-    command: Extract<AgentLoopCommand, { type: 'approval-decision' }>,
-    result: Extract<AgentLoopApprovalDecisionResult, { status: 'accepted' }>,
+    command: Extract<AgentLoopCommand, { type: 'approval-decision'; }>,
+    result: Extract<AgentLoopApprovalDecisionResult, { status: 'accepted'; }>,
   ): void {
-    if (result.commandId !== command.commandId
+    if (
+      result.commandId !== command.commandId
       || result.causation.operationId !== command.commandId
       || result.turn !== command.turn
       || result.approvalId !== command.approvalId
       || result.decision !== command.decision
-      || !sameBinding(result.binding, command.binding)) {
+      || !sameBinding(result.binding, command.binding)
+    ) {
       throw new Error('Accepted approval decision did not match its exact command.');
     }
   }
 
   private createCanonicalPayload(
-    command: Extract<AgentLoopCommand, { type: 'create-or-bind' }>,
+    command: Extract<AgentLoopCommand, { type: 'create-or-bind'; }>,
   ): string {
     return canonicalRoomDeliveryOperation({ kind: 'create', payload: payloadFor(command) });
   }
@@ -1311,19 +1442,23 @@ export class ChatroomAgentLoopController {
     result: CreateOrSendFailure,
     controllerGeneration?: number,
   ): Promise<void> {
-    await this.mutateRoom(roomId, room => result.status === 'denied'
-      ? requireRoomDeliveryStageAttention(room, operationIdValue, {
-        outcome: 'denied', diagnostic: result.authorization.code,
-      })
-      : result.authorization.state === 'unavailable'
+    await this.mutateRoom(roomId, room =>
+      result.status === 'denied'
         ? requireRoomDeliveryStageAttention(room, operationIdValue, {
-          outcome: 'unavailable', diagnostic: result.authorization.code,
+          outcome: 'denied',
+          diagnostic: result.authorization.code,
+        })
+        : result.authorization.state === 'unavailable'
+        ? requireRoomDeliveryStageAttention(room, operationIdValue, {
+          outcome: 'unavailable',
+          diagnostic: result.authorization.code,
         })
         : 'code' in result
-          ? requireRoomDeliveryAttention(room, operationIdValue, result.code, result.code)
-          : requireRoomDeliveryStageAttention(room, operationIdValue, {
-            outcome: 'unavailable', diagnostic: result.authorization.code,
-          }), controllerGeneration);
+        ? requireRoomDeliveryAttention(room, operationIdValue, result.code, result.code)
+        : requireRoomDeliveryStageAttention(room, operationIdValue, {
+          outcome: 'unavailable',
+          diagnostic: result.authorization.code,
+        }), controllerGeneration);
   }
 
   private async ensureSubscribed(
@@ -1331,13 +1466,15 @@ export class ChatroomAgentLoopController {
     runId: string,
     binding: AgentLoopTaskBinding,
     expectedControllerGeneration = this.controllerGeneration,
-  ): Promise<{ readonly status: 'denied' | 'unavailable'; readonly code: string } | undefined> {
+  ): Promise<{ readonly status: 'denied' | 'unavailable'; readonly code: string; } | undefined> {
     const controllerGeneration = expectedControllerGeneration;
     const subscriptionKey = `${stablePart(room.id)}${stablePart(runId)}`;
     const existing = this.subscriptions.get(subscriptionKey);
-    if (existing !== undefined
+    if (
+      existing !== undefined
       && existing.bindingId === binding.binding.bindingId
-      && existing.generation === binding.binding.generation) return undefined;
+      && existing.generation === binding.binding.generation
+    ) return undefined;
     existing?.unsubscribe();
     const run = this.requireRun(room, runId);
     let result: AgentLoopSubscribeRuntimeResult;
@@ -1349,7 +1486,9 @@ export class ChatroomAgentLoopController {
     }
     if (!this.isCurrentGeneration(controllerGeneration)) {
       if (result.status === 'accepted') {
-        try { result.handle.unsubscribe(); } catch { /* retired handles cannot affect the replacement source */ }
+        try {
+          result.handle.unsubscribe();
+        } catch { /* retired handles cannot affect the replacement source */ }
       }
       return undefined;
     }
@@ -1400,16 +1539,24 @@ export class ChatroomAgentLoopController {
           next = await iterator.next();
         } catch (error) {
           if (!this.isCurrentGeneration(controllerGeneration)) return;
-          await this.mutateRoom(roomId, room => this.failPendingRunMessages(
-            room, runId, binding, 'event-stream-failed',
-          ), controllerGeneration);
+          await this.mutateRoom(roomId, room =>
+            this.failPendingRunMessages(
+              room,
+              runId,
+              binding,
+              'event-stream-failed',
+            ), controllerGeneration);
           return;
         }
         if (!this.isCurrentGeneration(controllerGeneration)) return;
         if (next.done) {
-          await this.mutateRoom(roomId, room => this.failPendingRunMessages(
-            room, runId, binding, 'event-stream-ended',
-          ), controllerGeneration);
+          await this.mutateRoom(roomId, room =>
+            this.failPendingRunMessages(
+              room,
+              runId,
+              binding,
+              'event-stream-ended',
+            ), controllerGeneration);
           return;
         }
         const page = next.value;
@@ -1424,9 +1571,13 @@ export class ChatroomAgentLoopController {
             }, controllerGeneration);
           } catch {
             if (!this.isCurrentGeneration(controllerGeneration)) return;
-            await this.mutateRoom(roomId, room => this.failPendingRunMessages(
-              room, runId, binding, 'event-projection-failed',
-            ), controllerGeneration);
+            await this.mutateRoom(roomId, room =>
+              this.failPendingRunMessages(
+                room,
+                runId,
+                binding,
+                'event-projection-failed',
+              ), controllerGeneration);
             return;
           }
           if (!ownsBinding) return;
@@ -1468,15 +1619,20 @@ export class ChatroomAgentLoopController {
     const replayableItemIds = new Set<string>();
     for (const run of room.runs) {
       const hasPendingAcknowledgement = room.acknowledgements.some(candidate =>
-        candidate.runId === run.runId && candidate.state === 'pending');
-      const hasAcceptedSend = room.deliveries.some(candidate => candidate.runId === run.runId
+        candidate.runId === run.runId && candidate.state === 'pending'
+      );
+      const hasAcceptedSend = room.deliveries.some(candidate =>
+        candidate.runId === run.runId
         && candidate.stage === 'send' && candidate.state === 'accepted'
-        && candidate.acceptance?.kind === 'send');
+        && candidate.acceptance?.kind === 'send'
+      );
       if (!hasPendingAcknowledgement && hasAcceptedSend) continue;
       for (const projection of run.publicProjections ?? []) {
         const item = itemsById.get(projection.itemId);
-        if (item?.kind === 'message' && item.source === 'agent-loop'
-          && item.semantic.purpose === 'conversation') replayableItemIds.add(item.itemId);
+        if (
+          item?.kind === 'message' && item.source === 'agent-loop'
+          && item.semantic.purpose === 'conversation'
+        ) replayableItemIds.add(item.itemId);
       }
     }
     if (replayableItemIds.size === 0) return room;
@@ -1484,12 +1640,10 @@ export class ChatroomAgentLoopController {
       ...room,
       runs: room.runs.map(run => ({
         ...run,
-        publicProjections: (run.publicProjections ?? []).filter(candidate =>
-          !replayableItemIds.has(candidate.itemId)),
+        publicProjections: (run.publicProjections ?? []).filter(candidate => !replayableItemIds.has(candidate.itemId)),
       })),
       items: room.items.filter(item => !replayableItemIds.has(item.itemId)),
-      imageReferences: room.imageReferences.filter(reference =>
-        !replayableItemIds.has(reference.itemId)),
+      imageReferences: room.imageReferences.filter(reference => !replayableItemIds.has(reference.itemId)),
     });
   }
 
@@ -1517,9 +1671,11 @@ export class ChatroomAgentLoopController {
     const run = this.requireRun(room, runId);
     return createRoom({
       ...room,
-      items: room.items.map(item => item.kind === 'message' && item.itemId === userItemId
-        ? { ...item, deliveryState, runState }
-        : item),
+      items: room.items.map(item =>
+        item.kind === 'message' && item.itemId === userItemId
+          ? { ...item, deliveryState, runState }
+          : item
+      ),
       runs: room.runs.map(candidate => candidate.runId === runId ? { ...run, status: runState } : candidate),
     });
   }
@@ -1558,15 +1714,17 @@ export class ChatroomAgentLoopController {
   private async persistRoom(
     room: Room,
     controllerGeneration?: number,
-    fence?: Readonly<{ revision: number | undefined; roomSnapshot: string | undefined }>,
+    fence?: Readonly<{ revision: number | undefined; roomSnapshot: string | undefined; }>,
   ): Promise<boolean> {
     if (controllerGeneration !== undefined && !this.isCurrentGeneration(controllerGeneration)) return false;
     const current = this.store.document(room.id);
     if (fence !== undefined && (current === undefined) !== (fence.roomSnapshot === undefined)) {
       throw new ChatroomRoomStoreError('conflict', 'Room existence changed concurrently.', true);
     }
-    if (fence?.roomSnapshot !== undefined && current !== undefined && current.revision !== fence.revision
-      && JSON.stringify(current.room) !== fence.roomSnapshot) {
+    if (
+      fence?.roomSnapshot !== undefined && current !== undefined && current.revision !== fence.revision
+      && JSON.stringify(current.room) !== fence.roomSnapshot
+    ) {
       throw new ChatroomRoomStoreError(
         'conflict',
         `Room changed concurrently after revision ${fence.revision}.`,
@@ -1600,9 +1758,11 @@ export class ChatroomAgentLoopController {
     const state = this.localHydratedRuns.get(key);
     const run = room?.runs.find(candidate => candidate.runId === runId);
     if (state === undefined) return undefined;
-    if (run?.taskBinding === undefined
+    if (
+      run?.taskBinding === undefined
       || !sameBinding(run.taskBinding, state.source)
-      || (run.presence.state !== 'joined' && run.presence.state !== 'ready')) {
+      || (run.presence.state !== 'joined' && run.presence.state !== 'ready')
+    ) {
       this.localHydratedRuns.delete(key);
       return undefined;
     }

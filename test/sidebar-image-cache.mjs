@@ -90,9 +90,11 @@ test('rejects contract-invalid and semantically invalid PNG snapshots', async ()
     const badCrc = cache.begin('room-a', 'a');
     const corruptedBytes = Buffer.from(validPngData, 'base64');
     corruptedBytes[29] ^= 1;
-    assert.throws(() => badCrc.publish({
-      ...snapshot(imported.module), data: corruptedBytes.toString('base64'),
-    }), /CRC/u);
+    assert.throws(() =>
+      badCrc.publish({
+        ...snapshot(imported.module),
+        data: corruptedBytes.toString('base64'),
+      }), /CRC/u);
     const unknownField = cache.begin('room-a', 'a');
     assert.throws(() => unknownField.publish({ ...snapshot(imported.module), unexpected: true }), /invalid/u);
     cache.dispose();
@@ -118,7 +120,11 @@ test('closes every decoded bitmap when one composite input fails', async () => {
     globalThis.createImageBitmap = async () => {
       call += 1;
       if (call === 2) throw new Error('decode failed');
-      return { close: () => { closed += 1; } };
+      return {
+        close: () => {
+          closed += 1;
+        },
+      };
     };
     await assert.rejects(
       imported.module.composeChatroomSidebarSnapshots([

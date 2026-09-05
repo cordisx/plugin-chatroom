@@ -20,27 +20,88 @@ function canonical(value: RoomDeliveryPayload): string {
   }
   if (Array.isArray(value)) return `[${value.map(item => canonical(item)).join(',')}]`;
   if (typeof value !== 'object') throw new Error('Room delivery payload must be JSON-compatible.');
-  const record = value as { readonly [key: string]: RoomDeliveryPayload };
+  const record = value as { readonly [key: string]: RoomDeliveryPayload; };
   return `{${Object.keys(record).sort().map(key => `${JSON.stringify(key)}:${canonical(record[key])}`).join(',')}}`;
 }
 
 const SHA256_INITIAL = [
-  0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-  0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+  0x6a09e667,
+  0xbb67ae85,
+  0x3c6ef372,
+  0xa54ff53a,
+  0x510e527f,
+  0x9b05688c,
+  0x1f83d9ab,
+  0x5be0cd19,
 ] as const;
 const SHA256_CONSTANTS = [
-  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+  0x428a2f98,
+  0x71374491,
+  0xb5c0fbcf,
+  0xe9b5dba5,
+  0x3956c25b,
+  0x59f111f1,
+  0x923f82a4,
+  0xab1c5ed5,
+  0xd807aa98,
+  0x12835b01,
+  0x243185be,
+  0x550c7dc3,
+  0x72be5d74,
+  0x80deb1fe,
+  0x9bdc06a7,
+  0xc19bf174,
+  0xe49b69c1,
+  0xefbe4786,
+  0x0fc19dc6,
+  0x240ca1cc,
+  0x2de92c6f,
+  0x4a7484aa,
+  0x5cb0a9dc,
+  0x76f988da,
+  0x983e5152,
+  0xa831c66d,
+  0xb00327c8,
+  0xbf597fc7,
+  0xc6e00bf3,
+  0xd5a79147,
+  0x06ca6351,
+  0x14292967,
+  0x27b70a85,
+  0x2e1b2138,
+  0x4d2c6dfc,
+  0x53380d13,
+  0x650a7354,
+  0x766a0abb,
+  0x81c2c92e,
+  0x92722c85,
+  0xa2bfe8a1,
+  0xa81a664b,
+  0xc24b8b70,
+  0xc76c51a3,
+  0xd192e819,
+  0xd6990624,
+  0xf40e3585,
+  0x106aa070,
+  0x19a4c116,
+  0x1e376c08,
+  0x2748774c,
+  0x34b0bcb5,
+  0x391c0cb3,
+  0x4ed8aa4a,
+  0x5b9cca4f,
+  0x682e6ff3,
+  0x748f82ee,
+  0x78a5636f,
+  0x84c87814,
+  0x8cc70208,
+  0x90befffa,
+  0xa4506ceb,
+  0xbef9a3f7,
+  0xc67178f2,
 ] as const;
 
-const rotateRight = (value: number, shift: number) =>
-  (value >>> shift) | (value << (32 - shift));
+const rotateRight = (value: number, shift: number) => (value >>> shift) | (value << (32 - shift));
 
 function sha256(value: string): string {
   const input = new TextEncoder().encode(value);
@@ -71,13 +132,23 @@ function sha256(value: string): string {
       const sum0 = rotateRight(a, 2) ^ rotateRight(a, 13) ^ rotateRight(a, 22);
       const majority = (a & b) ^ (a & c) ^ (b & c);
       const temporary2 = (sum0 + majority) >>> 0;
-      h = g; g = f; f = e; e = (d + temporary1) >>> 0;
-      d = c; c = b; b = a; a = (temporary1 + temporary2) >>> 0;
+      h = g;
+      g = f;
+      f = e;
+      e = (d + temporary1) >>> 0;
+      d = c;
+      c = b;
+      b = a;
+      a = (temporary1 + temporary2) >>> 0;
     }
-    hash[0] = (hash[0] + a) >>> 0; hash[1] = (hash[1] + b) >>> 0;
-    hash[2] = (hash[2] + c) >>> 0; hash[3] = (hash[3] + d) >>> 0;
-    hash[4] = (hash[4] + e) >>> 0; hash[5] = (hash[5] + f) >>> 0;
-    hash[6] = (hash[6] + g) >>> 0; hash[7] = (hash[7] + h) >>> 0;
+    hash[0] = (hash[0] + a) >>> 0;
+    hash[1] = (hash[1] + b) >>> 0;
+    hash[2] = (hash[2] + c) >>> 0;
+    hash[3] = (hash[3] + d) >>> 0;
+    hash[4] = (hash[4] + e) >>> 0;
+    hash[5] = (hash[5] + f) >>> 0;
+    hash[6] = (hash[6] + g) >>> 0;
+    hash[7] = (hash[7] + h) >>> 0;
   }
   return hash.map(word => word.toString(16).padStart(8, '0')).join('');
 }
@@ -98,7 +169,9 @@ export function canonicalRoomDeliveryOperation(operation: RoomDeliveryOperation)
   return canonicalRoomPayloadHash(structural);
 }
 
-const payloadRecord = (payload: RoomDeliveryPayload | undefined): Readonly<Record<string, RoomDeliveryPayload>> | undefined =>
+const payloadRecord = (
+  payload: RoomDeliveryPayload | undefined,
+): Readonly<Record<string, RoomDeliveryPayload>> | undefined =>
   payload !== undefined && payload !== null && typeof payload === 'object' && !Array.isArray(payload)
     ? payload as Readonly<Record<string, RoomDeliveryPayload>>
     : undefined;
@@ -130,11 +203,13 @@ function bindingCorrelation(value: RoomDeliveryPayload | undefined): RoomDeliver
   const taskBinding = value === undefined ? undefined : payloadRecord(value);
   const binding = payloadRecord(taskBinding?.binding);
   const definition = identityOnly(taskBinding?.definition);
-  if (typeof binding?.bindingId !== 'string'
+  if (
+    typeof binding?.bindingId !== 'string'
     || typeof binding.generation !== 'number'
     || definition === undefined
     || typeof taskBinding?.task !== 'string'
-    || (taskBinding.state !== 'active' && taskBinding.state !== 'closed')) return undefined;
+    || (taskBinding.state !== 'active' && taskBinding.state !== 'closed')
+  ) return undefined;
   return {
     ...(['$schema', 'contract', 'schemaVersion'] as const).reduce<Record<string, RoomDeliveryPayload>>(
       (result, key) => {
@@ -189,27 +264,29 @@ function replaceDelivery(room: Room, operationId: string, replacement: RoomDeliv
   if (index < 0 || replacement.operationId !== operationId) throw new Error('Room delivery is unavailable.');
   const deliveries = [...room.deliveries];
   deliveries[index] = replacement;
-  const outbox = room.outbox.map(item => replacement.stage === 'create'
-    && item.create.state !== 'not-required'
-    && item.create.operationId === replacement.operationId
-    ? {
-      ...item,
-      create: {
-        ...item.create,
-        ...(replacement.state === 'closed' ? {} : { state: replacement.state }),
-      },
-    }
-    : item.deliveryId === replacement.deliveryId
-      ? replacement.stage === 'send'
+  const outbox = room.outbox.map(item =>
+    replacement.stage === 'create'
+      && item.create.state !== 'not-required'
+      && item.create.operationId === replacement.operationId
       ? {
         ...item,
-        send: {
-          ...item.send,
+        create: {
+          ...item.create,
           ...(replacement.state === 'closed' ? {} : { state: replacement.state }),
         },
       }
+      : item.deliveryId === replacement.deliveryId
+      ? replacement.stage === 'send'
+        ? {
+          ...item,
+          send: {
+            ...item.send,
+            ...(replacement.state === 'closed' ? {} : { state: replacement.state }),
+          },
+        }
+        : item
       : item
-      : item);
+  );
   return createRoom({ ...room, deliveries, outbox });
 }
 
@@ -220,12 +297,14 @@ export function prepareRoomOutboxDelivery(room: Room, input: {
   readonly runId: string;
   readonly createOperationId?: string;
   readonly sendOperationId: string;
-}): { readonly room: Room; readonly delivery: RoomOutboxDelivery; readonly created: boolean } {
+}): { readonly room: Room; readonly delivery: RoomOutboxDelivery; readonly created: boolean; } {
   const member = room.memberships.find(candidate => candidate.memberId === input.memberId);
   const run = room.runs.find(candidate => candidate.runId === input.runId);
-  const acknowledgement = room.acknowledgements.find(candidate => candidate.userItemId === input.userItemId
+  const acknowledgement = room.acknowledgements.find(candidate =>
+    candidate.userItemId === input.userItemId
     && candidate.memberId === input.memberId && candidate.runId === input.runId
-    && candidate.participantId === member?.participantId);
+    && candidate.participantId === member?.participantId
+  );
   if (member === undefined || run?.memberId !== member.memberId || acknowledgement === undefined) {
     throw new Error('Outbox delivery requires its exact participant/member/run acknowledgement.');
   }
@@ -250,18 +329,24 @@ export function prepareRoomOutboxDelivery(room: Room, input: {
   const createRequired = !(run.presence.state === 'ready'
     && run.taskBinding?.state === 'active' && run.detailsUrl !== undefined);
   const sharedCreate = createRequired
-    ? room.outbox.find(candidate => candidate.participantId === member.participantId
+    ? room.outbox.find(candidate =>
+      candidate.participantId === member.participantId
       && candidate.memberId === member.memberId && candidate.runId === run.runId
       && candidate.create.state !== 'not-required'
-      && candidate.create.state !== 'accepted')
+      && candidate.create.state !== 'accepted'
+    )
     : undefined;
-  if (sharedCreate?.create.state !== 'not-required'
+  if (
+    sharedCreate?.create.state !== 'not-required'
     && sharedCreate !== undefined && input.createOperationId !== undefined
-    && sharedCreate.create.operationId !== input.createOperationId) {
+    && sharedCreate.create.operationId !== input.createOperationId
+  ) {
     throw new Error('Run already owns a different pending create operation.');
   }
-  if (createRequired && sharedCreate === undefined
-    && (input.createOperationId === undefined || input.createOperationId.trim() === '')) {
+  if (
+    createRequired && sharedCreate === undefined
+    && (input.createOperationId === undefined || input.createOperationId.trim() === '')
+  ) {
     throw new Error('First-join outbox delivery requires a stable create operation id.');
   }
   if (!createRequired && input.createOperationId !== undefined) {
@@ -309,7 +394,7 @@ export function planRoomDelivery(room: Room, input: {
   readonly runId: string;
   readonly issuedAt: string;
   readonly operation: RoomDeliveryOperation;
-}): { readonly room: Room; readonly delivery: RoomDelivery; readonly created: boolean } {
+}): { readonly room: Room; readonly delivery: RoomDelivery; readonly created: boolean; } {
   if (input.operationId.trim() === '') throw new Error('Room delivery operation id must be non-empty.');
   if (!Number.isFinite(Date.parse(input.issuedAt))) throw new Error('Room delivery issuedAt must be an ISO timestamp.');
   const run = room.runs.find(candidate => candidate.runId === input.runId);
@@ -317,34 +402,43 @@ export function planRoomDelivery(room: Room, input: {
   const stage = input.operation.kind;
   const outboxStage = stage === 'send'
     ? outbox?.send
-    : outbox?.create.state === 'not-required' ? undefined : outbox?.create;
-  if (run?.memberId !== input.memberId || outbox?.participantId !== input.participantId
+    : outbox?.create.state === 'not-required'
+    ? undefined
+    : outbox?.create;
+  if (
+    run?.memberId !== input.memberId || outbox?.participantId !== input.participantId
     || outbox.memberId !== input.memberId || outbox.runId !== input.runId
     || outbox.userItemId !== input.userItemId || outboxStage?.operationId !== input.operationId
     || (stage === 'create' && outbox?.create.state !== 'not-required'
-      && outbox.create.ownerDeliveryId !== input.deliveryId)) {
+      && outbox.create.ownerDeliveryId !== input.deliveryId)
+  ) {
     throw new Error('Room delivery must target its exact outbox participant/member/run operation.');
   }
   if (input.operation.kind === 'send') {
     const operation = input.operation;
     const acknowledgement = room.acknowledgements.find(item =>
-      item.acknowledgementKey === operation.acknowledgementKey);
-    if (operation.acknowledgementKey !== outbox.acknowledgementKey
+      item.acknowledgementKey === operation.acknowledgementKey
+    );
+    if (
+      operation.acknowledgementKey !== outbox.acknowledgementKey
       || acknowledgement?.participantId !== input.participantId
       || acknowledgement.memberId !== input.memberId || acknowledgement.runId !== input.runId
       || acknowledgement.userItemId !== input.userItemId
-      || acknowledgement.dispatchState !== 'accepted') {
+      || acknowledgement.dispatchState !== 'accepted'
+    ) {
       throw new Error('Send delivery requires its exact accepted acknowledgement effect.');
     }
   }
   const canonicalPayload = canonicalRoomDeliveryOperation(input.operation);
   const existing = room.deliveries.find(candidate => candidate.operationId === input.operationId);
   if (existing !== undefined) {
-    if (existing.canonicalPayload === canonicalPayload
+    if (
+      existing.canonicalPayload === canonicalPayload
       && existing.memberId === input.memberId && existing.runId === input.runId
       && existing.deliveryId === input.deliveryId && existing.userItemId === input.userItemId
       && existing.participantId === input.participantId
-      && existing.issuedAt === input.issuedAt) return { room, delivery: existing, created: false };
+      && existing.issuedAt === input.issuedAt
+    ) return { room, delivery: existing, created: false };
     const conflicted: RoomDelivery = {
       ...existing,
       revision: existing.revision + 1,
@@ -389,7 +483,9 @@ export function markRoomDeliverySendingUnknown(room: Room, operationId: string):
   if (current.state === 'sending-unknown') return room;
   if (current.state !== 'planned') throw new Error('Only a planned delivery may enter sending-unknown.');
   return replaceDelivery(room, operationId, {
-    ...current, revision: current.revision + 1, state: 'sending-unknown',
+    ...current,
+    revision: current.revision + 1,
+    state: 'sending-unknown',
   });
 }
 
@@ -419,7 +515,9 @@ export function acceptRoomDelivery(
     if (exactResult) {
       if (prior.disposition === acceptance.disposition) return room;
       return replaceDelivery(room, operationId, {
-        ...current, revision: current.revision + 1, acceptance,
+        ...current,
+        revision: current.revision + 1,
+        acceptance,
       });
     }
     return requireRoomDeliveryAttention(room, operationId, 'operation-conflict');
@@ -451,8 +549,10 @@ export function requireRoomDeliveryAttention(
 ): Room {
   const current = room.deliveries.find(candidate => candidate.operationId === operationId);
   if (current === undefined) throw new Error('Room delivery is unavailable.');
-  if (current.state === 'attention' && current.attention?.code === code
-    && current.attention.diagnostic === diagnostic) return room;
+  if (
+    current.state === 'attention' && current.attention?.code === code
+    && current.attention.diagnostic === diagnostic
+  ) return room;
   return replaceDelivery(room, operationId, {
     ...current,
     revision: current.revision + 1,
@@ -478,15 +578,17 @@ export function requireRoomDeliveryStageAttention(
 export function closeRoomDelivery(
   room: Room,
   operationId: string,
-  observation: { readonly closedAt: string; readonly source: 'host' | 'provider' },
+  observation: { readonly closedAt: string; readonly source: 'host' | 'provider'; },
 ): Room {
   if (!Number.isFinite(Date.parse(observation.closedAt))) {
     throw new Error('Room delivery Host/provider closedAt must be an ISO timestamp.');
   }
   const current = room.deliveries.find(candidate => candidate.operationId === operationId);
   if (current === undefined) throw new Error('Room delivery is unavailable.');
-  if (current.state === 'closed' && current.closedAt === observation.closedAt
-    && current.closedBy === observation.source) return room;
+  if (
+    current.state === 'closed' && current.closedAt === observation.closedAt
+    && current.closedBy === observation.source
+  ) return room;
   return replaceDelivery(room, operationId, {
     ...current,
     revision: current.revision + 1,
@@ -507,7 +609,7 @@ export function hydrateRoomDeliveries(room: Room, input: {
   readonly now: string;
   readonly durableApiAvailable: boolean;
   readonly providerReplaced?: boolean;
-}): { readonly room: Room; readonly reconciliations: readonly RoomDeliveryReconciliation[] } {
+}): { readonly room: Room; readonly reconciliations: readonly RoomDeliveryReconciliation[]; } {
   const now = Date.parse(input.now);
   if (!Number.isFinite(now)) throw new Error('Room delivery hydration time must be an ISO timestamp.');
   let next = room;
@@ -515,8 +617,10 @@ export function hydrateRoomDeliveries(room: Room, input: {
   for (const original of room.deliveries) {
     const current = next.deliveries.find(candidate => candidate.operationId === original.operationId)!;
     if (!['planned', 'sending-unknown', 'closed'].includes(current.state)) continue;
-    if (current.state === 'closed' && current.closedAt !== undefined
-      && now - Date.parse(current.closedAt) > RECOVERY_WINDOW_MS) {
+    if (
+      current.state === 'closed' && current.closedAt !== undefined
+      && now - Date.parse(current.closedAt) > RECOVERY_WINDOW_MS
+    ) {
       next = requireRoomDeliveryAttention(
         next,
         current.operationId,
@@ -552,6 +656,7 @@ export function hydrateRoomDeliveries(room: Room, input: {
   return { room: next, reconciliations: Object.freeze(reconciliations) };
 }
 
-export const roomDeliveryCausation = (delivery: RoomDelivery) => Object.freeze({
-  operationId: delivery.operationId,
-});
+export const roomDeliveryCausation = (delivery: RoomDelivery) =>
+  Object.freeze({
+    operationId: delivery.operationId,
+  });

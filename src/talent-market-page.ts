@@ -11,13 +11,13 @@ import {
   type CordisXRoutes,
   type CordisXSlots,
 } from 'cordisx/contracts';
-import { createElement, defineReactPage, type ComponentProps } from 'cordisx/react';
+import { type ComponentProps, createElement, defineReactPage } from 'cordisx/react';
 import { Button, EmptyState } from 'cordisx/ui';
 
 import {
   registerTalentMarketLocales,
-  talentMarketMessage,
   type TalentMarketDisposer,
+  talentMarketMessage,
   type TalentMarketMessages,
 } from './talent-market-locales.js';
 
@@ -53,16 +53,16 @@ export const talentMarketRoute = {
   description: talentMarketMessage('navigation.description'),
 } as const satisfies CordisXRouteDefinitionV2<'manager.content'>;
 
-export const TALENT_MARKET_MANAGER_CONTENT_DECLARATIONS:
-readonly CordisXManagerContentNavigationDeclarationV1[] = Object.freeze([
-  Object.freeze({
-    $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V1,
-    schemaVersion: 1,
-    id: 'talent-market-root',
-    route: Object.freeze({ id: TALENT_MARKET_ROUTE_ID }),
-    header: Object.freeze({ title: Object.freeze({ kind: 'route' as const }) }),
-  }),
-]);
+export const TALENT_MARKET_MANAGER_CONTENT_DECLARATIONS: readonly CordisXManagerContentNavigationDeclarationV1[] =
+  Object.freeze([
+    Object.freeze({
+      $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V1,
+      schemaVersion: 1,
+      id: 'talent-market-root',
+      route: Object.freeze({ id: TALENT_MARKET_ROUTE_ID }),
+      header: Object.freeze({ title: Object.freeze({ kind: 'route' as const }) }),
+    }),
+  ]);
 
 export function registerTalentMarket(
   context: TalentMarketHostContext,
@@ -70,17 +70,25 @@ export function registerTalentMarket(
   const localeRegistration = registerTalentMarketLocales(context.i18n);
   const { localization } = localeRegistration;
   const disposers: TalentMarketDisposer[] = [...localeRegistration.disposers];
-  const TalentMarketPage: CordisXReactPageComponent<TalentMarketMessages> = ({ navigation }) => createElement(EmptyState, {
-    'data-chatroom-talent-market-empty': 'true',
-    title: localization.t('empty.title'),
-    description: localization.t('empty.description'),
-    action: createElement(Button, {
-      type: 'button',
-      variant: 'secondary',
-      'data-chatroom-talent-market-back': 'true',
-      onClick: () => void navigation.back('manager.content'),
-    } as ComponentProps<typeof Button> & { 'data-chatroom-talent-market-back': string }, localization.t('action.back')),
-  } as ComponentProps<typeof EmptyState> & { 'data-chatroom-talent-market-empty': string });
+  const TalentMarketPage: CordisXReactPageComponent<TalentMarketMessages> = ({ navigation }) =>
+    createElement(
+      EmptyState,
+      {
+        'data-chatroom-talent-market-empty': 'true',
+        title: localization.t('empty.title'),
+        description: localization.t('empty.description'),
+        action: createElement(
+          Button,
+          {
+            type: 'button',
+            variant: 'secondary',
+            'data-chatroom-talent-market-back': 'true',
+            onClick: () => void navigation.back('manager.content'),
+          } as ComponentProps<typeof Button> & { 'data-chatroom-talent-market-back': string; },
+          localization.t('action.back'),
+        ),
+      } as ComponentProps<typeof EmptyState> & { 'data-chatroom-talent-market-empty': string; },
+    );
 
   try {
     disposers.push(

@@ -8,17 +8,11 @@ import type {
   ApprovalRequest,
   ApprovalService,
 } from '@cordisx/protocol/approval/v2';
-import type {
-  ApprovalRequestRoutingQuestion,
-  ApprovalRequestRoutingResult,
-} from '@cordisx/protocol/approval/v3';
+import type { ApprovalRequestRoutingQuestion, ApprovalRequestRoutingResult } from '@cordisx/protocol/approval/v3';
 import type { AgentConversationApprovalItem } from '@cordisx/protocol/agent-conversation-shell/v7';
 import type { SessionEvent, SessionId } from '@cordisx/protocol/sessions/v1';
 
-import {
-  CHATROOM_COMMAND_APPROVAL_APPROVE,
-  CHATROOM_COMMAND_APPROVAL_DENY,
-} from './conversation-model.js';
+import { CHATROOM_COMMAND_APPROVAL_APPROVE, CHATROOM_COMMAND_APPROVAL_DENY } from './conversation-model.js';
 import {
   approvalAuthorityMemberIds,
   createChatroomOpaqueId,
@@ -34,10 +28,12 @@ const exactIdentity = (identity: AgentDefinitionIdentity): boolean =>
   identity.agentId.trim() !== '' && identity.revision.trim() !== ''
   && identity.agentId !== '*' && identity.revision !== '*';
 
-const validReason = (value: string): boolean => value.length >= 1 && value.length <= 10_000
+const validReason = (value: string): boolean =>
+  value.length >= 1 && value.length <= 10_000
   && !/[\u0000\u000B\u000C\u000E-\u001F\u007F]/u.test(value);
 
-const validToolName = (value: string): boolean => value.length >= 1 && value.length <= 256
+const validToolName = (value: string): boolean =>
+  value.length >= 1 && value.length <= 256
   && /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/u.test(value);
 
 const validOpaqueId = (value: string): boolean => value.length >= 1 && value.length <= 512;
@@ -65,8 +61,8 @@ export type ChatroomApprovalRequestPreparation =
   | {
     readonly status: 'ready';
     readonly request: ApprovalRequest;
-    readonly requester: { readonly run: RoomRun; readonly member: RoomMembership };
-    readonly authority: { readonly run: RoomRun; readonly member: RoomMembership };
+    readonly requester: { readonly run: RoomRun; readonly member: RoomMembership; };
+    readonly authority: { readonly run: RoomRun; readonly member: RoomMembership; };
   }
   | {
     readonly status: 'unavailable';
@@ -84,12 +80,13 @@ export type ChatroomApprovalRequestPreparation =
       | 'call-id-invalid';
   };
 
-const unavailable = <C extends Extract<ChatroomApprovalRequestPreparation, { status: 'unavailable' }>['code']>(
+const unavailable = <C extends Extract<ChatroomApprovalRequestPreparation, { status: 'unavailable'; }>['code']>(
   code: C,
-): Extract<ChatroomApprovalRequestPreparation, { status: 'unavailable' }> => Object.freeze({
-  status: 'unavailable',
-  code,
-});
+): Extract<ChatroomApprovalRequestPreparation, { status: 'unavailable'; }> =>
+  Object.freeze({
+    status: 'unavailable',
+    code,
+  });
 
 /**
  * Resolves the exact Reviewer -> reportsTo authority pair while both Agents
@@ -153,14 +150,14 @@ export function prepareChatroomApprovalRequest(
 }
 
 export type ChatroomApprovalRequestExecution =
-  | Exclude<ChatroomApprovalRequestPreparation, { readonly status: 'ready' }>
+  | Exclude<ChatroomApprovalRequestPreparation, { readonly status: 'ready'; }>
   | {
     readonly status: 'decided';
     readonly decision: ApprovalDecision;
-    readonly requester: { readonly run: RoomRun; readonly member: RoomMembership };
-    readonly authority: { readonly run: RoomRun; readonly member: RoomMembership };
+    readonly requester: { readonly run: RoomRun; readonly member: RoomMembership; };
+    readonly authority: { readonly run: RoomRun; readonly member: RoomMembership; };
   }
-  | { readonly status: 'unavailable'; readonly code: 'decision-correlation-invalid' };
+  | { readonly status: 'unavailable'; readonly code: 'decision-correlation-invalid'; };
 
 /** Calls only the public v2 service after the exact Room mapping is complete. */
 export async function requestChatroomApproval(
@@ -172,14 +169,16 @@ export async function requestChatroomApproval(
   const decision = await approvals.request(prepared.request);
   const requester = prepared.request.requester.agent;
   const authority = prepared.request.authority.agent;
-  if (!bindingMatches(decision.requester, prepared.request.requester.definition)
+  if (
+    !bindingMatches(decision.requester, prepared.request.requester.definition)
     || decision.requester.agentId !== requester.id
     || decision.requester.sessionId !== requester.session.id
     || decision.requester.agentGeneration !== requester.generation
     || !bindingMatches(decision.authority, prepared.request.authority.definition)
     || decision.authority.agentId !== authority.id
     || decision.authority.sessionId !== authority.session.id
-    || decision.authority.agentGeneration !== authority.generation) {
+    || decision.authority.agentGeneration !== authority.generation
+  ) {
     return Object.freeze({ status: 'unavailable', code: 'decision-correlation-invalid' });
   }
   return Object.freeze({
@@ -208,9 +207,9 @@ export interface ChatroomApprovalBubbleProjectionInput {
 }
 
 export type ChatroomApprovalBubbleProjection =
-  | { readonly status: 'projected'; readonly item: AgentConversationApprovalItem }
-  | { readonly status: 'legacy'; readonly code: 'authority-binding-missing' }
-  | { readonly status: 'waiting'; readonly code: 'live-authority-unavailable' }
+  | { readonly status: 'projected'; readonly item: AgentConversationApprovalItem; }
+  | { readonly status: 'legacy'; readonly code: 'authority-binding-missing'; }
+  | { readonly status: 'waiting'; readonly code: 'live-authority-unavailable'; }
   | {
     readonly status: 'invalid';
     readonly code:
@@ -227,7 +226,8 @@ const projectionResult = <T extends ChatroomApprovalBubbleProjection>(value: T):
 const bindingMatches = (
   binding: ApprovalAgentBinding,
   definition: AgentDefinitionIdentity,
-): boolean => binding.agentId === binding.sessionId
+): boolean =>
+  binding.agentId === binding.sessionId
   && Number.isSafeInteger(binding.agentGeneration)
   && binding.agentGeneration > 0
   && sameIdentity(binding.definition, definition);
@@ -250,27 +250,30 @@ const routingResult = (
       readonly status: 'unavailable';
       readonly code: 'mapping-unavailable' | 'authority-unavailable';
     },
-): ApprovalRequestRoutingResult => result.status === 'accepted'
-  ? Object.freeze({
-    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/approval-request-routing-result.v1.schema.json',
-    contract: 'cordisx.approval-request-routing-result/v1',
-    schemaVersion: 1,
-    routingId: question.routingId,
-    registration: question.registration,
-    status: result.status,
-    code: result.code,
-    requester: result.requester,
-    authority: result.authority,
-  })
-  : Object.freeze({
-    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/approval-request-routing-result.v1.schema.json',
-    contract: 'cordisx.approval-request-routing-result/v1',
-    schemaVersion: 1,
-    routingId: question.routingId,
-    registration: question.registration,
-    status: result.status,
-    code: result.code,
-  });
+): ApprovalRequestRoutingResult =>
+  result.status === 'accepted'
+    ? Object.freeze({
+      $schema:
+        'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/approval-request-routing-result.v1.schema.json',
+      contract: 'cordisx.approval-request-routing-result/v1',
+      schemaVersion: 1,
+      routingId: question.routingId,
+      registration: question.registration,
+      status: result.status,
+      code: result.code,
+      requester: result.requester,
+      authority: result.authority,
+    })
+    : Object.freeze({
+      $schema:
+        'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/approval-request-routing-result.v1.schema.json',
+      contract: 'cordisx.approval-request-routing-result/v1',
+      schemaVersion: 1,
+      routingId: question.routingId,
+      registration: question.registration,
+      status: result.status,
+      code: result.code,
+    });
 
 export interface ChatroomDriverApprovalRouteInput {
   readonly room: Room;
@@ -288,10 +291,12 @@ export function routeChatroomDriverApproval(
   input: ChatroomDriverApprovalRouteInput,
 ): ApprovalRequestRoutingResult {
   const question = input.question;
-  if (question.registration.requester.agentId !== question.requester.agentId
+  if (
+    question.registration.requester.agentId !== question.requester.agentId
     || question.registration.requester.sessionId !== question.requester.sessionId
     || question.registration.requester.agentGeneration !== question.requester.agentGeneration
-    || !sameIdentity(question.registration.requester.definition, question.requester.definition)) {
+    || !sameIdentity(question.registration.requester.definition, question.requester.definition)
+  ) {
     return routingResult(question, { status: 'unavailable', code: 'mapping-unavailable' });
   }
   const requesterRuns = input.room.runs.filter(run => run.sessionId === question.requester.sessionId);
@@ -301,13 +306,15 @@ export function routeChatroomDriverApproval(
   const requesterRun = requesterRuns[0];
   const requesterMember = input.room.memberships.find(member => member.memberId === requesterRun.memberId);
   const requesterAgent = input.liveAgentForRun(requesterRun.runId);
-  if (requesterMember === undefined
+  if (
+    requesterMember === undefined
     || requesterAgent === undefined
     || !exactIdentity(requesterMember.definition)
     || !sameIdentity(question.requester.definition, requesterMember.definition)
     || !bindingMatches(question.requester, requesterMember.definition)
     || !bindingMatchesAgent(question.requester, requesterAgent)
-    || !exactLiveAgent(requesterAgent, requesterRun)) {
+    || !exactLiveAgent(requesterAgent, requesterRun)
+  ) {
     return routingResult(question, { status: 'unavailable', code: 'mapping-unavailable' });
   }
 
@@ -362,16 +369,19 @@ export function projectChatroomApprovalBubble(
   const bound = input.events.filter((event): event is ApprovalAuthorityBoundSessionEvent =>
     event.type === 'approval/authority-bound'
     && event.sessionId === input.sessionId
-    && event.data.approvalId === input.approvalId);
+    && event.data.approvalId === input.approvalId
+  );
   if (bound.length === 0) return projectionResult({ status: 'legacy', code: 'authority-binding-missing' });
   const asked = input.events.filter((event): event is ApprovalAskedEvent =>
     event.type === 'approval/asked'
     && event.sessionId === input.sessionId
-    && event.data.id === input.approvalId);
+    && event.data.id === input.approvalId
+  );
   const decided = input.events.filter((event): event is ApprovalDecidedEvent =>
     event.type === 'approval/decided'
     && event.sessionId === input.sessionId
-    && event.data.id === input.approvalId);
+    && event.data.id === input.approvalId
+  );
   if (bound.length !== 1 || asked.length !== 1 || decided.length > 1) {
     return projectionResult({ status: 'invalid', code: 'event-correlation-invalid' });
   }
@@ -404,9 +414,12 @@ export function projectChatroomApprovalBubble(
 
   const question = input.liveQuestion;
   if (question !== undefined) {
-    const authorityRuns = input.room.runs.filter(run => run.memberId === authorityMember.memberId
-      && run.sessionId === question.authority.sessionId);
-    if (question.id !== input.approvalId
+    const authorityRuns = input.room.runs.filter(run =>
+      run.memberId === authorityMember.memberId
+      && run.sessionId === question.authority.sessionId
+    );
+    if (
+      question.id !== input.approvalId
       || question.toolName !== asked[0].data.toolName
       || question.callId !== asked[0].data.callId
       || question.reason.kind !== 'plain-text'
@@ -414,7 +427,8 @@ export function projectChatroomApprovalBubble(
       || question.requester.sessionId !== input.sessionId
       || !bindingMatches(question.requester, binding.requester)
       || !bindingMatches(question.authority, binding.authority)
-      || authorityRuns.length !== 1) {
+      || authorityRuns.length !== 1
+    ) {
       return projectionResult({ status: 'invalid', code: 'live-question-invalid' });
     }
   }
@@ -441,10 +455,12 @@ export function projectChatroomApprovalBubble(
     if (question === undefined) {
       return projectionResult({ status: 'waiting', code: 'live-authority-unavailable' });
     }
-    const actions = Object.freeze([
-      Object.freeze({ decision: 'approve', command: Object.freeze({ id: CHATROOM_COMMAND_APPROVAL_APPROVE }) }),
-      Object.freeze({ decision: 'reject', command: Object.freeze({ id: CHATROOM_COMMAND_APPROVAL_DENY }) }),
-    ] as const);
+    const actions = Object.freeze(
+      [
+        Object.freeze({ decision: 'approve', command: Object.freeze({ id: CHATROOM_COMMAND_APPROVAL_APPROVE }) }),
+        Object.freeze({ decision: 'reject', command: Object.freeze({ id: CHATROOM_COMMAND_APPROVAL_DENY }) }),
+      ] as const,
+    );
     const item: AgentConversationApprovalItem = Object.freeze({
       ...common,
       state: 'pending',

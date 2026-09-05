@@ -4,8 +4,8 @@ import { ChatroomAgentLoopController } from './agent-loop-controller.js';
 import { ChatroomAgentSessionController } from './agent-session-controller.js';
 import {
   ChatroomConversationController,
-  type ChatroomPlaygroundDelegationContext,
   type ChatroomPlaygroundAgentReplyCorrelation,
+  type ChatroomPlaygroundDelegationContext,
   type ChatroomPlaygroundSourceCorrelation,
   type ChatroomPlaygroundSourceInspection,
 } from './conversation-source.js';
@@ -17,8 +17,7 @@ import {
 } from './room.js';
 
 export const PLAYGROUND_ROOM_SIMULATION_BRIDGE_SERVICE = 'playgroundRoomSimulationBridge' as const;
-export const PLAYGROUND_ROOM_SIMULATION_BINDING_CONTRACT =
-  'cordisx.playground-room-simulation-binding/v1' as const;
+export const PLAYGROUND_ROOM_SIMULATION_BINDING_CONTRACT = 'cordisx.playground-room-simulation-binding/v1' as const;
 
 export interface PlaygroundRoomSimulationBinding extends ChatroomPlaygroundSourceCorrelation {
   readonly contract: typeof PLAYGROUND_ROOM_SIMULATION_BINDING_CONTRACT;
@@ -83,12 +82,16 @@ export interface PlaygroundRoomSimulationSnapshot {
   readonly events: readonly PlaygroundRoomSimulationEvent[];
 }
 
-export interface PlaygroundRoomSimulationMessageInput { readonly text: string }
+export interface PlaygroundRoomSimulationMessageInput {
+  readonly text: string;
+}
 export interface PlaygroundRoomSimulationAgentReplyInput {
   readonly text: string;
   readonly correlation?: ChatroomPlaygroundAgentReplyCorrelation;
 }
-export interface PlaygroundRoomSimulationAgentApprovalRequest { readonly reason: string }
+export interface PlaygroundRoomSimulationAgentApprovalRequest {
+  readonly reason: string;
+}
 export interface PlaygroundRoomSimulationTaskDelegationInput {
   readonly memberId: string;
   readonly task: string;
@@ -104,15 +107,47 @@ export type PlaygroundRoomSimulationPermissionDecision = 'allow' | 'deny' | 'can
 export interface PlaygroundRoomSimulationOwner {
   readonly ownerGeneration: string;
   resolveSession(sessionId: string): Promise<PlaygroundRoomSimulationResult<PlaygroundRoomSimulationBinding>>;
-  inspect(binding: PlaygroundRoomSimulationBinding): Promise<PlaygroundRoomSimulationResult<PlaygroundRoomSimulationInspection>>;
-  injectMessage(binding: PlaygroundRoomSimulationBinding, operationId: string, payload: PlaygroundRoomSimulationMessageInput): Promise<PlaygroundRoomSimulationResult<PlaygroundRoomSimulationOperationReceipt>>;
-  emitAgentReply(binding: PlaygroundRoomSimulationBinding, operationId: string, payload: PlaygroundRoomSimulationAgentReplyInput): Promise<PlaygroundRoomSimulationResult<PlaygroundRoomSimulationOperationReceipt>>;
-  emitAgentApprovalRequest(binding: PlaygroundRoomSimulationBinding, operationId: string, payload: PlaygroundRoomSimulationAgentApprovalRequest): Promise<PlaygroundRoomSimulationResult<PlaygroundRoomSimulationOperationReceipt>>;
-  delegateTask(binding: PlaygroundRoomSimulationBinding, operationId: string, payload: PlaygroundRoomSimulationTaskDelegationInput): Promise<PlaygroundRoomSimulationResult<PlaygroundRoomSimulationOperationReceipt>>;
-  requestPermission(binding: PlaygroundRoomSimulationBinding, operationId: string, request: PlaygroundRoomSimulationPermissionRequest): Promise<PlaygroundRoomSimulationResult<PlaygroundRoomSimulationOperationReceipt>>;
-  decidePermission(binding: PlaygroundRoomSimulationBinding, operationId: string, approvalId: string, decision: PlaygroundRoomSimulationPermissionDecision): Promise<PlaygroundRoomSimulationResult<PlaygroundRoomSimulationOperationReceipt>>;
-  snapshot(binding: PlaygroundRoomSimulationBinding): Promise<PlaygroundRoomSimulationResult<PlaygroundRoomSimulationSnapshot>>;
-  subscribe(binding: PlaygroundRoomSimulationBinding, listener: (event: PlaygroundRoomSimulationResult<PlaygroundRoomSimulationEvent>) => void): () => void;
+  inspect(
+    binding: PlaygroundRoomSimulationBinding,
+  ): Promise<PlaygroundRoomSimulationResult<PlaygroundRoomSimulationInspection>>;
+  injectMessage(
+    binding: PlaygroundRoomSimulationBinding,
+    operationId: string,
+    payload: PlaygroundRoomSimulationMessageInput,
+  ): Promise<PlaygroundRoomSimulationResult<PlaygroundRoomSimulationOperationReceipt>>;
+  emitAgentReply(
+    binding: PlaygroundRoomSimulationBinding,
+    operationId: string,
+    payload: PlaygroundRoomSimulationAgentReplyInput,
+  ): Promise<PlaygroundRoomSimulationResult<PlaygroundRoomSimulationOperationReceipt>>;
+  emitAgentApprovalRequest(
+    binding: PlaygroundRoomSimulationBinding,
+    operationId: string,
+    payload: PlaygroundRoomSimulationAgentApprovalRequest,
+  ): Promise<PlaygroundRoomSimulationResult<PlaygroundRoomSimulationOperationReceipt>>;
+  delegateTask(
+    binding: PlaygroundRoomSimulationBinding,
+    operationId: string,
+    payload: PlaygroundRoomSimulationTaskDelegationInput,
+  ): Promise<PlaygroundRoomSimulationResult<PlaygroundRoomSimulationOperationReceipt>>;
+  requestPermission(
+    binding: PlaygroundRoomSimulationBinding,
+    operationId: string,
+    request: PlaygroundRoomSimulationPermissionRequest,
+  ): Promise<PlaygroundRoomSimulationResult<PlaygroundRoomSimulationOperationReceipt>>;
+  decidePermission(
+    binding: PlaygroundRoomSimulationBinding,
+    operationId: string,
+    approvalId: string,
+    decision: PlaygroundRoomSimulationPermissionDecision,
+  ): Promise<PlaygroundRoomSimulationResult<PlaygroundRoomSimulationOperationReceipt>>;
+  snapshot(
+    binding: PlaygroundRoomSimulationBinding,
+  ): Promise<PlaygroundRoomSimulationResult<PlaygroundRoomSimulationSnapshot>>;
+  subscribe(
+    binding: PlaygroundRoomSimulationBinding,
+    listener: (event: PlaygroundRoomSimulationResult<PlaygroundRoomSimulationEvent>) => void,
+  ): () => void;
 }
 
 export interface PlaygroundRoomSimulationBridgeService {
@@ -130,9 +165,13 @@ const unavailable = (
   ownerGeneration: string,
   code: string,
   message: string,
-): PlaygroundRoomSimulationUnavailable => Object.freeze({
-  status: 'unavailable', code, message, ownerGeneration,
-});
+): PlaygroundRoomSimulationUnavailable =>
+  Object.freeze({
+    status: 'unavailable',
+    code,
+    message,
+    ownerGeneration,
+  });
 
 const boundedText = (value: unknown, maximum: number): string | undefined =>
   typeof value === 'string' && value.trim() !== '' && value.length <= maximum ? value.trim() : undefined;
@@ -143,8 +182,12 @@ function normalizeAgentReplyCorrelation(
   if (value === undefined) return undefined;
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as Readonly<Record<string, unknown>>;
-  if (Object.keys(record).some(key => key !== 'turnId'
-    && key !== 'messageId' && key !== 'inReplyToMessageId')) return null;
+  if (
+    Object.keys(record).some(key =>
+      key !== 'turnId'
+      && key !== 'messageId' && key !== 'inReplyToMessageId'
+    )
+  ) return null;
   const fields = ['turnId', 'messageId', 'inReplyToMessageId'] as const;
   for (const field of fields) {
     if (record[field] !== undefined && boundedText(record[field], 512) === undefined) return null;
@@ -171,7 +214,8 @@ const bindingCorrelation = (binding: PlaygroundRoomSimulationBinding): ChatroomP
 const agentEgressMatchesBinding = (
   egress: RoomPlaygroundAgentEgress,
   binding: PlaygroundRoomSimulationBinding,
-): boolean => egress.runId === binding.runId
+): boolean =>
+  egress.runId === binding.runId
   && egress.memberId === binding.memberId
   && egress.shellBindingId === binding.bindingId
   && egress.ownerGeneration === binding.ownerGeneration
@@ -180,7 +224,8 @@ const agentEgressMatchesBinding = (
 const agentApprovalMatchesBinding = (
   approval: RoomPlaygroundAgentApproval,
   binding: PlaygroundRoomSimulationBinding,
-): boolean => approval.runId === binding.runId
+): boolean =>
+  approval.runId === binding.runId
   && approval.memberId === binding.memberId
   && approval.shellBindingId === binding.bindingId
   && approval.ownerGeneration === binding.ownerGeneration
@@ -200,19 +245,25 @@ function operationForItem(item: AgentConversationItem): string | undefined {
 }
 
 function approvalForTurn(room: Room, runId: string, turn: string | undefined) {
-  return turn === undefined ? undefined : room.items.find(item => item.kind === 'approval'
-    && item.runId === runId && item.turn === turn);
+  return turn === undefined ? undefined : room.items.find(item =>
+    item.kind === 'approval'
+    && item.runId === runId && item.turn === turn
+  );
 }
 
 function messageForOperation(room: Room, operationId: string) {
-  return room.items.find(item => item.kind === 'message'
+  return room.items.find(item =>
+    item.kind === 'message'
     && item.semantic.purpose === 'conversation'
-    && item.semantic.causation?.operationId === operationId);
+    && item.semantic.causation?.operationId === operationId
+  );
 }
 
 function deliveryForOperation(room: Room, operationId: string) {
-  return room.deliveries.find(delivery => delivery.stage === 'send'
-    && delivery.operationId === operationId);
+  return room.deliveries.find(delivery =>
+    delivery.stage === 'send'
+    && delivery.operationId === operationId
+  );
 }
 
 function acknowledgementForDelivery(room: Room, operationId: string) {
@@ -236,16 +287,23 @@ function receiptForOperation(
   const acknowledgement = acknowledgementForDelivery(room, operationId);
   const approval = approvalForTurn(room, binding.runId, acceptance?.turn);
   const terminal = approval?.kind === 'approval' && approval.state !== 'pending' && approval.state !== 'failed'
-    ? approval.state === 'approved' ? 'completed' as const
-      : approval.state === 'denied' ? 'denied' as const : 'cancelled' as const
-    : acknowledgement?.state === 'completed' ? 'completed' as const
-      : acknowledgement?.state === 'failed' ? 'failed' as const : undefined;
+    ? approval.state === 'approved'
+      ? 'completed' as const
+      : approval.state === 'denied'
+      ? 'denied' as const
+      : 'cancelled' as const
+    : acknowledgement?.state === 'completed'
+    ? 'completed' as const
+    : acknowledgement?.state === 'failed'
+    ? 'failed' as const
+    : undefined;
   const phase = approval?.kind === 'approval' && approval.state === 'pending'
     ? 'pending' as const
-    : terminal === 'failed' ? 'failed' as const
-      : terminal === undefined
-        ? delivery?.state === 'accepted' ? 'accepted' as const : 'pending' as const
-        : 'completed' as const;
+    : terminal === 'failed'
+    ? 'failed' as const
+    : terminal === undefined
+    ? delivery?.state === 'accepted' ? 'accepted' as const : 'pending' as const
+    : 'completed' as const;
   return Object.freeze({
     operationId,
     phase,
@@ -280,10 +338,12 @@ function receiptForAgentEgress(
   replayed: boolean,
 ): PlaygroundRoomSimulationOperationReceipt {
   const targetedDeliveries = (egress.recipients ?? []).map(recipient => {
-    const delivery = room.deliveries.find(candidate => candidate.stage === 'send'
+    const delivery = room.deliveries.find(candidate =>
+      candidate.stage === 'send'
       && candidate.userItemId === egress.itemId
       && candidate.memberId === recipient.targetMemberId
-      && candidate.runId === recipient.targetRunId);
+      && candidate.runId === recipient.targetRunId
+    );
     return Object.freeze({
       targetMemberId: recipient.targetMemberId,
       targetRunId: recipient.targetRunId,
@@ -338,7 +398,8 @@ function delegationContextText(context: ChatroomPlaygroundDelegationContext): st
       availableTargets: context.availableTargets,
       communication: {
         mode: context.communicationMode,
-        rule: 'Prefix an ordinary Room message with @<memberId-or-label> to deliver it only to that entity. Without @, the message is Room-visible only.',
+        rule:
+          'Prefix an ordinary Room message with @<memberId-or-label> to deliver it only to that entity. Without @, the message is Room-visible only.',
       },
       approvals: {
         mode: context.approvalMode,
@@ -357,10 +418,12 @@ function receiptForAgentDelegation(
 ): PlaygroundRoomSimulationOperationReceipt {
   const delegation = egress.delegation!;
   const run = room.runs.find(candidate => candidate.runId === delegation.targetRunId);
-  const delivery = room.deliveries.find(candidate => candidate.stage === 'send'
+  const delivery = room.deliveries.find(candidate =>
+    candidate.stage === 'send'
     && candidate.userItemId === egress.itemId
     && candidate.memberId === delegation.targetMemberId
-    && candidate.runId === delegation.targetRunId);
+    && candidate.runId === delegation.targetRunId
+  );
   const acceptance = delivery?.acceptance?.kind === 'send' ? delivery.acceptance : undefined;
   const failed = delivery?.state === 'attention' || run?.status === 'failed';
   return Object.freeze({
@@ -397,9 +460,11 @@ function receiptForAgentApproval(
   operationId: string,
   replayed: boolean,
 ): PlaygroundRoomSimulationOperationReceipt {
-  const terminal = approval.state === 'pending' ? undefined
-    : approval.state === 'approved' ? 'completed' as const
-      : approval.state;
+  const terminal = approval.state === 'pending'
+    ? undefined
+    : approval.state === 'approved'
+    ? 'completed' as const
+    : approval.state;
   return Object.freeze({
     operationId,
     phase: terminal === undefined ? 'pending' as const : 'completed' as const,
@@ -430,29 +495,44 @@ function roomEvents(
   for (const item of room.items) {
     const operationId = operationForItem(item);
     if (item.kind === 'message' && operationId !== undefined) {
-      const egress = room.playgroundAgentEgresses?.find(candidate => candidate.itemId === item.itemId
-        && candidate.operationId === operationId && agentEgressMatchesBinding(candidate, binding));
+      const egress = room.playgroundAgentEgresses?.find(candidate =>
+        candidate.itemId === item.itemId
+        && candidate.operationId === operationId && agentEgressMatchesBinding(candidate, binding)
+      );
       events.push(Object.freeze({
-        kind: egress?.delegation !== undefined ? 'room.agent-task-delegation.projected'
-          : egress?.recipients !== undefined ? 'room.agent-message.targeted.projected'
-          : egress !== undefined ? 'room.agent-egress.projected'
-          : item.author.role === 'human' ? 'room.message.projected' : 'room.agent-message.projected',
-        binding, revision, operationId, occurredAt: item.timestamp,
+        kind: egress?.delegation !== undefined
+          ? 'room.agent-task-delegation.projected'
+          : egress?.recipients !== undefined
+          ? 'room.agent-message.targeted.projected'
+          : egress !== undefined
+          ? 'room.agent-egress.projected'
+          : item.author.role === 'human'
+          ? 'room.message.projected'
+          : 'room.agent-message.projected',
+        binding,
+        revision,
+        operationId,
+        occurredAt: item.timestamp,
         detail: Object.freeze({
-          entryId: item.itemId, messageId: item.messageId,
-          deliveryState: item.deliveryState, runState: item.runState,
+          entryId: item.itemId,
+          messageId: item.messageId,
+          deliveryState: item.deliveryState,
+          runState: item.runState,
           authorRole: item.author.role,
           ...(egress === undefined ? {} : {
             direction: egress.delegation === undefined && egress.recipients === undefined
-              ? 'agent-to-room' : 'agent-to-agent',
+              ? 'agent-to-room'
+              : 'agent-to-agent',
             memberId: egress.memberId,
             participantId: egress.participantId,
             ...(egress.recipients === undefined ? {} : {
               targetingMode: 'explicit-mention',
-              recipients: Object.freeze(egress.recipients.map(recipient => Object.freeze({
-                targetMemberId: recipient.targetMemberId,
-                targetRunId: recipient.targetRunId,
-              }))),
+              recipients: Object.freeze(egress.recipients.map(recipient =>
+                Object.freeze({
+                  targetMemberId: recipient.targetMemberId,
+                  targetRunId: recipient.targetRunId,
+                })
+              )),
             }),
             ...(egress.delegation === undefined ? {} : {
               targetMemberId: egress.delegation.targetMemberId,
@@ -472,7 +552,8 @@ function roomEvents(
     if (item.kind === 'approval' && item.runId === binding.runId) {
       const playgroundApproval = room.playgroundAgentApprovals?.find(candidate =>
         candidate.itemId === item.itemId && candidate.approvalId === item.approvalId
-        && agentApprovalMatchesBinding(candidate, binding));
+        && agentApprovalMatchesBinding(candidate, binding)
+      );
       if (playgroundApproval !== undefined) {
         const latestDecision = playgroundApproval.decisionAttempts.at(-1);
         const projectionDetail = Object.freeze({
@@ -500,7 +581,8 @@ function roomEvents(
         }));
         events.push(Object.freeze({
           kind: item.state === 'pending'
-            ? 'room.agent-approval.pending' : 'room.agent-approval.terminal',
+            ? 'room.agent-approval.pending'
+            : 'room.agent-approval.terminal',
           binding,
           revision,
           operationId: playgroundApproval.operationId,
@@ -509,16 +591,22 @@ function roomEvents(
         }));
         continue;
       }
-      const delivery = room.deliveries.find(candidate => candidate.stage === 'send'
+      const delivery = room.deliveries.find(candidate =>
+        candidate.stage === 'send'
         && candidate.runId === binding.runId && candidate.acceptance?.kind === 'send'
-        && candidate.acceptance.turn === item.turn);
+        && candidate.acceptance.turn === item.turn
+      );
       events.push(Object.freeze({
         kind: item.state === 'pending' ? 'room.permission.pending' : 'room.permission.terminal',
-        binding, revision,
+        binding,
+        revision,
         ...(delivery === undefined ? {} : { operationId: delivery.operationId }),
         detail: Object.freeze({
-          entryId: item.itemId, approvalId: item.approvalId, turnId: item.turn,
-          approvalKind: item.approvalKind, state: item.state,
+          entryId: item.itemId,
+          approvalId: item.approvalId,
+          turnId: item.turn,
+          approvalKind: item.approvalKind,
+          state: item.state,
         }),
       }));
     }
@@ -526,11 +614,18 @@ function roomEvents(
   for (const delivery of room.deliveries) {
     if (delivery.stage !== 'send' || delivery.runId !== binding.runId) continue;
     events.push(Object.freeze({
-      kind: delivery.state === 'accepted' ? 'room.delivery.accepted'
-        : delivery.state === 'attention' ? 'room.delivery.failed' : 'room.delivery.pending',
-      binding, revision, operationId: delivery.operationId, occurredAt: delivery.issuedAt,
+      kind: delivery.state === 'accepted'
+        ? 'room.delivery.accepted'
+        : delivery.state === 'attention'
+        ? 'room.delivery.failed'
+        : 'room.delivery.pending',
+      binding,
+      revision,
+      operationId: delivery.operationId,
+      occurredAt: delivery.issuedAt,
       detail: Object.freeze({
-        deliveryId: delivery.deliveryId, state: delivery.state,
+        deliveryId: delivery.deliveryId,
+        state: delivery.state,
         disposition: delivery.acceptance?.disposition,
         turnId: delivery.acceptance?.kind === 'send' ? delivery.acceptance.turn : undefined,
         messageId: delivery.acceptance?.kind === 'send' ? delivery.acceptance.messageId : undefined,
@@ -541,10 +636,14 @@ function roomEvents(
     if (acknowledgement !== undefined) {
       events.push(Object.freeze({
         kind: acknowledgement.state === 'pending' ? 'room.ack.pending' : 'room.ack.terminal',
-        binding, revision, operationId: delivery.operationId, occurredAt: acknowledgement.timestamp,
+        binding,
+        revision,
+        operationId: delivery.operationId,
+        occurredAt: acknowledgement.timestamp,
         detail: Object.freeze({
           acknowledgementKey: acknowledgement.acknowledgementKey,
-          state: acknowledgement.state, dispatchState: acknowledgement.dispatchState,
+          state: acknowledgement.state,
+          dispatchState: acknowledgement.dispatchState,
           failureCode: acknowledgement.failureCode,
         }),
       }));
@@ -554,11 +653,17 @@ function roomEvents(
     if (decision.runId !== binding.runId) continue;
     events.push(Object.freeze({
       kind: decision.state === 'completed' ? 'room.permission-decision.terminal' : 'room.permission-decision.accepted',
-      binding, revision, operationId: decision.requestOperationId ?? decision.operationId,
+      binding,
+      revision,
+      operationId: decision.requestOperationId ?? decision.operationId,
       detail: Object.freeze({
-        commandOperationId: decision.operationId, approvalId: decision.approvalId,
-        turnId: decision.turn, decision: decision.decision, state: decision.state,
-        disposition: decision.disposition, failureCode: decision.attention?.code,
+        commandOperationId: decision.operationId,
+        approvalId: decision.approvalId,
+        turnId: decision.turn,
+        decision: decision.decision,
+        state: decision.state,
+        disposition: decision.disposition,
+        failureCode: decision.attention?.code,
       }),
     }));
   }
@@ -571,10 +676,12 @@ function roomEvents(
       occurredAt: egress.timestamp,
     } as const;
     if (egress.delegation !== undefined) {
-      const delivery = room.deliveries.find(candidate => candidate.stage === 'send'
+      const delivery = room.deliveries.find(candidate =>
+        candidate.stage === 'send'
         && candidate.userItemId === egress.itemId
         && candidate.memberId === egress.delegation!.targetMemberId
-        && candidate.runId === egress.delegation!.targetRunId);
+        && candidate.runId === egress.delegation!.targetRunId
+      );
       if (delivery?.state === 'accepted') {
         events.push(Object.freeze({
           kind: 'room.agent-task-delegation.accepted',
@@ -596,10 +703,12 @@ function roomEvents(
     }
     if (egress.recipients !== undefined) {
       for (const recipient of egress.recipients) {
-        const delivery = room.deliveries.find(candidate => candidate.stage === 'send'
+        const delivery = room.deliveries.find(candidate =>
+          candidate.stage === 'send'
           && candidate.userItemId === egress.itemId
           && candidate.memberId === recipient.targetMemberId
-          && candidate.runId === recipient.targetRunId);
+          && candidate.runId === recipient.targetRunId
+        );
         if (delivery?.state !== 'accepted') continue;
         events.push(Object.freeze({
           kind: 'room.agent-message.targeted.accepted',
@@ -667,10 +776,15 @@ function roomEvents(
   const run = room.runs.find(candidate => candidate.runId === binding.runId);
   if (run !== undefined) {
     events.push(Object.freeze({
-      kind: 'room.run.lifecycle', binding, revision,
+      kind: 'room.run.lifecycle',
+      binding,
+      revision,
       detail: Object.freeze({
-        runId: run.runId, memberId: run.memberId, status: run.status,
-        presence: run.presence.state, agentLoopCursor: run.agentLoopCursor,
+        runId: run.runId,
+        memberId: run.memberId,
+        status: run.status,
+        presence: run.presence.state,
+        agentLoopCursor: run.agentLoopCursor,
         agentLoopBindingId: run.taskBinding?.binding.bindingId,
         agentLoopBindingGeneration: run.taskBinding?.binding.generation,
       }),
@@ -698,20 +812,29 @@ export class ChatroomPlaygroundRoomSimulationOwner implements PlaygroundRoomSimu
   }
 
   async resolveSession(_sessionId: string) {
-    return unavailable(this.ownerGeneration, 'unsupported', 'Legacy AgentLoop Rooms do not expose Agent Session bindings.');
+    return unavailable(
+      this.ownerGeneration,
+      'unsupported',
+      'Legacy AgentLoop Rooms do not expose Agent Session bindings.',
+    );
   }
 
   async inspect(binding: PlaygroundRoomSimulationBinding) {
     const inspection = this.inspectInternal(binding);
     if (inspection.status === 'unavailable') return inspection;
-    return available(this.ownerGeneration, Object.freeze({
-      binding,
-      lifecycle: 'active' as const,
-      revision: this.revision,
-      delegationTargets: Object.freeze(inspection.inspection.room.memberships
-        .filter(member => member.memberId !== binding.memberId)
-        .map(member => Object.freeze({ memberId: member.memberId, label: member.label }))),
-    }));
+    return available(
+      this.ownerGeneration,
+      Object.freeze({
+        binding,
+        lifecycle: 'active' as const,
+        revision: this.revision,
+        delegationTargets: Object.freeze(
+          inspection.inspection.room.memberships
+            .filter(member => member.memberId !== binding.memberId)
+            .map(member => Object.freeze({ memberId: member.memberId, label: member.label })),
+        ),
+      }),
+    );
   }
 
   async injectMessage(
@@ -724,33 +847,54 @@ export class ChatroomPlaygroundRoomSimulationOwner implements PlaygroundRoomSimu
     const inputError = this.inputError(operationId, payload.text);
     if (inputError !== undefined) return inputError;
     const plan = this.conversation.planPlaygroundMessage(
-      bindingCorrelation(binding), operationId, payload.text,
+      bindingCorrelation(binding),
+      operationId,
+      payload.text,
     );
     if (plan.status === 'conflict') {
-      return available(this.ownerGeneration, Object.freeze({
-        operationId, phase: 'rejected' as const, binding, runId: binding.runId,
-        detail: Object.freeze({ code: plan.code }),
-      }));
+      return available(
+        this.ownerGeneration,
+        Object.freeze({
+          operationId,
+          phase: 'rejected' as const,
+          binding,
+          runId: binding.runId,
+          detail: Object.freeze({ code: plan.code }),
+        }),
+      );
     }
     let outcome: Awaited<ReturnType<ChatroomAgentLoopController['sendToRoom']>>;
     try {
       outcome = await this.agentLoop.sendToRoom(
-        binding.roomId, binding.runId, plan.userItemId,
-        [{ kind: 'text', text: plan.text }], binding.generation, operationId,
+        binding.roomId,
+        binding.runId,
+        plan.userItemId,
+        [{ kind: 'text', text: plan.text }],
+        binding.generation,
+        operationId,
       );
     } catch (error) {
       return this.ownerFailure('room-send-failed', 'Room message delivery failed', error);
     }
     if (outcome.status !== 'accepted') {
-      return available(this.ownerGeneration, Object.freeze({
-        operationId, phase: 'rejected' as const, binding,
-        roomEntryId: plan.userItemId, messageId: plan.messageId, runId: binding.runId,
-        terminal: 'failed' as const,
-        detail: Object.freeze({ code: outcome.code, status: outcome.status }),
-      }));
+      return available(
+        this.ownerGeneration,
+        Object.freeze({
+          operationId,
+          phase: 'rejected' as const,
+          binding,
+          roomEntryId: plan.userItemId,
+          messageId: plan.messageId,
+          runId: binding.runId,
+          terminal: 'failed' as const,
+          detail: Object.freeze({ code: outcome.code, status: outcome.status }),
+        }),
+      );
     }
     const room = this.agentLoop.rooms.get(binding.roomId);
-    if (room === undefined) return unavailable(this.ownerGeneration, 'deleted', 'The Room was deleted during injection.');
+    if (room === undefined) {
+      return unavailable(this.ownerGeneration, 'deleted', 'The Room was deleted during injection.');
+    }
     return available(this.ownerGeneration, receiptForOperation(binding, room, operationId));
   }
 
@@ -770,31 +914,42 @@ export class ChatroomPlaygroundRoomSimulationOwner implements PlaygroundRoomSimu
     let projection: Awaited<ReturnType<ChatroomConversationController['projectPlaygroundAgentReply']>>;
     try {
       projection = await this.conversation.projectPlaygroundAgentReply(
-        bindingCorrelation(binding), operationId, payload.text, correlation,
+        bindingCorrelation(binding),
+        operationId,
+        payload.text,
+        correlation,
       );
     } catch (error) {
       return this.ownerFailure('agent-egress-projection-failed', 'Room Agent reply projection failed', error);
     }
     if (projection.status !== 'accepted') {
-      return available(this.ownerGeneration, Object.freeze({
-        operationId, phase: 'rejected' as const, binding, runId: binding.runId,
-        detail: Object.freeze({
-          code: projection.code,
-          direction: 'agent-to-room',
-          ...(projection.status === 'target-error' ? { mention: projection.mention } : {}),
+      return available(
+        this.ownerGeneration,
+        Object.freeze({
+          operationId,
+          phase: 'rejected' as const,
+          binding,
+          runId: binding.runId,
+          detail: Object.freeze({
+            code: projection.code,
+            direction: 'agent-to-room',
+            ...(projection.status === 'target-error' ? { mention: projection.mention } : {}),
+          }),
         }),
-      }));
+      );
     }
     const outcomes: Awaited<ReturnType<ChatroomAgentLoopController['sendToRoom']>>[] = [];
     for (const recipient of projection.recipients ?? []) {
       try {
-        outcomes.push(await this.agentLoop.sendToRoom(
-          binding.roomId,
-          recipient.targetRunId,
-          projection.itemId,
-          [{ kind: 'text', text: recipient.content }],
-          binding.generation,
-        ));
+        outcomes.push(
+          await this.agentLoop.sendToRoom(
+            binding.roomId,
+            recipient.targetRunId,
+            projection.itemId,
+            [{ kind: 'text', text: recipient.content }],
+            binding.generation,
+          ),
+        );
       } catch (error) {
         return this.ownerFailure('agent-targeted-send-failed', 'Targeted Agent message delivery failed', error);
       }
@@ -813,15 +968,18 @@ export class ChatroomPlaygroundRoomSimulationOwner implements PlaygroundRoomSimu
     }
     const failure = outcomes.find(outcome => outcome.status !== 'accepted');
     if (failure !== undefined) {
-      return available(this.ownerGeneration, Object.freeze({
-        ...receiptForAgentEgress(binding, room, egress, projection.replayed),
-        phase: 'failed' as const,
-        detail: Object.freeze({
-          ...receiptForAgentEgress(binding, room, egress, projection.replayed).detail,
-          code: failure.code,
-          status: failure.status,
+      return available(
+        this.ownerGeneration,
+        Object.freeze({
+          ...receiptForAgentEgress(binding, room, egress, projection.replayed),
+          phase: 'failed' as const,
+          detail: Object.freeze({
+            ...receiptForAgentEgress(binding, room, egress, projection.replayed).detail,
+            code: failure.code,
+            status: failure.status,
+          }),
         }),
-      }));
+      );
     }
     return available(
       this.ownerGeneration,
@@ -851,18 +1009,28 @@ export class ChatroomPlaygroundRoomSimulationOwner implements PlaygroundRoomSimu
     let projection: Awaited<ReturnType<ChatroomConversationController['projectPlaygroundAgentApprovalRequest']>>;
     try {
       projection = await this.conversation.projectPlaygroundAgentApprovalRequest(
-        bindingCorrelation(binding), operationId, reason,
+        bindingCorrelation(binding),
+        operationId,
+        reason,
       );
     } catch (error) {
       return this.ownerFailure(
-        'agent-approval-projection-failed', 'Room Agent approval projection failed', error,
+        'agent-approval-projection-failed',
+        'Room Agent approval projection failed',
+        error,
       );
     }
     if (projection.status === 'conflict') {
-      return available(this.ownerGeneration, Object.freeze({
-        operationId, phase: 'rejected' as const, binding, runId: binding.runId,
-        detail: Object.freeze({ code: projection.code, direction: 'agent-to-room' }),
-      }));
+      return available(
+        this.ownerGeneration,
+        Object.freeze({
+          operationId,
+          phase: 'rejected' as const,
+          binding,
+          runId: binding.runId,
+          detail: Object.freeze({ code: projection.code, direction: 'agent-to-room' }),
+        }),
+      );
     }
     if (projection.status === 'missing') {
       return unavailable(
@@ -906,26 +1074,37 @@ export class ChatroomPlaygroundRoomSimulationOwner implements PlaygroundRoomSimu
     const record = request as Readonly<Record<string, unknown>>;
     const targetMemberId = boundedText(record.memberId, 512);
     const task = boundedText(record.task, MAX_MESSAGE_LENGTH);
-    if (targetMemberId === undefined || task === undefined
-      || Object.keys(record).some(key => key !== 'memberId' && key !== 'task')) {
+    if (
+      targetMemberId === undefined || task === undefined
+      || Object.keys(record).some(key => key !== 'memberId' && key !== 'task')
+    ) {
       return unavailable(this.ownerGeneration, 'invalid-request', 'The task delegation request is invalid.');
     }
     let projection: Awaited<ReturnType<ChatroomConversationController['projectPlaygroundAgentDelegation']>>;
     try {
       projection = await this.conversation.projectPlaygroundAgentDelegation(
-        bindingCorrelation(binding), operationId, targetMemberId, task,
+        bindingCorrelation(binding),
+        operationId,
+        targetMemberId,
+        task,
       );
     } catch (error) {
       return this.ownerFailure('agent-delegation-projection-failed', 'Agent task delegation projection failed', error);
     }
     if (projection.status !== 'accepted') {
-      return available(this.ownerGeneration, Object.freeze({
-        operationId, phase: 'rejected' as const, binding, runId: binding.runId,
-        detail: Object.freeze({
-          code: projection.status === 'missing-target' ? 'delegation-target-unavailable' : projection.code,
-          direction: 'agent-to-agent',
+      return available(
+        this.ownerGeneration,
+        Object.freeze({
+          operationId,
+          phase: 'rejected' as const,
+          binding,
+          runId: binding.runId,
+          detail: Object.freeze({
+            code: projection.status === 'missing-target' ? 'delegation-target-unavailable' : projection.code,
+            direction: 'agent-to-agent',
+          }),
         }),
-      }));
+      );
     }
     let outcome: Awaited<ReturnType<ChatroomAgentLoopController['sendToRoom']>>;
     try {
@@ -943,21 +1122,26 @@ export class ChatroomPlaygroundRoomSimulationOwner implements PlaygroundRoomSimu
       return this.ownerFailure('agent-delegation-send-failed', 'Delegated task delivery failed', error);
     }
     const room = this.agentLoop.rooms.get(binding.roomId);
-    if (room === undefined) return unavailable(this.ownerGeneration, 'deleted', 'The Room was deleted during task delegation.');
+    if (room === undefined) {
+      return unavailable(this.ownerGeneration, 'deleted', 'The Room was deleted during task delegation.');
+    }
     const egress = room.playgroundAgentEgresses?.find(candidate => candidate.operationId === operationId);
     if (egress === undefined || egress.delegation === undefined) {
       return unavailable(this.ownerGeneration, 'projection-missing', 'The delegated task projection is unavailable.');
     }
     if (outcome.status !== 'accepted') {
-      return available(this.ownerGeneration, Object.freeze({
-        ...receiptForAgentDelegation(binding, room, egress, projection.replayed),
-        phase: 'rejected' as const,
-        detail: Object.freeze({
-          ...receiptForAgentDelegation(binding, room, egress, projection.replayed).detail,
-          code: outcome.code,
-          status: outcome.status,
+      return available(
+        this.ownerGeneration,
+        Object.freeze({
+          ...receiptForAgentDelegation(binding, room, egress, projection.replayed),
+          phase: 'rejected' as const,
+          detail: Object.freeze({
+            ...receiptForAgentDelegation(binding, room, egress, projection.replayed).detail,
+            code: outcome.code,
+            status: outcome.status,
+          }),
         }),
-      }));
+      );
     }
     return available(
       this.ownerGeneration,
@@ -973,50 +1157,84 @@ export class ChatroomPlaygroundRoomSimulationOwner implements PlaygroundRoomSimu
     const inspection = this.inspectInternal(binding);
     if (inspection.status === 'unavailable') return inspection;
     if (request.kind !== undefined && request.kind !== 'command') {
-      return available(this.ownerGeneration, Object.freeze({
-        operationId, phase: 'rejected' as const, binding, runId: binding.runId,
-        detail: Object.freeze({ code: 'permission-kind-unavailable' }),
-      }));
+      return available(
+        this.ownerGeneration,
+        Object.freeze({
+          operationId,
+          phase: 'rejected' as const,
+          binding,
+          runId: binding.runId,
+          detail: Object.freeze({ code: 'permission-kind-unavailable' }),
+        }),
+      );
     }
     if (request.detail !== undefined && Object.keys(request.detail).length > 0) {
-      return available(this.ownerGeneration, Object.freeze({
-        operationId, phase: 'rejected' as const, binding, runId: binding.runId,
-        detail: Object.freeze({ code: 'permission-detail-unavailable' }),
-      }));
+      return available(
+        this.ownerGeneration,
+        Object.freeze({
+          operationId,
+          phase: 'rejected' as const,
+          binding,
+          runId: binding.runId,
+          detail: Object.freeze({ code: 'permission-detail-unavailable' }),
+        }),
+      );
     }
     const title = boundedText(request.title, 512);
     const rationale = request.rationale === undefined ? undefined : boundedText(request.rationale, 4_096);
-    const visibleText = title === undefined ? undefined
-      : rationale === undefined ? title : `${title}\n${rationale}`;
+    const visibleText = title === undefined
+      ? undefined
+      : rationale === undefined
+      ? title
+      : `${title}\n${rationale}`;
     const inputError = this.inputError(operationId, visibleText);
     if (inputError !== undefined || visibleText === undefined) {
       return inputError ?? unavailable(this.ownerGeneration, 'invalid-request', 'The permission request is invalid.');
     }
     const plan = this.conversation.planPlaygroundMessage(
-      bindingCorrelation(binding), operationId, visibleText,
+      bindingCorrelation(binding),
+      operationId,
+      visibleText,
     );
     if (plan.status === 'conflict') {
-      return available(this.ownerGeneration, Object.freeze({
-        operationId, phase: 'rejected' as const, binding, runId: binding.runId,
-        detail: Object.freeze({ code: plan.code }),
-      }));
+      return available(
+        this.ownerGeneration,
+        Object.freeze({
+          operationId,
+          phase: 'rejected' as const,
+          binding,
+          runId: binding.runId,
+          detail: Object.freeze({ code: plan.code }),
+        }),
+      );
     }
     let outcome: Awaited<ReturnType<ChatroomAgentLoopController['sendToRoom']>>;
     try {
       outcome = await this.agentLoop.sendToRoom(
-        binding.roomId, binding.runId, plan.userItemId,
-        [{ kind: 'text', text: `${visibleText}\n[approval]` }], binding.generation, operationId,
+        binding.roomId,
+        binding.runId,
+        plan.userItemId,
+        [{ kind: 'text', text: `${visibleText}\n[approval]` }],
+        binding.generation,
+        operationId,
       );
     } catch (error) {
       return this.ownerFailure('permission-send-failed', 'Room permission delivery failed', error);
     }
     if (outcome.status !== 'accepted') {
-      return available(this.ownerGeneration, Object.freeze({
-        operationId, phase: 'rejected' as const, binding,
-        roomEntryId: plan.userItemId, messageId: plan.messageId, runId: binding.runId,
-        terminal: 'failed' as const,
-        detail: Object.freeze({ code: outcome.code, status: outcome.status }),
-      }));
+      return available(
+        this.ownerGeneration,
+        Object.freeze({
+          operationId,
+          phase: 'rejected' as const,
+          binding,
+          roomEntryId: plan.userItemId,
+          messageId: plan.messageId,
+          runId: binding.runId,
+          terminal: 'failed' as const,
+          detail: Object.freeze({ code: outcome.code, status: outcome.status }),
+        }),
+      );
     }
     const pending = await this.waitForRoom(binding.roomId, room => {
       const delivery = deliveryForOperation(room, operationId);
@@ -1028,12 +1246,15 @@ export class ChatroomPlaygroundRoomSimulationOwner implements PlaygroundRoomSimu
       if (currentRoom === undefined) {
         return unavailable(this.ownerGeneration, 'deleted', 'The Room was deleted while awaiting approval projection.');
       }
-      return available(this.ownerGeneration, Object.freeze({
-        ...receiptForOperation(binding, currentRoom, operationId),
-        phase: 'rejected' as const,
-        terminal: 'failed' as const,
-        detail: Object.freeze({ code: 'approval-not-projected' }),
-      }));
+      return available(
+        this.ownerGeneration,
+        Object.freeze({
+          ...receiptForOperation(binding, currentRoom, operationId),
+          phase: 'rejected' as const,
+          terminal: 'failed' as const,
+          detail: Object.freeze({ code: 'approval-not-projected' }),
+        }),
+      );
     }
     return available(this.ownerGeneration, receiptForOperation(binding, pending, operationId));
   }
@@ -1049,26 +1270,41 @@ export class ChatroomPlaygroundRoomSimulationOwner implements PlaygroundRoomSimu
     if (!OPERATION_ID_PATTERN.test(operationId) || boundedText(approvalId, 512) === undefined) {
       return unavailable(this.ownerGeneration, 'invalid-request', 'The permission decision correlation is invalid.');
     }
-    const mapped = decision === 'allow' ? 'approved' as const
-      : decision === 'deny' ? 'denied' as const : 'cancelled' as const;
+    const mapped = decision === 'allow'
+      ? 'approved' as const
+      : decision === 'deny'
+      ? 'denied' as const
+      : 'cancelled' as const;
     let playgroundDecision: Awaited<ReturnType<ChatroomConversationController['decidePlaygroundAgentApproval']>>;
     try {
       playgroundDecision = await this.conversation.decidePlaygroundAgentApproval(
-        bindingCorrelation(binding), operationId, approvalId, mapped,
+        bindingCorrelation(binding),
+        operationId,
+        approvalId,
+        mapped,
       );
     } catch (error) {
       return this.ownerFailure(
-        'agent-approval-decision-failed', 'Room Agent approval decision failed', error,
+        'agent-approval-decision-failed',
+        'Room Agent approval decision failed',
+        error,
       );
     }
     if (playgroundDecision.status === 'conflict') {
-      return available(this.ownerGeneration, Object.freeze({
-        operationId, phase: 'rejected' as const, binding, approvalId, runId: binding.runId,
-        detail: Object.freeze({
-          code: playgroundDecision.code,
-          direction: 'host-to-chatroom',
+      return available(
+        this.ownerGeneration,
+        Object.freeze({
+          operationId,
+          phase: 'rejected' as const,
+          binding,
+          approvalId,
+          runId: binding.runId,
+          detail: Object.freeze({
+            code: playgroundDecision.code,
+            direction: 'host-to-chatroom',
+          }),
         }),
-      }));
+      );
     }
     if (playgroundDecision.status === 'accepted') {
       const room = this.agentLoop.rooms.get(binding.roomId);
@@ -1086,70 +1322,126 @@ export class ChatroomPlaygroundRoomSimulationOwner implements PlaygroundRoomSimu
       return available(
         this.ownerGeneration,
         receiptForAgentApproval(
-          binding, directApproval, operationId, playgroundDecision.replayed,
+          binding,
+          directApproval,
+          operationId,
+          playgroundDecision.replayed,
         ),
       );
     }
-    const approval = inspection.inspection.room.items.find(item => item.kind === 'approval'
-      && item.runId === binding.runId && item.approvalId === approvalId);
+    const approval = inspection.inspection.room.items.find(item =>
+      item.kind === 'approval'
+      && item.runId === binding.runId && item.approvalId === approvalId
+    );
     if (approval?.kind !== 'approval') {
-      return available(this.ownerGeneration, Object.freeze({
-        operationId, phase: 'rejected' as const, binding, approvalId, runId: binding.runId,
-        detail: Object.freeze({ code: 'approval-missing' }),
-      }));
+      return available(
+        this.ownerGeneration,
+        Object.freeze({
+          operationId,
+          phase: 'rejected' as const,
+          binding,
+          approvalId,
+          runId: binding.runId,
+          detail: Object.freeze({ code: 'approval-missing' }),
+        }),
+      );
     }
     if (approval.state !== 'pending') {
-      return available(this.ownerGeneration, Object.freeze({
-        operationId,
-        phase: approval.state === mapped ? 'completed' as const : 'rejected' as const,
-        binding, approvalId, turnId: approval.turn, runId: binding.runId,
-        ...(approval.state === mapped ? { terminal: mapped === 'approved' ? 'completed' as const : mapped }
-          : { detail: Object.freeze({ code: 'approval-conflict', current: approval.state }) }),
-      }));
+      return available(
+        this.ownerGeneration,
+        Object.freeze({
+          operationId,
+          phase: approval.state === mapped ? 'completed' as const : 'rejected' as const,
+          binding,
+          approvalId,
+          turnId: approval.turn,
+          runId: binding.runId,
+          ...(approval.state === mapped
+            ? { terminal: mapped === 'approved' ? 'completed' as const : mapped }
+            : { detail: Object.freeze({ code: 'approval-conflict', current: approval.state }) }),
+        }),
+      );
     }
     let outcome: Awaited<ReturnType<ChatroomAgentLoopController['decideApproval']>>;
     try {
       outcome = await this.agentLoop.decideApproval(
-        binding.roomId, binding.runId, approval.turn, approval.approvalId, mapped, operationId,
+        binding.roomId,
+        binding.runId,
+        approval.turn,
+        approval.approvalId,
+        mapped,
+        operationId,
       );
     } catch (error) {
       return this.ownerFailure('permission-decision-failed', 'Room permission decision failed', error);
     }
     if (outcome.status !== 'accepted') {
-      return available(this.ownerGeneration, Object.freeze({
-        operationId, phase: 'rejected' as const, binding,
-        approvalId, turnId: approval.turn, runId: binding.runId,
-        detail: Object.freeze({ code: outcome.code, status: outcome.status, commandOperationId: outcome.operationId }),
-      }));
+      return available(
+        this.ownerGeneration,
+        Object.freeze({
+          operationId,
+          phase: 'rejected' as const,
+          binding,
+          approvalId,
+          turnId: approval.turn,
+          runId: binding.runId,
+          detail: Object.freeze({
+            code: outcome.code,
+            status: outcome.status,
+            commandOperationId: outcome.operationId,
+          }),
+        }),
+      );
     }
     const terminalRoom = await this.waitForRoom(binding.roomId, room => {
-      const item = room.items.find(candidate => candidate.kind === 'approval'
-        && candidate.runId === binding.runId && candidate.approvalId === approvalId);
+      const item = room.items.find(candidate =>
+        candidate.kind === 'approval'
+        && candidate.runId === binding.runId && candidate.approvalId === approvalId
+      );
       return item?.kind === 'approval' && item.state !== 'pending';
     });
-    const terminalApproval = terminalRoom?.items.find(item => item.kind === 'approval'
-      && item.runId === binding.runId && item.approvalId === approvalId);
-    return available(this.ownerGeneration, Object.freeze({
-      operationId,
-      phase: terminalApproval?.kind === 'approval' && terminalApproval.state !== 'pending'
-        ? 'completed' as const : 'accepted' as const,
-      binding, approvalId, turnId: approval.turn, runId: binding.runId,
-      ...(terminalApproval?.kind === 'approval' && terminalApproval.state !== 'pending'
-        ? { terminal: terminalApproval.state === 'approved' ? 'completed' as const
-          : terminalApproval.state === 'denied' ? 'denied' as const : terminalApproval.state === 'cancelled' ? 'cancelled' as const : 'failed' as const }
-        : {}),
-      detail: Object.freeze({ commandOperationId: outcome.operationId }),
-    }));
+    const terminalApproval = terminalRoom?.items.find(item =>
+      item.kind === 'approval'
+      && item.runId === binding.runId && item.approvalId === approvalId
+    );
+    return available(
+      this.ownerGeneration,
+      Object.freeze({
+        operationId,
+        phase: terminalApproval?.kind === 'approval' && terminalApproval.state !== 'pending'
+          ? 'completed' as const
+          : 'accepted' as const,
+        binding,
+        approvalId,
+        turnId: approval.turn,
+        runId: binding.runId,
+        ...(terminalApproval?.kind === 'approval' && terminalApproval.state !== 'pending'
+          ? {
+            terminal: terminalApproval.state === 'approved'
+              ? 'completed' as const
+              : terminalApproval.state === 'denied'
+              ? 'denied' as const
+              : terminalApproval.state === 'cancelled'
+              ? 'cancelled' as const
+              : 'failed' as const,
+          }
+          : {}),
+        detail: Object.freeze({ commandOperationId: outcome.operationId }),
+      }),
+    );
   }
 
   async snapshot(binding: PlaygroundRoomSimulationBinding) {
     const inspection = this.inspectInternal(binding);
     if (inspection.status === 'unavailable') return inspection;
-    return available(this.ownerGeneration, Object.freeze({
-      binding,
-      revision: this.revision,
-      events: roomEvents(binding, inspection.inspection.room, this.revision),
-    }));
+    return available(
+      this.ownerGeneration,
+      Object.freeze({
+        binding,
+        revision: this.revision,
+        events: roomEvents(binding, inspection.inspection.room, this.revision),
+      }),
+    );
   }
 
   subscribe(
@@ -1189,11 +1481,17 @@ export class ChatroomPlaygroundRoomSimulationOwner implements PlaygroundRoomSimu
   }
 
   private inspectInternal(binding: PlaygroundRoomSimulationBinding):
-    | { readonly status: 'available'; readonly inspection: Extract<ChatroomPlaygroundSourceInspection, { readonly status: 'available' }> }
-    | PlaygroundRoomSimulationUnavailable {
+    | {
+      readonly status: 'available';
+      readonly inspection: Extract<ChatroomPlaygroundSourceInspection, { readonly status: 'available'; }>;
+    }
+    | PlaygroundRoomSimulationUnavailable
+  {
     if (this.disposed) return unavailable(this.ownerGeneration, 'owner-retired', 'The Chatroom owner is retired.');
-    if (binding.contract !== PLAYGROUND_ROOM_SIMULATION_BINDING_CONTRACT
-      || binding.ownerGeneration !== this.ownerGeneration) {
+    if (
+      binding.contract !== PLAYGROUND_ROOM_SIMULATION_BINDING_CONTRACT
+      || binding.ownerGeneration !== this.ownerGeneration
+    ) {
       return unavailable(this.ownerGeneration, 'invalid-binding', 'The Playground Room binding is invalid or retired.');
     }
     const inspection = this.conversation.inspectPlaygroundSource(bindingCorrelation(binding));
@@ -1271,9 +1569,11 @@ export class ChatroomAgentSessionRoomSimulationOwner implements PlaygroundRoomSi
 
   async resolveSession(sessionId: string) {
     if (this.disposed) return unavailable(this.ownerGeneration, 'owner-retired', 'The Chatroom owner is retired.');
-    const matches = this.agentSession.rooms.snapshot().flatMap(room => room.runs
-      .filter(run => run.sessionId === sessionId)
-      .map(run => ({ room, run })));
+    const matches = this.agentSession.rooms.snapshot().flatMap(room =>
+      room.runs
+        .filter(run => run.sessionId === sessionId)
+        .map(run => ({ room, run }))
+    );
     if (matches.length !== 1) {
       return unavailable(
         this.ownerGeneration,
@@ -1284,7 +1584,9 @@ export class ChatroomAgentSessionRoomSimulationOwner implements PlaygroundRoomSi
       );
     }
     const { room, run } = matches[0]!;
-    if (room.archived) return unavailable(this.ownerGeneration, 'archived', 'The associated Chatroom Room is archived.');
+    if (room.archived) {
+      return unavailable(this.ownerGeneration, 'archived', 'The associated Chatroom Room is archived.');
+    }
     const binding: PlaygroundRoomSimulationBinding = Object.freeze({
       contract: PLAYGROUND_ROOM_SIMULATION_BINDING_CONTRACT,
       sessionId,
@@ -1304,14 +1606,19 @@ export class ChatroomAgentSessionRoomSimulationOwner implements PlaygroundRoomSi
   async inspect(binding: PlaygroundRoomSimulationBinding) {
     const inspection = this.inspectInternal(binding);
     if (inspection.status === 'unavailable') return inspection;
-    return available(this.ownerGeneration, Object.freeze({
-      binding,
-      lifecycle: 'active' as const,
-      revision: this.revision,
-      delegationTargets: Object.freeze(inspection.inspection.room.memberships
-        .filter(member => member.memberId !== binding.memberId)
-        .map(member => Object.freeze({ memberId: member.memberId, label: member.label }))),
-    }));
+    return available(
+      this.ownerGeneration,
+      Object.freeze({
+        binding,
+        lifecycle: 'active' as const,
+        revision: this.revision,
+        delegationTargets: Object.freeze(
+          inspection.inspection.room.memberships
+            .filter(member => member.memberId !== binding.memberId)
+            .map(member => Object.freeze({ memberId: member.memberId, label: member.label })),
+        ),
+      }),
+    );
   }
 
   async delegateTask(
@@ -1321,34 +1628,45 @@ export class ChatroomAgentSessionRoomSimulationOwner implements PlaygroundRoomSi
   ) {
     const inspection = this.inspectInternal(binding);
     if (inspection.status === 'unavailable') return inspection;
-    if (!OPERATION_ID_PATTERN.test(operationId)
+    if (
+      !OPERATION_ID_PATTERN.test(operationId)
       || boundedText(payload.memberId, 512) === undefined
-      || boundedText(payload.task, MAX_MESSAGE_LENGTH) === undefined) {
+      || boundedText(payload.task, MAX_MESSAGE_LENGTH) === undefined
+    ) {
       return unavailable(this.ownerGeneration, 'invalid-request', 'The task delegation request is invalid.');
     }
     const projection = await this.conversation.projectAgentSessionDelegation(
-      bindingCorrelation(binding), operationId, payload.memberId.trim(), payload.task.trim(),
+      bindingCorrelation(binding),
+      operationId,
+      payload.memberId.trim(),
+      payload.task.trim(),
       this.agentSession.reservePresentationSequence(),
     );
     if (projection.status !== 'accepted') {
-      return available(this.ownerGeneration, Object.freeze({
-        operationId,
-        phase: 'rejected' as const,
-        binding,
-        detail: Object.freeze({
-          code: projection.status === 'missing-target' ? 'delegation-target-unavailable' : projection.code,
+      return available(
+        this.ownerGeneration,
+        Object.freeze({
+          operationId,
+          phase: 'rejected' as const,
+          binding,
+          detail: Object.freeze({
+            code: projection.status === 'missing-target' ? 'delegation-target-unavailable' : projection.code,
+          }),
         }),
-      }));
+      );
     }
     if (projection.replayed) {
-      return available(this.ownerGeneration, Object.freeze({
-        operationId,
-        phase: 'accepted' as const,
-        binding,
-        roomEntryId: projection.itemId,
-        messageId: projection.messageId,
-        runId: projection.targetRunId,
-      }));
+      return available(
+        this.ownerGeneration,
+        Object.freeze({
+          operationId,
+          phase: 'accepted' as const,
+          binding,
+          roomEntryId: projection.itemId,
+          messageId: projection.messageId,
+          runId: projection.targetRunId,
+        }),
+      );
     }
     const outcome = await this.agentSession.sendToRoom(
       binding.roomId,
@@ -1358,17 +1676,20 @@ export class ChatroomAgentSessionRoomSimulationOwner implements PlaygroundRoomSi
       'followup',
       'agent-delegation',
     );
-    return available(this.ownerGeneration, Object.freeze({
-      operationId,
-      phase: outcome.status === 'accepted' ? 'accepted' as const : 'rejected' as const,
-      binding,
-      roomEntryId: projection.itemId,
-      messageId: outcome.status === 'accepted' ? outcome.messageId : projection.messageId,
-      runId: projection.targetRunId,
-      ...(outcome.status === 'accepted' ? {} : {
-        detail: Object.freeze({ code: outcome.code, status: outcome.status }),
+    return available(
+      this.ownerGeneration,
+      Object.freeze({
+        operationId,
+        phase: outcome.status === 'accepted' ? 'accepted' as const : 'rejected' as const,
+        binding,
+        roomEntryId: projection.itemId,
+        messageId: outcome.status === 'accepted' ? outcome.messageId : projection.messageId,
+        runId: projection.targetRunId,
+        ...(outcome.status === 'accepted' ? {} : {
+          detail: Object.freeze({ code: outcome.code, status: outcome.status }),
+        }),
       }),
-    }));
+    );
   }
 
   async injectMessage(
@@ -1379,26 +1700,38 @@ export class ChatroomAgentSessionRoomSimulationOwner implements PlaygroundRoomSi
     const inspection = this.inspectInternal(binding);
     if (inspection.status === 'unavailable') return inspection;
     const plan = this.conversation.planPlaygroundMessage(
-      bindingCorrelation(binding), operationId, payload.text,
+      bindingCorrelation(binding),
+      operationId,
+      payload.text,
     );
     if (plan.status !== 'accepted') {
       return available(this.ownerGeneration, Object.freeze({ operationId, phase: 'rejected' as const, binding }));
     }
     const outcome = await this.agentSession.sendToRoom(
-      binding.roomId, binding.runId, plan.userItemId, plan.text,
+      binding.roomId,
+      binding.runId,
+      plan.userItemId,
+      plan.text,
     );
-    return available(this.ownerGeneration, Object.freeze({
-      operationId,
-      phase: outcome.status === 'accepted' ? 'accepted' as const : 'rejected' as const,
-      binding,
-      roomEntryId: plan.userItemId,
-      messageId: outcome.status === 'accepted' ? outcome.messageId : plan.messageId,
-      runId: binding.runId,
-    }));
+    return available(
+      this.ownerGeneration,
+      Object.freeze({
+        operationId,
+        phase: outcome.status === 'accepted' ? 'accepted' as const : 'rejected' as const,
+        binding,
+        roomEntryId: plan.userItemId,
+        messageId: outcome.status === 'accepted' ? outcome.messageId : plan.messageId,
+        runId: binding.runId,
+      }),
+    );
   }
 
   async emitAgentReply() {
-    return unavailable(this.ownerGeneration, 'unsupported', 'Direct Agent reply injection is unavailable for Agent Sessions.');
+    return unavailable(
+      this.ownerGeneration,
+      'unsupported',
+      'Direct Agent reply injection is unavailable for Agent Sessions.',
+    );
   }
 
   async emitAgentApprovalRequest(
@@ -1412,9 +1745,11 @@ export class ChatroomAgentSessionRoomSimulationOwner implements PlaygroundRoomSi
     if (!OPERATION_ID_PATTERN.test(operationId) || reason === undefined) {
       return unavailable(this.ownerGeneration, 'invalid-request', 'The Agent approval request is invalid.');
     }
-    const prior = new Set(this.agentSession.projectionForRoom(binding.roomId).items
-      .filter(item => item.kind === 'approval' && item.runId === binding.runId)
-      .map(item => item.itemId));
+    const prior = new Set(
+      this.agentSession.projectionForRoom(binding.roomId).items
+        .filter(item => item.kind === 'approval' && item.runId === binding.runId)
+        .map(item => item.itemId),
+    );
     const decision = this.agentSession.requestApproval(
       binding.roomId,
       binding.runId,
@@ -1435,42 +1770,56 @@ export class ChatroomAgentSessionRoomSimulationOwner implements PlaygroundRoomSi
         'The exact Reviewer approval request could not be projected.',
       );
     }
-    return available(this.ownerGeneration, Object.freeze({
-      operationId,
-      phase: item.state === 'pending' ? 'pending' as const : 'completed' as const,
-      binding,
-      roomEntryId: item.itemId,
-      approvalId: item.approvalId,
-      runId: item.runId,
-      ...(item.state === 'pending' ? {} : {
-        terminal: item.state === 'approved' ? 'completed' as const : item.state,
+    return available(
+      this.ownerGeneration,
+      Object.freeze({
+        operationId,
+        phase: item.state === 'pending' ? 'pending' as const : 'completed' as const,
+        binding,
+        roomEntryId: item.itemId,
+        approvalId: item.approvalId,
+        runId: item.runId,
+        ...(item.state === 'pending' ? {} : {
+          terminal: item.state === 'approved' ? 'completed' as const : item.state,
+        }),
+        detail: Object.freeze({
+          direction: 'agent-to-room',
+          requestOperationId: operationId,
+          projectionState: 'session-event',
+          requesterMemberId: item.memberId,
+          authorityMemberId: 'authority' in item ? item.authority.memberId : undefined,
+        }),
       }),
-      detail: Object.freeze({
-        direction: 'agent-to-room',
-        requestOperationId: operationId,
-        projectionState: 'session-event',
-        requesterMemberId: item.memberId,
-        authorityMemberId: 'authority' in item ? item.authority.memberId : undefined,
-      }),
-    }));
+    );
   }
 
   async requestPermission() {
-    return unavailable(this.ownerGeneration, 'unsupported', 'Synthetic permission requests are unavailable for Agent Sessions.');
+    return unavailable(
+      this.ownerGeneration,
+      'unsupported',
+      'Synthetic permission requests are unavailable for Agent Sessions.',
+    );
   }
 
   async decidePermission() {
-    return unavailable(this.ownerGeneration, 'unsupported', 'Synthetic permission decisions are unavailable for Agent Sessions.');
+    return unavailable(
+      this.ownerGeneration,
+      'unsupported',
+      'Synthetic permission decisions are unavailable for Agent Sessions.',
+    );
   }
 
   async snapshot(binding: PlaygroundRoomSimulationBinding) {
     const inspection = this.inspectInternal(binding);
     if (inspection.status === 'unavailable') return inspection;
-    return available(this.ownerGeneration, Object.freeze({
-      binding,
-      revision: this.revision,
-      events: Object.freeze([]),
-    }));
+    return available(
+      this.ownerGeneration,
+      Object.freeze({
+        binding,
+        revision: this.revision,
+        events: Object.freeze([]),
+      }),
+    );
   }
 
   subscribe(
@@ -1498,10 +1847,18 @@ export class ChatroomAgentSessionRoomSimulationOwner implements PlaygroundRoomSi
   }
 
   private inspectInternal(binding: PlaygroundRoomSimulationBinding):
-    | { readonly status: 'available'; readonly inspection: Extract<ChatroomPlaygroundSourceInspection, { readonly status: 'available' }> }
-    | PlaygroundRoomSimulationUnavailable {
+    | {
+      readonly status: 'available';
+      readonly inspection: Extract<ChatroomPlaygroundSourceInspection, { readonly status: 'available'; }>;
+    }
+    | PlaygroundRoomSimulationUnavailable
+  {
     if (this.disposed || binding.ownerGeneration !== this.ownerGeneration || binding.sessionId === undefined) {
-      return unavailable(this.ownerGeneration, 'invalid-binding', 'The Agent Session Room binding is invalid or retired.');
+      return unavailable(
+        this.ownerGeneration,
+        'invalid-binding',
+        'The Agent Session Room binding is invalid or retired.',
+      );
     }
     const inspection = this.conversation.inspectPlaygroundSource(bindingCorrelation(binding));
     return inspection.status === 'available'
@@ -1518,10 +1875,11 @@ export class ChatroomAgentSessionRoomSimulationOwner implements PlaygroundRoomSi
     runId: string,
     prior: ReadonlySet<string>,
   ) {
-    const current = () => this.agentSession.projectionForRoom(roomId).items.find(
-      (item): item is Extract<typeof item, { readonly kind: 'approval' }> =>
-        item.kind === 'approval' && item.runId === runId && !prior.has(item.itemId),
-    );
+    const current = () =>
+      this.agentSession.projectionForRoom(roomId).items.find(
+        (item): item is Extract<typeof item, { readonly kind: 'approval'; }> =>
+          item.kind === 'approval' && item.runId === runId && !prior.has(item.itemId),
+      );
     const retained = current();
     if (retained !== undefined) return retained;
     return await new Promise<ReturnType<typeof current>>(resolve => {
@@ -1553,7 +1911,9 @@ export function registerChatroomAgentSessionRoomSimulationOwner(
     globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
   );
   const owner = new ChatroomAgentSessionRoomSimulationOwner(
-    ownerGeneration, conversation, agentSession,
+    ownerGeneration,
+    conversation,
+    agentSession,
   );
   const unregister = service.register(owner);
   return () => {

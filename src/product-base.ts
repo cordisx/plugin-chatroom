@@ -1,7 +1,4 @@
-import type {
-  CordisXCommandContext,
-  CordisXOwnerDocumentsV1,
-} from 'cordisx/contracts';
+import type { CordisXCommandContext, CordisXOwnerDocumentsV1 } from 'cordisx/contracts';
 
 import {
   CHATROOM_COMMAND_ROOM_ARCHIVE,
@@ -9,8 +6,8 @@ import {
   CHATROOM_COMMAND_ROOM_PIN,
   CHATROOM_COMMAND_ROOM_RENAME,
   CHATROOM_COMMAND_ROOM_RESTORE,
-  createRoomManagementHandler,
   type ChatroomRoomManagementCommand,
+  createRoomManagementHandler,
 } from './room-management.js';
 import { ChatroomRoomNavigationCollection } from './room-navigation.js';
 import { DurableChatroomRoomStore } from './room-store.js';

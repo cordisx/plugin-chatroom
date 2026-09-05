@@ -1,12 +1,9 @@
 import type { AgentLoopTaskBinding } from '@cordisx/protocol/agent-loop/v4';
 
+import { acknowledgeBehaviorForMember, type ChatroomAgentConfiguration } from './agent-definition.js';
 import {
-  acknowledgeBehaviorForMember,
-  type ChatroomAgentConfiguration,
-} from './agent-definition.js';
-import {
-  createRoom,
   createChatroomOpaqueId,
+  createRoom,
   nextRoomTimelineSequence,
   replaceRoomRun,
   type Room,
@@ -71,8 +68,10 @@ export function beginRoomRunPresence(
 ): Room {
   const run = requireRun(room, runId);
   const state = options.state ?? 'creating';
-  if ((run.presence.state === 'joined' || run.presence.state === 'ready')
-    && options.replacement !== true) return room;
+  if (
+    (run.presence.state === 'joined' || run.presence.state === 'ready')
+    && options.replacement !== true
+  ) return room;
   if (run.presence.state === state && options.replacement !== true) return room;
   const attempt = (run.presence.state === 'inviting' || run.presence.state === 'creating')
     ? run.presence.attempt
@@ -101,7 +100,7 @@ export function acceptRoomRunPresence(
   runId: string,
   binding: AgentLoopTaskBinding,
   detailsUrlInput: StoredRoomRunDetailsUrl,
-  options: { readonly acceptedState?: 'joined' | 'ready' } = {},
+  options: { readonly acceptedState?: 'joined' | 'ready'; } = {},
 ): Room {
   const run = requireRun(room, runId);
   const member = room.memberships.find(candidate => candidate.memberId === run.memberId)!;
@@ -112,19 +111,23 @@ export function acceptRoomRunPresence(
   }
   const detailsUrl = createStoredRoomRunDetailsUrl(detailsUrlInput);
   const alreadyJoined = run.taskBinding !== undefined && run.detailsUrl !== undefined;
-  if (run.presence.state === acceptedState && alreadyJoined
-    && sameBinding(run.taskBinding!, binding) && sameDetailsUrl(run.detailsUrl!, detailsUrl)) return room;
-  const memberships = room.memberships.map(candidate => candidate.memberId === member.memberId
-    ? { ...candidate, preferredRunId: runId }
-    : candidate);
+  if (
+    run.presence.state === acceptedState && alreadyJoined
+    && sameBinding(run.taskBinding!, binding) && sameDetailsUrl(run.detailsUrl!, detailsUrl)
+  ) return room;
+  const memberships = room.memberships.map(candidate =>
+    candidate.memberId === member.memberId
+      ? { ...candidate, preferredRunId: runId }
+      : candidate
+  );
   const replacement: RoomRun = {
     ...run,
     status: 'active',
     taskBinding: binding,
     detailsUrl,
     agentLoopCursor: run.taskBinding !== undefined
-      && (run.taskBinding.binding.bindingId !== binding.binding.bindingId
-        || run.taskBinding.binding.generation !== binding.binding.generation)
+        && (run.taskBinding.binding.bindingId !== binding.binding.bindingId
+          || run.taskBinding.binding.generation !== binding.binding.generation)
       ? -1
       : run.agentLoopCursor,
     presence: {
@@ -133,8 +136,8 @@ export function acceptRoomRunPresence(
       attempt: run.presence.attempt,
     },
     ...(run.selfIntroduction !== undefined
-      && (run.selfIntroduction.state === 'planned' || run.selfIntroduction.state === 'sending-unknown')
-      && !sameBinding(run.selfIntroduction.binding, binding)
+        && (run.selfIntroduction.state === 'planned' || run.selfIntroduction.state === 'sending-unknown')
+        && !sameBinding(run.selfIntroduction.binding, binding)
       ? {
         selfIntroduction: {
           ...run.selfIntroduction,
@@ -157,7 +160,7 @@ export function failRoomRunPresence(
     readonly code: string;
     readonly retryable: boolean;
     readonly diagnostic?: string;
-    readonly retryCommand?: { readonly commandId: string };
+    readonly retryCommand?: { readonly commandId: string; };
   },
 ): Room {
   if (input.code.trim() === '') throw new Error('Member presence failure code must be non-empty.');
@@ -177,12 +180,14 @@ export function failRoomRunPresence(
         : { reportsToMemberId: member.reportsToMemberId }),
     };
   });
-  if (run.presence.state === 'failed'
+  if (
+    run.presence.state === 'failed'
     && run.presence.failure?.code === input.code
     && run.presence.failure.retryable === input.retryable
     && run.presence.failure.diagnostic === input.diagnostic
     && run.presence.failure.retryCommand?.commandId === input.retryCommand?.commandId
-    && memberships.every((member, index) => member === room.memberships[index])) return room;
+    && memberships.every((member, index) => member === room.memberships[index])
+  ) return room;
   const failed = replaceRoomRun(room, runId, {
     ...run,
     status: 'failed',
@@ -208,7 +213,8 @@ const acknowledgementKey = (
   participantId: string,
   memberId: string,
   runId: string,
-) => `ack:${userItemId.length}:${userItemId}:${participantId.length}:${participantId}:${memberId.length}:${memberId}:${runId.length}:${runId}`;
+) =>
+  `ack:${userItemId.length}:${userItemId}:${participantId.length}:${participantId}:${memberId.length}:${memberId}:${runId.length}:${runId}`;
 
 function presentationFor(
   behavior: ReturnType<typeof acknowledgeBehaviorForMember>,
@@ -219,7 +225,8 @@ function presentationFor(
 ): RoomAcknowledgementPresentation {
   if (behavior.mode === 'reaction') {
     return {
-      kind: 'reaction', source: 'chatroom-acknowledgement',
+      kind: 'reaction',
+      source: 'chatroom-acknowledgement',
       reactionId: createChatroomOpaqueId('reaction', stableKey),
       actorParticipantId: participantId,
       value: { kind: 'emoji', emoji: behavior.pendingReaction },
@@ -249,7 +256,7 @@ export interface PrepareRoomAcknowledgementResult {
 export function prepareRoomAcknowledgement(
   room: Room,
   configuration: ChatroomAgentConfiguration,
-  input: { readonly userItemId: string; readonly memberId: string; readonly runId: string },
+  input: { readonly userItemId: string; readonly memberId: string; readonly runId: string; },
 ): PrepareRoomAcknowledgementResult {
   const run = requireRun(room, input.runId);
   if (run.memberId !== input.memberId) throw new Error('Acknowledgement must target its exact member run.');
@@ -299,16 +306,18 @@ function replaceAcknowledgement(
   const acknowledgements = [...room.acknowledgements];
   const replacement = update(acknowledgements[index]);
   acknowledgements[index] = replacement;
-  const outbox = room.outbox.map(item => item.acknowledgementKey === key
-    ? { ...item, acknowledge: { state: replacement.state } }
-    : item);
+  const outbox = room.outbox.map(item =>
+    item.acknowledgementKey === key
+      ? { ...item, acknowledge: { state: replacement.state } }
+      : item
+  );
   return createRoom({ ...room, acknowledgements, outbox });
 }
 
 export function claimRoomAcknowledgementDispatch(
   room: Room,
   key: string,
-): { readonly room: Room; readonly claimed: boolean } {
+): { readonly room: Room; readonly claimed: boolean; } {
   const current = room.acknowledgements.find(candidate => candidate.acknowledgementKey === key);
   if (current === undefined) throw new Error('Room acknowledgement is unavailable.');
   if (current.dispatchState !== 'pending') return { room, claimed: false };
@@ -330,13 +339,15 @@ export function completeRoomAcknowledgement(room: Room, key: string): Room {
   return replaceAcknowledgement(room, key, item => ({
     ...item,
     state: 'completed',
-    ...(item.presentation.kind === 'reaction' ? {
-      presentation: {
-        ...item.presentation,
-        value: { kind: 'emoji' as const, emoji: item.behavior.completedReaction },
-        state: 'completed' as const,
-      },
-    } : {}),
+    ...(item.presentation.kind === 'reaction'
+      ? {
+        presentation: {
+          ...item.presentation,
+          value: { kind: 'emoji' as const, emoji: item.behavior.completedReaction },
+          state: 'completed' as const,
+        },
+      }
+      : {}),
     failureCode: undefined,
   }));
 }
@@ -348,13 +359,15 @@ export function failRoomAcknowledgement(room: Room, key: string, code: string): 
   return replaceAcknowledgement(room, key, item => ({
     ...item,
     state: 'failed',
-    ...(item.presentation.kind === 'reaction' ? {
-      presentation: {
-        ...item.presentation,
-        value: { kind: 'emoji' as const, emoji: item.behavior.failedReaction },
-        state: 'failed' as const,
-      },
-    } : {}),
+    ...(item.presentation.kind === 'reaction'
+      ? {
+        presentation: {
+          ...item.presentation,
+          value: { kind: 'emoji' as const, emoji: item.behavior.failedReaction },
+          state: 'failed' as const,
+        },
+      }
+      : {}),
     failureCode: code,
   }));
 }
@@ -368,13 +381,15 @@ export function failRoomAcknowledgementDispatch(room: Room, key: string, code: s
     ...item,
     state: 'failed',
     dispatchState: 'failed',
-    ...(item.presentation.kind === 'reaction' ? {
-      presentation: {
-        ...item.presentation,
-        value: { kind: 'emoji' as const, emoji: item.behavior.failedReaction },
-        state: 'failed' as const,
-      },
-    } : {}),
+    ...(item.presentation.kind === 'reaction'
+      ? {
+        presentation: {
+          ...item.presentation,
+          value: { kind: 'emoji' as const, emoji: item.behavior.failedReaction },
+          state: 'failed' as const,
+        },
+      }
+      : {}),
     failureCode: code,
   }));
 }

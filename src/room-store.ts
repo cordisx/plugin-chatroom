@@ -1,8 +1,4 @@
-import type {
-  CordisXJsonValue,
-  CordisXOwnerDocumentLoadResultV1,
-  CordisXOwnerDocumentsV1,
-} from 'cordisx/contracts';
+import type { CordisXJsonValue, CordisXOwnerDocumentLoadResultV1, CordisXOwnerDocumentsV1 } from 'cordisx/contracts';
 
 import { ChatroomRoomRegistry, createRoom, type Room } from './room.js';
 
@@ -13,7 +9,7 @@ export const CHATROOM_ROOM_REGISTRY_CONTRACT = 'cordisx.chatroom-room-registry/v
 export const CHATROOM_MAX_DURABLE_ROOMS = 128 as const;
 
 export type ChatroomRoomStoreUnavailableCode =
-  | Extract<CordisXOwnerDocumentLoadResultV1, { readonly status: 'unavailable' }>['code']
+  | Extract<CordisXOwnerDocumentLoadResultV1, { readonly status: 'unavailable'; }>['code']
   | 'invalid-document'
   | 'unsupported-document-schema'
   | 'room-capacity-exceeded';
@@ -42,7 +38,7 @@ export interface ChatroomRoomRegistrySnapshot {
 }
 
 export type ChatroomRoomRegistryLoadResult =
-  | { readonly status: 'loaded'; readonly snapshot: ChatroomRoomRegistrySnapshot }
+  | { readonly status: 'loaded'; readonly snapshot: ChatroomRoomRegistrySnapshot; }
   | {
     readonly status: 'unavailable';
     readonly code: ChatroomRoomStoreUnavailableCode;
@@ -51,9 +47,9 @@ export type ChatroomRoomRegistryLoadResult =
   };
 
 export type ChatroomRoomRegistryReplaceResult =
-  | { readonly status: 'accepted'; readonly snapshot: ChatroomRoomRegistrySnapshot }
-  | { readonly status: 'conflict'; readonly actualRevision: number }
-  | Extract<ChatroomRoomRegistryLoadResult, { readonly status: 'unavailable' }>;
+  | { readonly status: 'accepted'; readonly snapshot: ChatroomRoomRegistrySnapshot; }
+  | { readonly status: 'conflict'; readonly actualRevision: number; }
+  | Extract<ChatroomRoomRegistryLoadResult, { readonly status: 'unavailable'; }>;
 
 /** Small consumer boundary over the exact owner-scoped Host document service. */
 export interface ChatroomRoomStoreAdapter {
@@ -72,9 +68,13 @@ const unavailable = (
   code: ChatroomRoomStoreUnavailableCode,
   diagnostic: string,
   recoverable: boolean,
-): Extract<ChatroomRoomRegistryLoadResult, { readonly status: 'unavailable' }> => Object.freeze({
-  status: 'unavailable', code, diagnostic: diagnostic.slice(0, 512), recoverable,
-});
+): Extract<ChatroomRoomRegistryLoadResult, { readonly status: 'unavailable'; }> =>
+  Object.freeze({
+    status: 'unavailable',
+    code,
+    diagnostic: diagnostic.slice(0, 512),
+    recoverable,
+  });
 
 function immutableRooms(rooms: readonly Room[]): readonly Room[] {
   if (rooms.length > CHATROOM_MAX_DURABLE_ROOMS) {
@@ -101,9 +101,11 @@ function parseRegistryValue(schemaVersion: number, value: unknown): readonly Roo
       false,
     );
   }
-  if (!isRecord(value)
+  if (
+    !isRecord(value)
     || value.contract !== CHATROOM_ROOM_REGISTRY_CONTRACT
-    || !Array.isArray(value.rooms)) {
+    || !Array.isArray(value.rooms)
+  ) {
     throw new ChatroomRoomStoreError('invalid-document', 'Room registry document is invalid.', false);
   }
   return immutableRooms(value.rooms as readonly Room[]);
@@ -124,9 +126,11 @@ function fromOwnerLoad(result: CordisXOwnerDocumentLoadResultV1): ChatroomRoomRe
   }
   if (result.status === 'unavailable') return unavailable(result.code, result.diagnostic, result.recoverable);
   try {
-    if (result.snapshot.contract !== OWNER_DOCUMENT_CONTRACT
+    if (
+      result.snapshot.contract !== OWNER_DOCUMENT_CONTRACT
       || !Number.isSafeInteger(result.snapshot.revision)
-      || result.snapshot.revision < 1) {
+      || result.snapshot.revision < 1
+    ) {
       throw new ChatroomRoomStoreError('invalid-document', 'Owner document snapshot is invalid.', false);
     }
     return {
@@ -177,8 +181,7 @@ export function createOwnerDocumentRoomStoreAdapter(
         : loaded;
     },
     subscribe(listener) {
-      return documents.subscribe(CHATROOM_ROOM_REGISTRY_DOCUMENT_ID,
-        result => listener(fromOwnerLoad(result)));
+      return documents.subscribe(CHATROOM_ROOM_REGISTRY_DOCUMENT_ID, result => listener(fromOwnerLoad(result)));
     },
   };
   return Object.freeze(adapter);
@@ -191,7 +194,9 @@ function memoryAdapter(initialRooms: readonly Room[]): ChatroomRoomStoreAdapter 
   });
   const listeners = new Set<(result: ChatroomRoomRegistryLoadResult) => void>();
   return {
-    async load() { return { status: 'loaded', snapshot }; },
+    async load() {
+      return { status: 'loaded', snapshot };
+    },
     async transaction(input) {
       if (input.expectedRevision !== snapshot.revision) {
         return { status: 'conflict', actualRevision: snapshot.revision };
@@ -201,7 +206,10 @@ function memoryAdapter(initialRooms: readonly Room[]): ChatroomRoomStoreAdapter 
       for (const listener of listeners) listener(loaded);
       return { status: 'accepted', snapshot };
     },
-    subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
   };
 }
 
@@ -209,7 +217,7 @@ function memoryAdapter(initialRooms: readonly Room[]): ChatroomRoomStoreAdapter 
 export class DurableChatroomRoomStore {
   readonly rooms: ChatroomRoomRegistry;
   private revision: number;
-  private unavailableState: Extract<ChatroomRoomRegistryLoadResult, { readonly status: 'unavailable' }> | undefined;
+  private unavailableState: Extract<ChatroomRoomRegistryLoadResult, { readonly status: 'unavailable'; }> | undefined;
   private unsubscribe: (() => void) | undefined;
 
   private constructor(
@@ -286,7 +294,9 @@ export class DurableChatroomRoomStore {
 
   async upsert(room: Room): Promise<ChatroomRoomDocument> {
     const committed = await this.compareAndSwap(this.revision, room);
-    if (committed === undefined) throw new ChatroomRoomStoreError('conflict', 'Room registry changed concurrently.', true);
+    if (committed === undefined) {
+      throw new ChatroomRoomStoreError('conflict', 'Room registry changed concurrently.', true);
+    }
     return committed;
   }
 
@@ -298,7 +308,11 @@ export class DurableChatroomRoomStore {
       rooms: this.rooms.snapshot().filter(room => room.id !== roomId),
     });
     if (result.status === 'conflict') {
-      throw new ChatroomRoomStoreError('conflict', `Room registry changed concurrently at revision ${result.actualRevision}.`, true);
+      throw new ChatroomRoomStoreError(
+        'conflict',
+        `Room registry changed concurrently at revision ${result.actualRevision}.`,
+        true,
+      );
     }
     if (result.status === 'unavailable') {
       this.unavailableState = result;

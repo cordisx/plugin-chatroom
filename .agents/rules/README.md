@@ -1,5 +1,8 @@
 # Repository Rules
 
+- Use `npm run format:check` to verify formatting and `npm run format` to apply
+  the [dprint configuration](../../dprint.json). Security manifests retain their original bytes.
+
 ## Ownership and boundaries
 
 - Chatroom owns Room relationships, routing intent, message presentation, and
