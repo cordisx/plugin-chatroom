@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { manifest, roomSessionDetailRoute } from '../dist/chatroom.js';
+import { manifest, roomSessionDetailRoute } from '../dist/chatroom-runtime-contract.js';
 
 const exactApprovalScope = {
   sessionIds: {

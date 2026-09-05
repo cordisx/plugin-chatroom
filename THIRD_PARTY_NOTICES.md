@@ -2,12 +2,18 @@
 
 Chatroom directly renders avatars with the following exact OneWorks packages:
 
-- `@oneworks/avatar@1.0.0-rc.8`
-- `@oneworks/avatar-react@1.0.0-rc.8`
+- `@oneworks/avatar@1.0.0-rc.9`
+- `@oneworks/avatar-react@1.0.0-rc.9`
 
 Copyright (c) 2026-present One Works contributors. Both packages are
 distributed under the MIT License. Their source and license are available from
 <https://github.com/oneworks-ai/avatar>.
+
+The pinned registry artifacts were published from source commit
+`abce277ee9a9d846ef6964766d3be8938d787ffc` with npm SLSA provenance:
+
+- `@oneworks/avatar`: `sha512-3EmbF3iWZ9qD9vxFYI0aMzINFoIYG38UIu3ngsK6QfWm6sqZf46e29G+BX0UiIERQ3ntWNzRun8FA5mpGMQcxw==`
+- `@oneworks/avatar-react`: `sha512-HqxGcmweaIyS1ppM+uJuUJ6NyZWdZnJHGTYyOm385tw21hcYYeFLUqu+l45D0XtsrPlPRA34h3mYdrgnRmDXUQ==`
 
 The five immutable animal definitions in `src/avatar-assets.ts` were exported
 from the public OneWorks Avatar editor. Their per-asset source and canonical

@@ -27,7 +27,7 @@ async function importAssets() {
   return { directory, module: await import(pathToFileURL(join(directory, 'avatar-assets.js')).href) };
 }
 
-test('resolves all five exact OneWorks RC.8 editor assets only at their pinned revisions', async () => {
+test('resolves all five exact OneWorks RC.9 editor assets only at their pinned revisions', async () => {
   const imported = await importAssets();
   try {
     const refs = [];
@@ -44,7 +44,7 @@ test('resolves all five exact OneWorks RC.8 editor assets only at their pinned r
     assert.equal(Object.keys(imported.module.CHATROOM_ONEWORKS_AVATAR_ASSET_PROVENANCE.definitions).length, 5);
     assert.equal(
       imported.module.CHATROOM_ONEWORKS_AVATAR_ASSET_PROVENANCE.renderer,
-      '@oneworks/avatar-react@1.0.0-rc.8',
+      '@oneworks/avatar-react@1.0.0-rc.9',
     );
     assert.equal(Object.isFrozen(imported.module.CHATROOM_ONEWORKS_AVATAR_ASSET_PROVENANCE), true);
   } finally {

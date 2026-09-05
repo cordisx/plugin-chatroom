@@ -3,7 +3,7 @@
   "schemaVersion": 8,
   "id": "chatroom",
   "version": "0.1.0",
-  "entry": "./dist/chatroom.js",
+  "entry": "./dist/runtime/chatroom.js",
   "readme": "./README.md",
   "canonicalSource": "https://github.com/cordisx/plugin-chatroom",
   "distribution": {

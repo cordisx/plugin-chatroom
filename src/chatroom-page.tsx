@@ -8,16 +8,15 @@ import {
   useState,
   useSyncExternalStore,
 } from 'cordisx/react';
-import { defineReactPage } from 'cordisx/react';
 import { Button, EmptyState, MarkdownViewer } from 'cordisx/ui';
 import type { CordisXReactPageProps } from 'cordisx/contracts';
 
-import { CHATROOM_AVATAR_VENDOR_STYLES, ChatroomAvatar } from './avatar.js';
+import { ChatroomAvatar } from './avatar.js';
 import { roomAvatarFingerprint } from './avatar-fingerprint.js';
 import { ChatroomCompositeAvatar } from './composite-avatar.js';
 import type { ChatroomPageItem, ChatroomPageSource } from './chatroom-page-source.js';
 import type { ChatroomSidebarImageCache, ChatroomSidebarImageCapture } from './sidebar-image-cache.js';
-import chatroomPageCss from './chatroom-page.css';
+import './chatroom-page.css';
 
 type Translate = CordisXReactPageProps['t'];
 
@@ -306,7 +305,7 @@ function Composer({ roomId, source, shortcutPolicy, navigation, signal, t }: {
   );
 }
 
-function ChatroomPage({ source, imageCache, ...props }: CordisXReactPageProps & {
+export function ChatroomPage({ source, imageCache, ...props }: CordisXReactPageProps & {
   readonly source: ChatroomPageSource;
   readonly imageCache: ChatroomSidebarImageCache;
 }) {
@@ -335,7 +334,6 @@ function ChatroomPage({ source, imageCache, ...props }: CordisXReactPageProps & 
   if (snapshot.missing) {
     return (
       <div className="cx-chatroom-page">
-        <style data-chatroom-page-styles="v1">{`${CHATROOM_AVATAR_VENDOR_STYLES}\n${chatroomPageCss}`}</style>
         <EmptyState title={props.t('page.missing.title')} description={props.t('page.missing.description')} />
       </div>
     );
@@ -343,7 +341,6 @@ function ChatroomPage({ source, imageCache, ...props }: CordisXReactPageProps & 
   const roomTitle = snapshot.room?.title ?? props.t('page.title');
   return (
     <div className="cx-chatroom-page">
-      <style data-chatroom-page-styles="v1">{`${CHATROOM_AVATAR_VENDOR_STYLES}\n${chatroomPageCss}`}</style>
       <header className="cx-chatroom-header">
         <ChatroomCompositeAvatar
           participants={participants}
@@ -399,8 +396,4 @@ function ChatroomPage({ source, imageCache, ...props }: CordisXReactPageProps & 
       </main>
     </div>
   );
-}
-
-export function createChatroomPage(source: ChatroomPageSource, imageCache: ChatroomSidebarImageCache) {
-  return defineReactPage(props => <ChatroomPage {...props} source={source} imageCache={imageCache} />);
 }

@@ -5,7 +5,7 @@
   "description": "Chatroom Room collaboration plugin for CordisX",
   "license": "MIT",
   "type": "module",
-  "main": "./dist/chatroom.js",
+  "main": "./dist/runtime/chatroom.js",
   "types": "./dist/chatroom.d.ts",
   "files": [
     "dist",
@@ -15,7 +15,7 @@
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/build-runtime-bundle.mjs && node scripts/copy-build-assets.mjs",
+    "build": "node scripts/clean-build-output.mjs && tsc -p tsconfig.json && vite build --config vite.config.mjs && node scripts/verify-runtime-bundle.mjs && node scripts/copy-build-assets.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test test/*.mjs",
     "check": "npm run typecheck && npm run build && npm test",
@@ -28,17 +28,17 @@
     "node": ">=22.19"
   },
   "devDependencies": {
-    "@cordisx/protocol": "github:cordisx/cordisx-protocol#6fa9bbbad0501114bece820d574d5e79a4cb3cdb",
+    "@cordisx/protocol": "github:cordisx/cordisx-protocol#3aa7d4de3d775aded3c81c72f5dae9842c6af812",
     "@deepseek-ai/cordis": "4.0.1",
     "@deepseek-ai/schemastery": "3.18.1",
-    "@oneworks/avatar": "1.0.0-rc.8",
-    "@oneworks/avatar-react": "1.0.0-rc.8",
+    "@oneworks/avatar": "1.0.0-rc.9",
+    "@oneworks/avatar-react": "1.0.0-rc.9",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
     "@vitejs/plugin-react": "6.1.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
-    "cordisx": "github:cordisx/cordisx#88b98996d70c0ceccaeb423e5329df9abf49d785",
+    "cordisx": "github:cordisx/cordisx#8e427d9b208dee86b2976761dc5f4311dddc0e7e",
     "dprint": "0.57.1",
     "esbuild": "^0.28.2",
     "react": "19.2.8",

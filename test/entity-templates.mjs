@@ -182,10 +182,11 @@ test('package pins the exact Protocol bootstrap-route and Host runtime releases 
   const packageJson = JSON.parse(readFileSync(path.join(repositoryRoot, 'package.json'), 'utf8'));
   assert.equal(
     packageJson.devDependencies['@cordisx/protocol'],
-    'github:cordisx/cordisx-protocol#6fa9bbbad0501114bece820d574d5e79a4cb3cdb',
+    'github:cordisx/cordisx-protocol#3aa7d4de3d775aded3c81c72f5dae9842c6af812',
   );
-  assert.equal(packageJson.devDependencies.cordisx, 'github:cordisx/cordisx#88b98996d70c0ceccaeb423e5329df9abf49d785');
-  assert.equal(packageManifest.entry, './dist/chatroom.js');
+  assert.equal(packageJson.devDependencies.cordisx, 'github:cordisx/cordisx#8e427d9b208dee86b2976761dc5f4311dddc0e7e');
+  assert.equal(packageJson.main, packageManifest.entry);
+  assert.equal(packageManifest.entry, './dist/runtime/chatroom.js');
   assert.equal(
     packageManifest.compatibility.protocolSchemas.includes(
       'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-file.v1.schema.json',
@@ -203,11 +204,23 @@ test('package pins the exact Protocol bootstrap-route and Host runtime releases 
   assert.equal(digest, packageManifest.runtimeManifest.digest);
 });
 
-test('built package entry is self-contained apart from Host virtual modules', () => {
+test('built package entry delegates only through the declared runtime graph', () => {
+  const artifact = JSON.parse(readFileSync(
+    path.join(repositoryRoot, 'dist/runtime/artifact.json'),
+    'utf8',
+  ));
+  assert.equal(artifact.contract, 'cordisx.plugin-generation-artifact/v1');
+  assert.equal(packageManifest.entry, `./dist/runtime/${artifact.entry.slice(2)}`);
+  assert.deepEqual(artifact.initialStyles, []);
+  assert.equal(
+    artifact.files.filter(file =>
+      file.kind === 'module'
+      && file.path.includes('chatroom-page-')
+    ).length,
+    1,
+  );
   const entry = readFileSync(path.join(repositoryRoot, packageManifest.entry), 'utf8');
   assert.ok(entry.length > 0);
   assert.equal(/(?:from|import)\s+["']@cordisx\/protocol/u.test(entry), false);
-  assert.equal(/from\s+["']\.\.?\//u.test(entry), false);
-  assert.equal(/import\s+["']\.\.?\//u.test(entry), false);
   assert.equal(entry.includes('team-architecture-page.css"'), false);
 });

@@ -27,6 +27,14 @@ merged into one Room timeline. Page-mounted avatars may capture a completed PNG
 for a bounded Chatroom cache; sidebar navigation receives only the generic
 `{ kind: "image", image }` value, or a semantic icon while no capture exists.
 
+The distributable runtime is a closed ESM graph. Plugin activation loads the
+small registration entry only. Mounting the Room loads its page module and
+stylesheet; the OneWorks renderer module and renderer-only stylesheet remain
+deferred until a resolved avatar is actually displayed. Closing and reopening
+the page creates a fresh React mount while the immutable module request is
+reused by the browser. CordisX owns generation URLs, integrity checks, shared
+React/ReactDOM singletons, replacement fencing, and stylesheet cleanup.
+
 ## Scope
 
 - Expand `seedLeaderIds` into a frozen Agent membership snapshot with multiple
@@ -37,7 +45,7 @@ for a bounded Chatroom cache; sidebar navigation receives only the generic
   each run.
 - Present real Session messages, approvals, failures, and lifecycle events in
   a chronological plugin-owned timeline.
-- Resolve and render the exact five OneWorks RC.8 animal assets directly in the
+- Resolve and render the exact five OneWorks RC.9 animal assets directly in the
   page, with deterministic initials for unsupported or absent references.
 
 Out of scope: host adapters, credentials, external channels, automation,
@@ -166,12 +174,14 @@ npm run check
 npm run dev:dry-run
 ```
 
-`cordisx-package.json` is the CordisX package descriptor. `src/chatroom.ts`
-registers the React page, routes, Room management commands, Manager content,
-and the v3 generic-image sidebar collection. OneWorks license and provenance
-details are in `THIRD_PARTY_NOTICES.md`. Local experimental Host and Protocol
-checkpoints may be used for combination validation; that does not make them a
-merged or released dependency.
+`cordisx-package.json` is the CordisX package descriptor and points to the
+Vite-built `dist/runtime/chatroom.js` graph entry. `src/chatroom.ts` registers the lazy
+React page, routes, Room management commands, Manager content, and the v3
+generic-image sidebar collection. The build emits hashed page, renderer, and
+CSS chunks while keeping CordisX's public React/UI modules Host-shared.
+OneWorks license and provenance details are in `THIRD_PARTY_NOTICES.md`. Local
+experimental Host, Protocol, and Avatar checkpoints may be used for combination
+validation; that does not make them a merged or released dependency.
 
 ## License
 

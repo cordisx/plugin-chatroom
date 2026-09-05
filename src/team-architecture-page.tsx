@@ -11,7 +11,7 @@ import {
   type TeamEntityTreeNode,
   type TeamEntityViewModel,
 } from './team-entity-view-model.js';
-import teamArchitectureCss from './team-architecture-page.css';
+import teamArchitectureCss from './team-architecture-page.css?inline';
 
 export type TeamArchitectureMessages = {
   'body.introduction': undefined;
