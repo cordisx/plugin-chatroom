@@ -129,16 +129,35 @@ function approvalReason(item: Extract<ChatroomPageItem, { readonly kind: 'approv
     : t('approval.reason.unavailable');
 }
 
-function ApprovalItem({ item, participant, roomId, source, t }: {
+function approvalAuthorityLabel(
+  item: Extract<ChatroomPageItem, { readonly kind: 'approval'; }>,
+  participants: readonly PageParticipant[],
+  t: Translate,
+): string {
+  if (
+    !('authority' in item) || item.authority === undefined || item.authority === null
+    || typeof item.authority !== 'object'
+  ) return t('approval.target.unavailable');
+  const authority = item.authority as { readonly participantId?: unknown; readonly memberId?: unknown; };
+  const participantId = typeof authority.participantId === 'string' ? authority.participantId : undefined;
+  const memberId = typeof authority.memberId === 'string' ? authority.memberId : undefined;
+  if (participantId === undefined || memberId === undefined) return t('approval.target.unavailable');
+  // The authority fact is carried by the item itself. This is presentation
+  // lookup only: it never resolves a Lead from a display name or live Agent.
+  return participants.find(participant => participant.id === participantId)?.name ?? memberId;
+}
+
+function ApprovalItem({ item, participant, participants, roomId, source, t }: {
   readonly item: Extract<ChatroomPageItem, { readonly kind: 'approval'; }>;
   readonly participant?: PageParticipant;
+  readonly participants: readonly PageParticipant[];
   readonly roomId: string;
   readonly source: ChatroomPageSource;
   readonly t: Translate;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
-  const decide = async (decision: 'approved' | 'denied' | 'cancelled') => {
+  const decide = async (decision: 'approved' | 'denied') => {
     if (busy || item.state !== 'pending') return;
     setBusy(true);
     setError(false);
@@ -150,32 +169,50 @@ function ApprovalItem({ item, participant, roomId, source, t }: {
       setBusy(false);
     }
   };
-  const hasCancel = item.state === 'pending'
-    && item.actions.some(action => action.decision === 'cancel');
+  const canDecide = item.state === 'pending'
+    && item.actions.some(action => action.decision === 'approve')
+    && item.actions.some(action => action.decision === 'deny' || action.decision === 'reject');
+  const authority = approvalAuthorityLabel(item, participants, t);
   return (
     <article className="cx-chatroom-approval" data-state={item.state}>
       <header>
         <ChatroomAvatar participant={participant ?? { id: item.participantId, name: item.participantId }} />
         <div>
           <strong>{t('approval.title')}</strong>
-          <small>{participant?.name ?? item.participantId}</small>
+          <small>
+            {t('approval.target', {
+              requester: participant?.name ?? item.participantId,
+              authority,
+            })}
+          </small>
           <span>{t(`approval.state.${item.state}`)}</span>
         </div>
       </header>
       <p>{approvalReason(item, t)}</p>
-      {item.state !== 'pending' ? null : (
+      {!canDecide ? null : (
         <div className="cx-chatroom-approval__actions">
-          <Button type="button" variant="primary" disabled={busy} onClick={() => void decide('approved')}>
-            {t('approval.approve')}
+          <Button
+            type="button"
+            className="cx-chatroom-approval__action"
+            variant="primary"
+            disabled={busy}
+            aria-label={t('approval.approve')}
+            title={t('approval.approve')}
+            onClick={() => void decide('approved')}
+          >
+            <span aria-hidden="true">✓</span>
           </Button>
-          <Button type="button" variant="secondary" disabled={busy} onClick={() => void decide('denied')}>
-            {t('approval.deny')}
+          <Button
+            type="button"
+            className="cx-chatroom-approval__action"
+            variant="secondary"
+            disabled={busy}
+            aria-label={t('approval.deny')}
+            title={t('approval.deny')}
+            onClick={() => void decide('denied')}
+          >
+            <span aria-hidden="true">×</span>
           </Button>
-          {hasCancel && (
-            <Button type="button" variant="ghost" disabled={busy} onClick={() => void decide('cancelled')}>
-              {t('approval.cancel')}
-            </Button>
-          )}
         </div>
       )}
       {error && <p role="alert" className="cx-chatroom-error">{t('approval.decision.failed')}</p>}
@@ -207,6 +244,7 @@ function Timeline({ items, participants, roomId, source, t }: {
                 key={item.itemId}
                 item={item}
                 participant={participants.find(participant => participant.id === item.participantId)}
+                participants={participants}
                 roomId={roomId}
                 source={source}
                 t={t}
