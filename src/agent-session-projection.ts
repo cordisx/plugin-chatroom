@@ -241,7 +241,7 @@ export class ChatroomAgentSessionProjector {
     return item?.kind === 'approval' ? item : undefined;
   }
 
-  /** Exact admission/v6 link for one already-projected SessionEvent item. */
+  /** Exact admitted-message link for one already-projected SessionEvent item. */
   admissionMessageLinkForItem(item: ProjectedItem): RoomAdmissionMessageLink | undefined {
     if (item.kind !== 'message' || item.source.kind !== 'session-event') return undefined;
     const event = this.events.get(item.source.eventSeq);
@@ -349,7 +349,7 @@ export class ChatroomAgentSessionProjector {
         && item.semantic.purpose === 'conversation');
     if (admissionLink !== undefined && durableDisplay?.kind !== 'message') return undefined;
     // The Session fact retains the parsed Agent payload. Chatroom's durable
-    // Room message owns only its display association. In the admission/v6
+    // Room message owns only its display association. In the admitted identity
     // path, text remains authoritative SessionEvent content; the Room link
     // never permits a content-only or current-Agent inference.
     const body = admissionLink === undefined && durableDisplay?.kind === 'message'

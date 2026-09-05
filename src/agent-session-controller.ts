@@ -568,7 +568,7 @@ export class ChatroomAgentSessionController {
   }
 
   /**
-   * Shell v8 target-scoped pre-submit path. Each delivery receives a distinct
+   * Shell target-origin pre-submit path. Each delivery receives a distinct
    * opaque Host-issued target origin derived from the same base command
    * origin. This method intentionally accepts only public contracts and never
    * falls through to Chatroom's legacy Agent driver methods.
@@ -576,6 +576,7 @@ export class ChatroomAgentSessionController {
   async submitDeliveriesViaAdmissionV3(
     roomId: string,
     deliveries: readonly ChatroomAgentAdmissionDelivery[],
+    userItemId: string,
     origin: AgentCommandOrigin,
     text: string,
     origins: AgentAdmissionTargetOriginService,
@@ -587,7 +588,7 @@ export class ChatroomAgentSessionController {
       memberId: delivery.memberId,
       runId: delivery.runId,
       outcome: await this.submitDeliveryViaAdmissionV3(
-        roomId, delivery, origin, text, origins, reservations,
+        roomId, delivery, userItemId, origin, text, origins, reservations,
       ),
     })));
   }
@@ -885,6 +886,7 @@ export class ChatroomAgentSessionController {
   private async submitDeliveryViaAdmissionV3(
     roomId: string,
     delivery: ChatroomAgentAdmissionDelivery,
+    userItemId: string,
     origin: AgentCommandOrigin,
     text: string,
     origins: AgentAdmissionTargetOriginService,
@@ -938,6 +940,9 @@ export class ChatroomAgentSessionController {
     if (result.status === 'denied') {
       return { status: 'denied', roomId, runId: delivery.runId, code: result.code };
     }
+    await this.recordAdmissionMessageLink(
+      roomId, userItemId, delivery, acquired.handle, result.admission.messageId,
+    );
     return {
       status: 'accepted', roomId, runId: delivery.runId, messageId: result.admission.messageId,
       sessionId: acquired.handle.agent.session.id,
