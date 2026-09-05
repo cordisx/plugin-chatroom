@@ -92,6 +92,8 @@ export type ChatroomMessages = {
   'approval.deny': undefined;
   'approval.cancel': undefined;
   'approval.reason.unavailable': undefined;
+  'approval.target': { readonly requester: string; readonly authority: string; };
+  'approval.target.unavailable': undefined;
   'approval.decision.failed': undefined;
   'approval.state.pending': undefined;
   'approval.state.approved': undefined;
@@ -247,6 +249,8 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       'approval.deny': 'Deny',
       'approval.cancel': 'Cancel',
       'approval.reason.unavailable': 'No reason was provided.',
+      'approval.target': '{requester} requests approval from {authority}.',
+      'approval.target.unavailable': 'the configured authority',
       'approval.decision.failed': 'This approval is no longer actionable.',
       'approval.state.pending': 'Pending',
       'approval.state.approved': 'Approved',
@@ -325,6 +329,8 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       'approval.deny': '拒绝',
       'approval.cancel': '取消',
       'approval.reason.unavailable': '未提供原因。',
+      'approval.target': '{requester} 向 {authority} 请求审批。',
+      'approval.target.unavailable': '指定审批人',
       'approval.decision.failed': '此审批已不可操作。',
       'approval.state.pending': '等待中',
       'approval.state.approved': '已批准',
