@@ -541,7 +541,7 @@ export interface Room {
   readonly deliveries: readonly RoomDelivery[];
   readonly outbox: readonly RoomOutboxDelivery[];
   readonly approvalDecisions: readonly RoomApprovalDecision[];
-  /** Exact admission/v6 SessionEvent-to-Room-item associations; no message copy. */
+  /** Exact admitted SessionEvent-to-Room-item associations; no message copy. */
   readonly admissionMessageLinks?: readonly RoomAdmissionMessageLink[];
   /** Present only when the loopback Playground bridge projected Agent egress. */
   readonly playgroundAgentEgresses?: readonly RoomPlaygroundAgentEgress[];
@@ -1508,7 +1508,7 @@ const sameAdmissionMessageLink = (
   && left.appendAfterItemId === right.appendAfterItemId;
 
 /**
- * Records the public result of an accepted admission/v6 reservation. The
+ * Records the public result of an accepted admission reservation. The
  * stored association is idempotent for the exact `{sessionId,messageId}` and
  * rejects any attempt to repurpose that immutable Host message identity.
  */

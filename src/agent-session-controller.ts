@@ -42,6 +42,11 @@ import type {
   AgentBootstrapCommandOrigin,
 } from '@cordisx/protocol/agent-admission/v4';
 import type {
+  AgentAdmissionBootstrapRoomReservationService,
+  AgentAdmissionBootstrapRoomTarget,
+  AgentAdmissionBootstrapRoomTargetService,
+} from '@cordisx/protocol/agent-admission/v5';
+import type {
   AgentAdmissionBootstrapRouteDeclarationService,
   AgentAdmissionBootstrapRouteReservationService,
   AgentAdmissionBootstrapRouteTarget,
@@ -90,6 +95,10 @@ import {
   issueChatroomAgentAdmissionBootstrapTarget,
   submitChatroomAgentAdmissionBootstrapReservation,
 } from './agent-admission-v4.js';
+import {
+  issueChatroomAgentAdmissionBootstrapRoomTarget,
+  submitChatroomAgentAdmissionBootstrapRoomReservation,
+} from './agent-admission-v5.js';
 import {
   declareChatroomAgentAdmissionBootstrapRoute,
   submitChatroomAgentAdmissionBootstrapRouteReservation,
@@ -568,7 +577,7 @@ export class ChatroomAgentSessionController {
   }
 
   /**
-   * Shell v8 target-scoped pre-submit path. Each delivery receives a distinct
+   * Shell target-origin pre-submit path. Each delivery receives a distinct
    * opaque Host-issued target origin derived from the same base command
    * origin. This method intentionally accepts only public contracts and never
    * falls through to Chatroom's legacy Agent driver methods.
@@ -576,6 +585,7 @@ export class ChatroomAgentSessionController {
   async submitDeliveriesViaAdmissionV3(
     roomId: string,
     deliveries: readonly ChatroomAgentAdmissionDelivery[],
+    userItemId: string,
     origin: AgentCommandOrigin,
     text: string,
     origins: AgentAdmissionTargetOriginService,
@@ -587,7 +597,7 @@ export class ChatroomAgentSessionController {
       memberId: delivery.memberId,
       runId: delivery.runId,
       outcome: await this.submitDeliveryViaAdmissionV3(
-        roomId, delivery, origin, text, origins, reservations,
+        roomId, delivery, userItemId, origin, text, origins, reservations,
       ),
     })));
   }
@@ -618,6 +628,32 @@ export class ChatroomAgentSessionController {
   }
 
   /**
+   * Shell v9 same-binding Room path. The Room and exact delivery are already
+   * durable, while the Host bootstrap command remains mounted; v5 records the
+   * Room source during reservation submit and never asks the plugin to claim
+   * or rebind that source.
+   */
+  async submitDeliveriesViaAdmissionV5(
+    roomId: string,
+    deliveries: readonly ChatroomAgentAdmissionDelivery[],
+    userItemId: string,
+    origin: AgentBootstrapCommandOrigin,
+    text: string,
+    targets: AgentAdmissionBootstrapRoomTargetService,
+    reservations: AgentAdmissionBootstrapRoomReservationService,
+  ): Promise<readonly ChatroomAgentAdmissionDeliveryOutcome[]> {
+    this.assertUsable();
+    if (text.trim() === '') throw new Error('Room message must not be empty.');
+    return await Promise.all(deliveries.map(async delivery => Object.freeze({
+      memberId: delivery.memberId,
+      runId: delivery.runId,
+      outcome: await this.submitDeliveryViaAdmissionV5(
+        roomId, delivery, userItemId, origin, text, targets, reservations,
+      ),
+    })));
+  }
+
+  /**
    * Shell v9/v6 route-rebind path. Each persisted delivery declares its exact
    * Room identity and future Room route before Chatroom acquires the target
    * Agent. Host alone may later claim the opaque continuation during route
@@ -641,6 +677,87 @@ export class ChatroomAgentSessionController {
         roomId, delivery, userItemId, origin, text, declarations, reservations,
       ),
     })));
+  }
+
+  private async submitDeliveryViaAdmissionV5(
+    roomId: string,
+    delivery: ChatroomAgentAdmissionDelivery,
+    userItemId: string,
+    origin: AgentBootstrapCommandOrigin,
+    text: string,
+    targets: AgentAdmissionBootstrapRoomTargetService,
+    reservations: AgentAdmissionBootstrapRoomReservationService,
+  ): Promise<ChatroomAgentSessionOutcome> {
+    const room = this.requireRoom(roomId);
+    const run = this.requireRun(room, delivery.runId);
+    if (run.memberId !== delivery.memberId) {
+      throw new Error('Chatroom bootstrap Room admission delivery does not match the exact Room run member.');
+    }
+    const member = this.requireMember(room, run.memberId);
+    const target: AgentAdmissionBootstrapRoomTarget = {
+      roomId: room.id,
+      participantId: member.participantId,
+      memberId: member.memberId,
+      runId: delivery.runId,
+    };
+    let issued: Awaited<ReturnType<typeof issueChatroomAgentAdmissionBootstrapRoomTarget>>;
+    try {
+      issued = await issueChatroomAgentAdmissionBootstrapRoomTarget(targets, origin, target);
+    } catch (error) {
+      await this.failPendingDelivery(roomId, delivery.runId, 'bootstrap-room-target-issue-failed', error);
+      throw error;
+    }
+    if (issued.status === 'denied') {
+      await this.failPendingDelivery(roomId, delivery.runId, issued.code);
+      return { status: 'denied', roomId, runId: delivery.runId, code: issued.code };
+    }
+
+    let authority: ApprovalAuthorityWarmup;
+    try {
+      authority = await this.ensureDirectApprovalAuthorityOwner(roomId, delivery.runId);
+    } catch (error) {
+      await this.failPendingDelivery(roomId, delivery.runId, 'authority-acquire-failed', error);
+      throw error;
+    }
+    if (authority.status === 'unavailable') {
+      await this.failPendingDelivery(roomId, delivery.runId, authority.code);
+      return { status: 'unavailable', roomId, runId: delivery.runId, code: authority.code };
+    }
+
+    let acquired: RuntimeOwner | RuntimeAcquireFailure;
+    try {
+      acquired = await this.ensureOwner(roomId, delivery.runId);
+    } catch (error) {
+      await this.failPendingDelivery(roomId, delivery.runId, 'agent-acquire-failed', error);
+      throw error;
+    }
+    if (!('handle' in acquired)) {
+      const code = acquireErrorCode(acquired);
+      await this.failPendingDelivery(roomId, delivery.runId, code);
+      return { status: acquired.status, roomId, runId: delivery.runId, code };
+    }
+
+    let result: Awaited<ReturnType<typeof submitChatroomAgentAdmissionBootstrapRoomReservation>>;
+    try {
+      result = await submitChatroomAgentAdmissionBootstrapRoomReservation(reservations, {
+        handle: acquired.handle,
+        origin: issued.origin,
+        message: { text },
+      });
+    } catch (error) {
+      await this.failPendingDelivery(roomId, delivery.runId, 'bootstrap-room-reservation-failed', error);
+      throw error;
+    }
+    if (result.status === 'denied') {
+      await this.failPendingDelivery(roomId, delivery.runId, result.code);
+      return { status: 'denied', roomId, runId: delivery.runId, code: result.code };
+    }
+    await this.recordAdmissionMessageLink(roomId, userItemId, delivery, acquired.handle, result.admission.messageId);
+    return {
+      status: 'accepted', roomId, runId: delivery.runId, messageId: result.admission.messageId,
+      sessionId: acquired.handle.agent.session.id,
+      disposition: acquired.disposition,
+    };
   }
 
   private async submitDeliveryViaAdmissionV6(
@@ -885,6 +1002,7 @@ export class ChatroomAgentSessionController {
   private async submitDeliveryViaAdmissionV3(
     roomId: string,
     delivery: ChatroomAgentAdmissionDelivery,
+    userItemId: string,
     origin: AgentCommandOrigin,
     text: string,
     origins: AgentAdmissionTargetOriginService,
@@ -938,6 +1056,9 @@ export class ChatroomAgentSessionController {
     if (result.status === 'denied') {
       return { status: 'denied', roomId, runId: delivery.runId, code: result.code };
     }
+    await this.recordAdmissionMessageLink(
+      roomId, userItemId, delivery, acquired.handle, result.admission.messageId,
+    );
     return {
       status: 'accepted', roomId, runId: delivery.runId, messageId: result.admission.messageId,
       sessionId: acquired.handle.agent.session.id,

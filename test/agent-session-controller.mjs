@@ -1233,6 +1233,148 @@ test('Shell v9 bootstrap denial fails the freshly persisted run closed before ac
   store.dispose();
 });
 
+test('Shell v9 same-binding Room target binds the exact persisted delivery before acquisition and records its admission link', async () => {
+  const userItem = {
+    kind: 'message', itemId: 'same-binding-user-item', messageId: 'same-binding-user-message', sequence: 1,
+    source: 'agent-loop',
+    author: { participantId: 'user', role: 'human', displayName: { key: 'user', fallback: 'You' } },
+    semantic: { purpose: 'conversation' },
+    body: [{ kind: 'text', text: { key: 'message', fallback: 'Continue the Room task.' } }],
+    reactions: [], timestamp: '2026-09-04T00:00:00.000Z', deliveryState: 'pending',
+    runState: 'idle', ariaLive: 'off', actions: [],
+  };
+  let room = createRoom({
+    id: 'room-existing-bootstrap', title: 'Existing Bootstrap Room', timelineSequence: 1,
+    participants: [{ id: 'user', name: 'You', kind: 'human' }], items: [userItem],
+  });
+  room = addRoomRun(room, {
+    runId: 'lead-existing-bootstrap', memberId: 'leader', title: 'Lead', status: 'creating',
+  });
+  const member = room.memberships.find(candidate => candidate.memberId === 'leader');
+  const harness = runtimeHarness({ room });
+  const store = DurableChatroomRoomStore.memory([room]);
+  const controller = new ChatroomAgentSessionController(
+    { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+  const order = [];
+  const origin = {
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-bootstrap-command-origin.v1.schema.json',
+    contract: 'cordisx.agent-bootstrap-command-origin/v1', schemaVersion: 1,
+    originId: 'origin-v9-existing', binding: { bindingId: 'binding-v9-existing', ownerGeneration: 'owner-v9-existing' },
+    generation: 'shell-v9', executionId: 'execution-v9-existing', commandId: CHATROOM_COMMAND_SUBMIT,
+    scope: 'composer-submit',
+  };
+  const targets = {
+    issue: async request => {
+      order.push('issue');
+      assert.equal(harness.creates.length, 0, 'same-binding Room target issues before acquire/create');
+      assert.deepEqual(request, {
+        origin,
+        target: {
+          roomId: room.id,
+          participantId: member.participantId,
+          memberId: member.memberId,
+          runId: 'lead-existing-bootstrap',
+        },
+      });
+      return {
+        status: 'issued',
+        origin: {
+          $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-admission-bootstrap-room-target-origin.v5.schema.json',
+          contract: 'cordisx.agent-admission-bootstrap-room-target-origin/v5', schemaVersion: 5,
+          token: 'existing-room-target-lead',
+        },
+        receipt: {
+          $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-admission-bootstrap-room-target-receipt.v5.schema.json',
+          contract: 'cordisx.agent-admission-bootstrap-room-target-receipt/v5', schemaVersion: 5,
+          receiptId: 'existing-room-receipt-lead', target: request.target,
+        },
+      };
+    },
+  };
+  const reservations = {
+    reserve: async request => {
+      order.push('reserve');
+      assert.equal(harness.creates.length, 1, 'reserve receives the exact newly acquired Agent handle');
+      assert.equal(request.handle, harness.handles[0].handle);
+      assert.equal(request.origin.token, 'existing-room-target-lead');
+      assert.deepEqual(request.message, { text: 'Continue the Room task.' });
+      return {
+        status: 'reserved',
+        reservation: {
+          reservationId: 'existing-room-reservation-lead',
+          submit: async () => {
+            order.push('submit');
+            return admission('host-v9-existing-message');
+          },
+          revoke: async () => {},
+        },
+      };
+    },
+  };
+
+  const outcomes = await controller.submitDeliveriesViaAdmissionV5(
+    room.id, [{ memberId: 'leader', runId: 'lead-existing-bootstrap' }], userItem.itemId, origin,
+    'Continue the Room task.', targets, reservations,
+  );
+
+  assert.deepEqual(order, ['issue', 'reserve', 'submit']);
+  assert.deepEqual(outcomes, [{
+    memberId: 'leader', runId: 'lead-existing-bootstrap',
+    outcome: {
+      status: 'accepted', roomId: room.id, runId: 'lead-existing-bootstrap', messageId: 'host-v9-existing-message',
+      sessionId: 'session-created-1', disposition: 'created',
+    },
+  }]);
+  assert.deepEqual(harness.handles[0].calls.messages, [], 'same-binding admission never falls through to an Agent driver');
+  assert.deepEqual(store.rooms.get(room.id).admissionMessageLinks, [{
+    roomId: room.id, itemId: userItem.itemId,
+    participantId: member.participantId, memberId: member.memberId, runId: 'lead-existing-bootstrap',
+    sessionId: 'session-created-1', messageId: 'host-v9-existing-message', owner,
+  }]);
+  await controller.dispose();
+  store.dispose();
+});
+
+test('Shell v9 same-binding Room target denial fails the persisted run closed before acquire or reserve', async () => {
+  let room = createRoom({ id: 'room-existing-bootstrap-denied', title: 'Existing Bootstrap Room' });
+  room = addRoomRun(room, {
+    runId: 'lead-existing-bootstrap-denied', memberId: 'leader', title: 'Lead', status: 'creating',
+  });
+  const harness = runtimeHarness({ room });
+  const store = DurableChatroomRoomStore.memory([room]);
+  const controller = new ChatroomAgentSessionController(
+    { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+  let reserves = 0;
+  const outcomes = await controller.submitDeliveriesViaAdmissionV5(
+    room.id, [{ memberId: 'leader', runId: 'lead-existing-bootstrap-denied' }], 'same-binding-user-item', {
+      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-bootstrap-command-origin.v1.schema.json',
+      contract: 'cordisx.agent-bootstrap-command-origin/v1', schemaVersion: 1,
+      originId: 'origin-v9-existing-denied', binding: { bindingId: 'binding-v9-existing', ownerGeneration: 'owner-v9-existing' },
+      generation: 'shell-v9', executionId: 'execution-v9-existing', commandId: CHATROOM_COMMAND_SUBMIT,
+      scope: 'composer-submit',
+    },
+    'Do not acquire without a bootstrap Room target.',
+    { issue: async () => ({ status: 'denied', code: 'target-denied' }) },
+    { reserve: async () => { reserves += 1; throw new Error('must not reserve'); } },
+  );
+
+  assert.deepEqual(outcomes, [{
+    memberId: 'leader', runId: 'lead-existing-bootstrap-denied',
+    outcome: { status: 'denied', roomId: room.id, runId: 'lead-existing-bootstrap-denied', code: 'target-denied' },
+  }]);
+  assert.equal(harness.creates.length, 0);
+  assert.equal(reserves, 0);
+  assert.equal(store.document(room.id)?.room.runs.find(run => run.runId === 'lead-existing-bootstrap-denied')?.status, 'failed');
+  await controller.dispose();
+  store.dispose();
+});
+
 test('Shell v9 route declaration binds the exact persisted Room before first Agent acquisition and reservation submit', async () => {
   const userItem = {
     kind: 'message', itemId: 'route-user-item', messageId: 'route-user-message', sequence: 1,
@@ -1485,7 +1627,19 @@ test('Shell v9 route declaration denial fails the persisted run closed before ac
 });
 
 test('Shell v8 admission reuses the exact Lead authority before creating Reviewer, then routes a v2 pending approval', async () => {
-  let room = createRoom({ id: 'room', title: 'Room' });
+  const userItem = {
+    kind: 'message', itemId: 'v3-review-item', messageId: 'v3-review-room-message', sequence: 1,
+    source: 'agent-loop',
+    author: { participantId: 'user', role: 'human', displayName: { key: 'user', fallback: 'You' } },
+    semantic: { purpose: 'conversation' },
+    body: [{ kind: 'text', text: { key: 'message', fallback: 'Review the exact v8 dispatch.' } }],
+    reactions: [], timestamp: '2026-09-04T00:00:00.000Z', deliveryState: 'pending',
+    runState: 'idle', ariaLive: 'off', actions: [],
+  };
+  let room = createRoom({
+    id: 'room', title: 'Room', timelineSequence: userItem.sequence,
+    participants: [{ id: 'user', name: 'You', kind: 'human' }], items: [userItem],
+  });
   room = addRoomRun(room, {
     runId: 'lead-run', memberId: 'leader', title: 'Lead', status: 'creating',
   });
@@ -1539,7 +1693,7 @@ test('Shell v8 admission reuses the exact Lead authority before creating Reviewe
   };
 
   const results = await controller.submitDeliveriesViaAdmissionV3(
-    room.id, [{ memberId: 'reviewer', runId: 'review-run' }], origin,
+    room.id, [{ memberId: 'reviewer', runId: 'review-run' }], userItem.itemId, origin,
     'Review the exact v8 dispatch.', origins, reservations,
   );
   const result = results[0].outcome;
@@ -1560,6 +1714,11 @@ test('Shell v8 admission reuses the exact Lead authority before creating Reviewe
   assert.equal(reserved.origin.token, 'opaque-review-run');
   assert.deepEqual(reserved.message, { text: 'Review the exact v8 dispatch.' });
   assert.deepEqual(harness.handles[1].calls.messages, [], 'v8 admission never falls through to Agent direct dispatch');
+  assert.deepEqual(store.rooms.get(room.id).admissionMessageLinks, [{
+    roomId: room.id, itemId: userItem.itemId,
+    participantId: member.participantId, memberId: member.memberId, runId: 'review-run',
+    sessionId: 'session-created-1', messageId: 'host-v8-message', owner,
+  }], 'the accepted v3 result keeps its exact durable Session/message association');
 
   const reviewer = harness.handles[1].handle.agent;
   const authority = harness.handles[0].handle.agent;
@@ -1583,6 +1742,110 @@ test('Shell v8 admission reuses the exact Lead authority before creating Reviewe
   assert.equal(controller.answerApprovalItem('room', pending.itemId, 'rejected'), true);
   assert.equal((await decision).outcome, 'rejected');
   await controller.dispose();
+  store.dispose();
+});
+
+test('Shell v8 reconciles an accepted existing-Room admission link when its SessionEvent arrives before submit resolves', async () => {
+  const userItem = {
+    kind: 'message', itemId: 'v3-existing-user-item', messageId: 'v3-existing-room-message', sequence: 1,
+    source: 'agent-loop',
+    author: { participantId: 'user', role: 'human', displayName: { key: 'user', fallback: 'You' } },
+    semantic: { purpose: 'conversation' },
+    body: [{ kind: 'text', text: { key: 'message', fallback: 'Continue the exact existing Room.' } }],
+    reactions: [], timestamp: '2026-09-04T00:00:00.000Z', deliveryState: 'pending',
+    runState: 'idle', ariaLive: 'off', actions: [],
+  };
+  let room = createRoom({
+    id: 'room-v3-existing', title: 'Existing Room', timelineSequence: userItem.sequence,
+    participants: [{ id: 'user', name: 'You', kind: 'human' }], items: [userItem],
+  });
+  room = addRoomRun(room, {
+    runId: 'lead-v3-existing', memberId: 'leader', title: 'Lead', status: 'creating',
+  });
+  room = bindRoomRunSession(room, 'lead-v3-existing', 'cx-session.lead-v3-existing');
+  const member = room.memberships.find(candidate => candidate.memberId === 'leader');
+  const events = [
+    sessionEvent('cx-session.lead-v3-existing', 0, 'turn/start', { turn: 1 }),
+    messageEvent('cx-session.lead-v3-existing', 1, {
+      id: 'host-v3-existing-message', role: 'user', content: [{ type: 'text', text: 'Continue the exact existing Room.' }],
+      source: { kind: 'plugin', pluginId: owner.pluginId, generation: owner.generation, form: 'relay' },
+    }),
+  ];
+  const harness = runtimeHarness({ room });
+  const store = DurableChatroomRoomStore.memory([room]);
+  const controller = new ChatroomAgentSessionController(
+    { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+  const origin = {
+    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-command-origin.v1.schema.json',
+    contract: 'cordisx.agent-command-origin/v1', schemaVersion: 1,
+    originId: 'origin-v3-existing', binding: { bindingId: 'binding-v3-existing', ownerGeneration: 'owner-v3-existing' },
+    generation: 'shell-v9', executionId: 'execution-v3-existing', commandId: CHATROOM_COMMAND_SUBMIT,
+    scope: 'composer-submit',
+    room: { roomId: room.id, participantId: member.participantId, memberId: member.memberId, runId: 'lead-v3-existing' },
+  };
+
+  const outcomes = await controller.submitDeliveriesViaAdmissionV3(
+    room.id, [{ memberId: 'leader', runId: 'lead-v3-existing' }], userItem.itemId, origin,
+    'Continue the exact existing Room.',
+    {
+      issue: async request => {
+        assert.deepEqual(request, {
+          origin,
+          target: { participantId: member.participantId, memberId: member.memberId, runId: 'lead-v3-existing' },
+        });
+        return {
+          status: 'issued',
+          origin: {
+            $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-admission-target-origin.v3.schema.json',
+            contract: 'cordisx.agent-admission-target-origin/v3', schemaVersion: 3, token: 'v3-existing-target',
+          },
+        };
+      },
+    },
+    {
+      reserve: async request => ({
+        status: 'reserved',
+        reservation: {
+          reservationId: 'v3-existing-reservation',
+          submit: async () => {
+            await request.handle.agent.session.emitLive(events);
+            return admission('host-v3-existing-message');
+          },
+          revoke: async () => {},
+        },
+      }),
+    },
+  );
+
+  assertChatroomAdmissionDeliveriesAccepted(outcomes);
+  const persisted = store.rooms.get(room.id);
+  assert.deepEqual(persisted.admissionMessageLinks, [{
+    roomId: room.id, itemId: userItem.itemId,
+    participantId: member.participantId, memberId: member.memberId, runId: 'lead-v3-existing',
+    sessionId: 'cx-session.lead-v3-existing', messageId: 'host-v3-existing-message', owner,
+  }]);
+  const live = controller.projectionForRoom(room.id);
+  assert.deepEqual(live.items.map(item => item.messageId), ['host-v3-existing-message'],
+    'the pre-result SessionEvent joins only after its accepted exact tuple persists');
+
+  await controller.dispose();
+  const coldHarness = runtimeHarness({ room: persisted });
+  coldHarness.sessions.get('cx-session.lead-v3-existing').replay = events;
+  const coldStore = DurableChatroomRoomStore.memory([persisted]);
+  const cold = new ChatroomAgentSessionController(
+    { agents: coldHarness.agents, sessions: coldHarness.sessionRegistry, approvals: coldHarness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    coldStore,
+  );
+  await cold.hydrateRoom(room.id);
+  assert.deepEqual(cold.projectionForRoom(room.id).items.map(item => item.messageId),
+    live.items.map(item => item.messageId),
+    'cold replay restores the same durable exact association without a text or session inference');
+  await cold.dispose();
+  coldStore.dispose();
   store.dispose();
 });
 
@@ -1653,7 +1916,7 @@ test('Shell v8 acquisition failure persists the creating run as failed before is
     room: { roomId: room.id, participantId: 'command-room', memberId: 'command-room', runId: 'command-run' },
   };
   const outcomes = await controller.submitDeliveriesViaAdmissionV3(
-    room.id, [{ memberId: 'leader', runId: 'lead-run' }], origin, '3',
+    room.id, [{ memberId: 'leader', runId: 'lead-run' }], 'user-item-v3-acquire-failure', origin, '3',
     { issue: async () => { issues += 1; throw new Error('must not issue'); } },
     { reserve: async () => { reserves += 1; throw new Error('must not reserve'); } },
   );
@@ -1696,7 +1959,7 @@ test('Shell v8 admission stops before issue or reserve when the exact Reviewer r
   let reserves = 0;
 
   await assert.rejects(controller.submitDeliveriesViaAdmissionV3(
-    room.id, [{ memberId: 'reviewer', runId: 'review-run' }], {
+    room.id, [{ memberId: 'reviewer', runId: 'review-run' }], 'user-item-v3-resolver-unavailable', {
       $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-command-origin.v1.schema.json',
       contract: 'cordisx.agent-command-origin/v1', schemaVersion: 1,
       originId: 'origin-v8-resolver-refused', binding: { bindingId: 'binding-v8', ownerGeneration: 'owner-v8' },
@@ -1741,7 +2004,7 @@ test('Shell v8 admission stops before issue or reserve when the exact Reviewer r
     let reserves = 0;
 
     await assert.rejects(controller.submitDeliveriesViaAdmissionV3(
-      room.id, [{ memberId: 'reviewer', runId: 'review-run' }], {
+      room.id, [{ memberId: 'reviewer', runId: 'review-run' }], `user-item-v3-resolver-${label}`, {
         $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-command-origin.v1.schema.json',
         contract: 'cordisx.agent-command-origin/v1', schemaVersion: 1,
         originId: `origin-v8-resolver-${label}`, binding: { bindingId: 'binding-v8', ownerGeneration: 'owner-v8' },
@@ -1773,7 +2036,7 @@ test('Shell v8 admission fails closed when Reviewer has no exact reports-to Lead
   let issues = 0;
   let reserves = 0;
   const result = await controller.submitDeliveriesViaAdmissionV3(
-    room.id, [{ memberId: 'reviewer', runId: 'review-run' }], {
+    room.id, [{ memberId: 'reviewer', runId: 'review-run' }], 'user-item-v3-missing-lead', {
       $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-command-origin.v1.schema.json',
       contract: 'cordisx.agent-command-origin/v1', schemaVersion: 1,
       originId: 'origin-v8-missing-lead', binding: { bindingId: 'binding-v8', ownerGeneration: 'owner-v8' },

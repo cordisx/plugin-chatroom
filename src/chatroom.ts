@@ -148,6 +148,7 @@ export const inject = [
   'i18n', 'commands', 'pages', 'routes', 'slots', 'managerContent',
   'agentConversationShell', 'agents', 'sessions', 'approvals', 'agentAdmissionOrigins',
   'agentAdmissionReservations', 'agentAdmissionBootstrapTargets', 'agentAdmissionBootstrapReservations',
+  'agentAdmissionBootstrapRoomTargets', 'agentAdmissionBootstrapRoomReservations',
   'agentAdmissionBootstrapRouteDeclarations', 'agentAdmissionBootstrapRouteReservations',
   'entities', 'documents',
   'settings',
@@ -198,8 +199,8 @@ const record = (value: unknown): value is Readonly<Record<string, unknown>> =>
   value !== null && typeof value === 'object';
 
 /**
- * A v7 command has no origin. A v8 composer command carries an existing
- * target origin; a v9 command may instead carry a bootstrap origin before its
+ * A v7 command has no origin. A v8 or v9 composer command may carry an
+ * existing target origin; v9 may instead carry a bootstrap origin before its
  * exact Room target exists. Older source registrations remain untouched.
  */
 function isAgentCommandOrigin(value: unknown): value is AgentCommandOrigin {
@@ -447,10 +448,22 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
         const outcomes = await agentSession.submitDeliveriesViaAdmissionV3(
           intent.roomId,
           intent.deliveries,
+          intent.userItemId,
           admissionOrigin.origin,
           intent.dispatchText,
           ctx.agentAdmissionOrigins,
           ctx.agentAdmissionReservations,
+        );
+        assertChatroomAdmissionDeliveriesAccepted(outcomes);
+      } else if (admissionMode === 'v9' && !intent.roomCreated) {
+        const outcomes = await agentSession.submitDeliveriesViaAdmissionV5(
+          intent.roomId,
+          intent.deliveries,
+          intent.userItemId,
+          admissionOrigin.origin,
+          intent.dispatchText,
+          ctx.agentAdmissionBootstrapRoomTargets,
+          ctx.agentAdmissionBootstrapRoomReservations,
         );
         assertChatroomAdmissionDeliveriesAccepted(outcomes);
       } else if (admissionMode === 'v9') {

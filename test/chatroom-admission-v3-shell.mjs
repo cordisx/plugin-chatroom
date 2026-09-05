@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-test('Shell v6-v9 composer registrations retain legacy paths and add bootstrap route admission', async () => {
+test('Shell v6-v9 composer registrations retain legacy paths, same-binding Room admission, and bootstrap route admission', async () => {
   const source = await readFile(new URL('../src/chatroom.ts', import.meta.url), 'utf8');
   const controller = await readFile(new URL('../src/agent-session-controller.ts', import.meta.url), 'utf8');
 
@@ -10,12 +10,14 @@ test('Shell v6-v9 composer registrations retain legacy paths and add bootstrap r
   assert.match(source, /agent-conversation-shell\/v9/);
   assert.match(source, /agent-admission\/v4/);
   assert.match(controller, /agent-admission\/v6/);
+  assert.match(controller, /agent-admission\/v5/);
+  assert.match(controller, /AgentAdmissionBootstrapRoomTarget/);
   assert.match(controller, /AgentAdmissionBootstrapRouteTarget/);
   assert.match(controller, /route: \{ routeId: 'room', param: 'roomId', roomId: room\.id \}/);
   assert.match(source, /agentAdmissionOrigins/);
   assert.match(source, /agentAdmissionReservations/);
-  assert.match(source, /agentAdmissionBootstrapTargets/);
-  assert.match(source, /agentAdmissionBootstrapReservations/);
+  assert.match(source, /agentAdmissionBootstrapRoomTargets/);
+  assert.match(source, /agentAdmissionBootstrapRoomReservations/);
   assert.match(source, /agentAdmissionBootstrapRouteDeclarations/);
   assert.match(source, /agentAdmissionBootstrapRouteReservations/);
   assert.match(source, /registerSourceV6/);
@@ -24,12 +26,13 @@ test('Shell v6-v9 composer registrations retain legacy paths and add bootstrap r
   assert.match(source, /registerSourceV9/);
   assert.match(source, /submitDeliveriesViaAdmissionV3\(/);
   assert.match(controller, /submitDeliveriesViaAdmissionV4\(/);
+  assert.match(source, /submitDeliveriesViaAdmissionV5\(/);
   assert.match(source, /submitDeliveriesViaAdmissionV6\(/);
   assert.match(source, /ctx\.agentAdmissionOrigins/);
   assert.match(source, /ctx\.agentAdmissionReservations/);
   assert.match(controller, /agent-admission\/v4/);
-  assert.doesNotMatch(source, /ctx\.agentAdmissionBootstrapTargets/);
-  assert.doesNotMatch(source, /ctx\.agentAdmissionBootstrapReservations/);
+  assert.match(source, /ctx\.agentAdmissionBootstrapRoomTargets/);
+  assert.match(source, /ctx\.agentAdmissionBootstrapRoomReservations/);
   assert.match(source, /ctx\.agentAdmissionBootstrapRouteDeclarations/);
   assert.match(source, /ctx\.agentAdmissionBootstrapRouteReservations/);
   assert.doesNotMatch(source, /agentAdmissionBootstrapRouteClaim/);
@@ -47,6 +50,13 @@ test('Shell v6-v9 composer registrations retain legacy paths and add bootstrap r
   const scoped = source.indexOf('await agentSession.submitDeliveriesViaAdmissionV3(');
   assert.ok(legacy >= 0 && scoped > legacy,
     'only an authority-less legacy command may retain the v6/v7 send path');
+
+  const sameBinding = source.indexOf('await agentSession.submitDeliveriesViaAdmissionV5(');
+  const freshRoute = source.indexOf('await agentSession.submitDeliveriesViaAdmissionV6(');
+  assert.ok(scoped >= 0 && sameBinding > scoped && freshRoute > sameBinding,
+    'v3 target origins take precedence; v5 handles an existing Room; only a new Room route takes v6');
+  assert.match(source, /admissionMode === 'v9' && !intent\.roomCreated/,
+    'the existing Room bootstrap path must not request a Host-only route claim');
 
   const v8 = source.indexOf('ctx.agentConversationShell.registerSourceV8(');
   const v9 = source.indexOf('const conversation = ctx.agentConversationShell.registerSourceV9(');
