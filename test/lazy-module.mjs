@@ -23,3 +23,23 @@ test('defers a module until first demand and reuses the owning loader request', 
   assert.equal(await load(), await first, 'a later page open reuses the loaded module');
   assert.equal(loads, 1);
 });
+
+test('keeps a failed retired loader isolated from its replacement', async () => {
+  let retiredLoads = 0;
+  const failure = new Error('retired generation failed');
+  const retired = loadModuleOnce(async () => {
+    retiredLoads += 1;
+    throw failure;
+  });
+  await assert.rejects(retired(), failure);
+  await assert.rejects(retired(), failure);
+  assert.equal(retiredLoads, 1, 'one owner does not retry a rejected immutable module');
+
+  let replacementLoads = 0;
+  const replacement = loadModuleOnce(async () => {
+    replacementLoads += 1;
+    return Object.freeze({ page: 'replacement' });
+  });
+  assert.deepEqual(await replacement(), { page: 'replacement' });
+  assert.equal(replacementLoads, 1, 'a replacement owns an independent module request');
+});
