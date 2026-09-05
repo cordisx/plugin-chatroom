@@ -5,7 +5,7 @@ import type { PluginRuntimeManifestV8 } from '@cordisx/protocol/plugin-manifest/
 
 // Keep product-owned avatar packages visible to Vite's initial dependency
 // scan without evaluating React-bound modules before the Host publishes its
-// shared runtime. NodeNext's `.js` edge resolves to `avatar.tsx` only later.
+// shared runtime. Calling either import remains deferred to the page graph.
 const avatarDevelopmentDependencies = () =>
   Promise.all([
     import('@oneworks/avatar'),
@@ -20,7 +20,7 @@ import {
 } from './agent-definition.js';
 import { ChatroomAgentSessionController } from './agent-session-controller.js';
 import { ChatroomConversationController } from './conversation-source.js';
-import { createChatroomPage } from './chatroom-page.js';
+import { createLazyChatroomPage } from './chatroom-page-loader.js';
 import { ChatroomPageSource } from './chatroom-page-source.js';
 import { CHATROOM_MANAGER_CONTENT_DECLARATIONS, registerChatroomManager } from './manager-chat.js';
 import { ChatroomProductBase } from './product-base.js';
@@ -407,7 +407,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       controller,
       agentSession,
     );
-  ctx.pages.register(page, createChatroomPage(pageSource, product.sidebarImages));
+  ctx.pages.register(page, createLazyChatroomPage(pageSource, product.sidebarImages));
   ctx.routes.register(newRoomRoute);
   ctx.routes.register(roomRoute);
   ctx.routes.register(roomSessionDetailRoute);

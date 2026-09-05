@@ -8,7 +8,6 @@ import {
   useState,
   useSyncExternalStore,
 } from 'cordisx/react';
-import { defineReactPage } from 'cordisx/react';
 import { Button, EmptyState, MarkdownViewer } from 'cordisx/ui';
 import type { CordisXReactPageProps } from 'cordisx/contracts';
 
@@ -306,7 +305,7 @@ function Composer({ roomId, source, shortcutPolicy, navigation, signal, t }: {
   );
 }
 
-function ChatroomPage({ source, imageCache, ...props }: CordisXReactPageProps & {
+export function ChatroomPage({ source, imageCache, ...props }: CordisXReactPageProps & {
   readonly source: ChatroomPageSource;
   readonly imageCache: ChatroomSidebarImageCache;
 }) {
@@ -399,8 +398,4 @@ function ChatroomPage({ source, imageCache, ...props }: CordisXReactPageProps & 
       </main>
     </div>
   );
-}
-
-export function createChatroomPage(source: ChatroomPageSource, imageCache: ChatroomSidebarImageCache) {
-  return defineReactPage(props => <ChatroomPage {...props} source={source} imageCache={imageCache} />);
 }

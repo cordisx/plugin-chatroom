@@ -4,19 +4,27 @@ import test from 'node:test';
 
 const source = name => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 
-test('registers one plugin-owned React Room page through public CordisX modules', async () => {
-  const [entry, page, pageSource, css] = await Promise.all([
+test('registers one plugin-owned lazy React Room page through public CordisX modules', async () => {
+  const [entry, loader, page, pageSource, css] = await Promise.all([
     source('src/chatroom.ts'),
+    source('src/chatroom-page-loader.tsx'),
     source('src/chatroom-page.tsx'),
     source('src/chatroom-page-source.ts'),
     source('src/chatroom-page.css'),
   ]);
 
-  assert.match(entry, /ctx\.pages\.register\(page, createChatroomPage\(pageSource, product\.sidebarImages\)\)/u);
+  assert.match(entry, /ctx\.pages\.register\(page, createLazyChatroomPage\(pageSource, product\.sidebarImages\)\)/u);
   assert.match(entry, /chrome: 'body-only'/u);
+  assert.doesNotMatch(entry, /from '\.\/chatroom-page\.js'/u);
+  assert.match(loader, /import\('\.\/chatroom-page\.js'\)/u);
+  assert.match(loader, /loadModuleOnce/u);
+  assert.match(loader, /lazy\(/u);
+  assert.match(loader, /<Suspense fallback=\{null\}>/u);
+  assert.match(loader, /defineReactPage/u);
   assert.match(page, /from 'cordisx\/react'/u);
   assert.match(page, /from 'cordisx\/ui'/u);
-  assert.match(page, /defineReactPage/u);
+  assert.doesNotMatch(page, /defineReactPage/u);
+  assert.match(page, /export function ChatroomPage/u);
   assert.match(page, /cx-chatroom-header/u);
   assert.match(page, /cx-chatroom-timeline/u);
   assert.match(page, /cx-chatroom-members/u);
@@ -71,18 +79,25 @@ test('publishes only completed generic images to sidebar and semantic icons to M
   assert.doesNotMatch(manager, /avatar-stack|cloneAgentAvatarRef/u);
 });
 
-test('pins OneWorks RC.8 and rejects a private React renderer in the bundle', async () => {
-  const [packageText, avatar, build, notices] = await Promise.all([
+test('pins OneWorks RC.8, defers its React renderer, and rejects a private React bundle', async () => {
+  const [packageText, entry, avatar, renderer, build, notices] = await Promise.all([
     source('package.json'),
+    source('src/chatroom.ts'),
     source('src/avatar.tsx'),
+    source('src/avatar-renderer.tsx'),
     source('scripts/build-runtime-bundle.mjs'),
     source('THIRD_PARTY_NOTICES.md'),
   ]);
   const packageJson = JSON.parse(packageText);
   assert.equal(packageJson.devDependencies['@oneworks/avatar'], '1.0.0-rc.8');
   assert.equal(packageJson.devDependencies['@oneworks/avatar-react'], '1.0.0-rc.8');
-  assert.match(avatar, /from '@oneworks\/avatar-react'/u);
+  assert.match(entry, /avatarDevelopmentDependencies/u);
+  assert.match(entry, /import\('@oneworks\/avatar-react'\)/u);
+  assert.doesNotMatch(avatar, /from '@oneworks\/avatar-react'/u);
+  assert.match(avatar, /import\('\.\/avatar-renderer\.js'\)/u);
   assert.match(avatar, /from 'cordisx\/react'/u);
+  assert.match(renderer, /from '@oneworks\/avatar-react'/u);
+  assert.match(renderer, /from 'cordisx\/react'/u);
   assert.match(build, /private React renderer/u);
   assert.match(build, /MAX_PLUGIN_RUNTIME_MODULE_BYTES = 24 \* 1024 \* 1024/u);
   assert.match(notices, /MIT License/u);

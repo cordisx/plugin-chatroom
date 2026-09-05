@@ -1,13 +1,28 @@
 import { type AgentAvatarRef, cloneAgentAvatarRef } from '@cordisx/protocol/agent-avatar/v1';
 import { type AvatarDefinition, createSeededAvatarDefinition, parseAvatarDefinition } from '@oneworks/avatar';
-import { Avatar as OneWorksAvatar, type AvatarHandle } from '@oneworks/avatar-react';
 import avatarVendorCss from '@oneworks/avatar-react/style.css';
-import React, { type ReactNode, useEffect, useMemo, useRef, useState } from 'cordisx/react';
+import React, {
+  lazy,
+  type ReactNode,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'cordisx/react';
 
 import { resolveOfficialOneWorksAvatarAsset } from './avatar-assets.js';
 import { chatroomAvatarFingerprint } from './avatar-fingerprint.js';
+import type { ChatroomAvatarRendererHandle } from './avatar-renderer.js';
+import { loadModuleOnce } from './lazy-module.js';
 import { pngBlobSnapshot } from './sidebar-image-cache.js';
 import type { RasterImageSnapshotV1 } from './sidebar-image-cache.js';
+
+const loadChatroomAvatarRenderer = loadModuleOnce(() => import('./avatar-renderer.js'));
+const LazyChatroomAvatarRenderer = lazy(async () => ({
+  default: (await loadChatroomAvatarRenderer()).ChatroomAvatarRenderer,
+}));
 
 export interface ChatroomAvatarParticipant {
   readonly id: string;
@@ -155,10 +170,11 @@ export function ChatroomAvatar({
   capture = false,
   onSnapshot,
 }: ChatroomAvatarProps) {
-  const handleRef = useRef<AvatarHandle>(null);
+  const handleRef = useRef<ChatroomAvatarRendererHandle>(null);
   const callbackRef = useRef(onSnapshot);
   callbackRef.current = onSnapshot;
   const [renderFailed, setRenderFailed] = useState(false);
+  const [rendererReadyKey, setRendererReadyKey] = useState<string>();
   const resolution = useMemo(() => {
     if (participant.avatar === undefined) return undefined;
     try {
@@ -172,9 +188,12 @@ export function ChatroomAvatar({
     setRenderFailed(false);
   }, [key]);
   const resolved = resolution?.status === 'resolved' && !renderFailed;
+  const markRendererReady = useCallback(() => {
+    setRendererReadyKey(key);
+  }, [key]);
 
   useEffect(() => {
-    if (!capture || !resolved || callbackRef.current === undefined) return;
+    if (!capture || !resolved || rendererReadyKey !== key || callbackRef.current === undefined) return;
     let current = true;
     const frame = globalThis.requestAnimationFrame(() => {
       const handle = handleRef.current;
@@ -192,7 +211,7 @@ export function ChatroomAvatar({
       current = false;
       globalThis.cancelAnimationFrame(frame);
     };
-  }, [capture, key, resolved]);
+  }, [capture, key, rendererReadyKey, resolved]);
 
   const fallbackNode = fallback === 'neutral'
     ? <span className="cx-chatroom-avatar__neutral" />
@@ -207,17 +226,14 @@ export function ChatroomAvatar({
       {resolved
         ? (
           <AvatarFailureBoundary resetKey={key} fallback={fallbackNode} onFailure={() => setRenderFailed(true)}>
-            <OneWorksAvatar
-              ref={handleRef}
-              className="cx-chatroom-avatar__renderer"
-              definition={resolution.definition}
-              theme="system"
-              interactive={false}
-              autoplay={false}
-              animation={null}
-              timeline={null}
-              onError={() => setRenderFailed(true)}
-            />
+            <Suspense fallback={fallbackNode}>
+              <LazyChatroomAvatarRenderer
+                ref={handleRef}
+                definition={resolution.definition}
+                onError={() => setRenderFailed(true)}
+                onReady={markRendererReady}
+              />
+            </Suspense>
           </AvatarFailureBoundary>
         )
         : fallbackNode}
