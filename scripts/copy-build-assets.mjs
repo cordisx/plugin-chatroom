@@ -6,7 +6,9 @@ await mkdir(outputDirectory, { recursive: true });
 await Promise.all([
   'team-architecture-page.css',
   'chatroom-page.css',
-].map(file => copyFile(
-  new URL(`../src/${file}`, import.meta.url),
-  new URL(file, outputDirectory),
-)));
+].map(file =>
+  copyFile(
+    new URL(`../src/${file}`, import.meta.url),
+    new URL(file, outputDirectory),
+  )
+));

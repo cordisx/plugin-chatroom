@@ -9,7 +9,10 @@ const expected = Object.freeze([
   ['CHATROOM_ONEWORKS_RED_FOX_AVATAR_ASSET_REF', 'CHATROOM_ONEWORKS_RED_FOX_AVATAR_ASSET_REVISION'],
   ['CHATROOM_ONEWORKS_ARCTIC_FOX_AVATAR_ASSET_REF', 'CHATROOM_ONEWORKS_ARCTIC_FOX_AVATAR_ASSET_REVISION'],
   ['CHATROOM_ONEWORKS_SYRIAN_HAMSTER_AVATAR_ASSET_REF', 'CHATROOM_ONEWORKS_SYRIAN_HAMSTER_AVATAR_ASSET_REVISION'],
-  ['CHATROOM_ONEWORKS_ASIAN_SMALL_CLAWED_OTTER_AVATAR_ASSET_REF', 'CHATROOM_ONEWORKS_ASIAN_SMALL_CLAWED_OTTER_AVATAR_ASSET_REVISION'],
+  [
+    'CHATROOM_ONEWORKS_ASIAN_SMALL_CLAWED_OTTER_AVATAR_ASSET_REF',
+    'CHATROOM_ONEWORKS_ASIAN_SMALL_CLAWED_OTTER_AVATAR_ASSET_REVISION',
+  ],
   ['CHATROOM_ONEWORKS_YELLOW_DUCKLING_AVATAR_ASSET_REF', 'CHATROOM_ONEWORKS_YELLOW_DUCKLING_AVATAR_ASSET_REVISION'],
 ]);
 
@@ -39,8 +42,10 @@ test('resolves all five exact OneWorks RC.8 editor assets only at their pinned r
     }
     assert.equal(new Set(refs).size, 5);
     assert.equal(Object.keys(imported.module.CHATROOM_ONEWORKS_AVATAR_ASSET_PROVENANCE.definitions).length, 5);
-    assert.equal(imported.module.CHATROOM_ONEWORKS_AVATAR_ASSET_PROVENANCE.renderer,
-      '@oneworks/avatar-react@1.0.0-rc.8');
+    assert.equal(
+      imported.module.CHATROOM_ONEWORKS_AVATAR_ASSET_PROVENANCE.renderer,
+      '@oneworks/avatar-react@1.0.0-rc.8',
+    );
     assert.equal(Object.isFrozen(imported.module.CHATROOM_ONEWORKS_AVATAR_ASSET_PROVENANCE), true);
   } finally {
     await rm(imported.directory, { recursive: true, force: true });

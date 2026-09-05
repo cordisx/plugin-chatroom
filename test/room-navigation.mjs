@@ -22,7 +22,9 @@ const png = Object.freeze({
 });
 
 const avatar = participantId => ({
-  kind: 'asset', ref: `room-avatar:${participantId}`, revision: 'room-avatar:v1',
+  kind: 'asset',
+  ref: `room-avatar:${participantId}`,
+  revision: 'room-avatar:v1',
 });
 
 const room = createRoom({

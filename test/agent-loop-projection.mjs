@@ -3,19 +3,10 @@ import test from 'node:test';
 
 import { CHATROOM_DEFAULT_AGENT_CONFIGURATION } from '../dist/agent-definition.js';
 import { projectAgentLoopEvent } from '../dist/agent-loop-projection.js';
-import {
-  acceptRoomDelivery,
-  planRoomDelivery,
-  prepareRoomOutboxDelivery,
-} from '../dist/room-delivery.js';
+import { acceptRoomDelivery, planRoomDelivery, prepareRoomOutboxDelivery } from '../dist/room-delivery.js';
 import { planApprovalDecision, updateApprovalDecision } from '../dist/room-agent-operations.js';
 import { createRoomConversationModel } from '../dist/conversation-model.js';
-import {
-  addRoomRun,
-  CHATROOM_MAX_RUN_PUBLIC_PROJECTIONS,
-  createChatroomOpaqueId,
-  createRoom,
-} from '../dist/room.js';
+import { addRoomRun, CHATROOM_MAX_RUN_PUBLIC_PROJECTIONS, createChatroomOpaqueId, createRoom } from '../dist/room.js';
 import {
   acceptRoomRunPresence,
   createStoredRoomRunDetailsUrl,
@@ -28,23 +19,43 @@ const identities = {
   review: { agentId: 'chatroom.reviewer', revision: 'chatroom-internal-v1' },
 };
 const binding = (id, definition, generation = 1) => ({
-  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-task-binding.v4.schema.json',
-  contract: 'cordisx.agent-loop-task-binding/v4', schemaVersion: 4,
-  binding: { bindingId: `Opaque:Binding-${id}`, generation }, definition,
-  task: `Opaque:Task-${id}`, state: 'active',
+  $schema:
+    'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-task-binding.v4.schema.json',
+  contract: 'cordisx.agent-loop-task-binding/v4',
+  schemaVersion: 4,
+  binding: { bindingId: `Opaque:Binding-${id}`, generation },
+  definition,
+  task: `Opaque:Task-${id}`,
+  state: 'active',
 });
 const acceptedTurnFor = runBinding => `turn-${runBinding.task}`;
 const members = [
   {
-    memberId: 'lead', label: 'Lead', definition: identities.lead, role: 'leader', attentionPolicy: 'ambient',
-    avatar: { kind: 'generated', algorithm: 'oneworks-avatar-seed', algorithmVersion: 1,
-      seed: 'cordisx.agent-avatar.seed/v1:agent-definition:12:chatroom-fox' },
+    memberId: 'lead',
+    label: 'Lead',
+    definition: identities.lead,
+    role: 'leader',
+    attentionPolicy: 'ambient',
+    avatar: {
+      kind: 'generated',
+      algorithm: 'oneworks-avatar-seed',
+      algorithmVersion: 1,
+      seed: 'cordisx.agent-avatar.seed/v1:agent-definition:12:chatroom-fox',
+    },
   },
   {
-    memberId: 'review', label: 'Review', definition: identities.review, role: 'member',
-    attentionPolicy: 'mention-only', reportsToMemberId: 'lead',
-    avatar: { kind: 'generated', algorithm: 'oneworks-avatar-seed', algorithmVersion: 1,
-      seed: 'cordisx.agent-avatar.seed/v1:agent-definition:24:chatroom-reviewer-animal' },
+    memberId: 'review',
+    label: 'Review',
+    definition: identities.review,
+    role: 'member',
+    attentionPolicy: 'mention-only',
+    reportsToMemberId: 'lead',
+    avatar: {
+      kind: 'generated',
+      algorithm: 'oneworks-avatar-seed',
+      algorithmVersion: 1,
+      seed: 'cordisx.agent-avatar.seed/v1:agent-definition:24:chatroom-reviewer-animal',
+    },
   },
 ];
 const testConfiguration = { ...CHATROOM_DEFAULT_AGENT_CONFIGURATION, members };
@@ -55,7 +66,9 @@ function acceptConversationTurn(input, runId) {
   const fixtureKey = `${runId}-${run.taskBinding.binding.generation}`;
   const userItemId = `fixture-user-${fixtureKey}`;
   const acknowledgement = prepareRoomAcknowledgement(input, testConfiguration, {
-    userItemId, memberId: member.memberId, runId,
+    userItemId,
+    memberId: member.memberId,
+    runId,
   });
   let result = markRoomAcknowledgementSent(
     acknowledgement.room,
@@ -64,25 +77,41 @@ function acceptConversationTurn(input, runId) {
   const deliveryId = `fixture-delivery-${fixtureKey}`;
   const operationId = `fixture-send-${fixtureKey}`;
   result = prepareRoomOutboxDelivery(result, {
-    deliveryId, userItemId, memberId: member.memberId, runId, sendOperationId: operationId,
+    deliveryId,
+    userItemId,
+    memberId: member.memberId,
+    runId,
+    sendOperationId: operationId,
   }).room;
   result = planRoomDelivery(result, {
-    deliveryId, operationId, userItemId, participantId: member.participantId,
-    memberId: member.memberId, runId, issuedAt: '2026-08-30T00:00:00.000Z',
+    deliveryId,
+    operationId,
+    userItemId,
+    participantId: member.participantId,
+    memberId: member.memberId,
+    runId,
+    issuedAt: '2026-08-30T00:00:00.000Z',
     operation: {
-      kind: 'send', acknowledgementKey: acknowledgement.acknowledgement.acknowledgementKey,
+      kind: 'send',
+      acknowledgementKey: acknowledgement.acknowledgement.acknowledgementKey,
       payload: { commandId: operationId, type: 'send', binding: run.taskBinding },
     },
   }).room;
   return acceptRoomDelivery(result, operationId, {
-    kind: 'send', disposition: 'executed', firstObservedAt: '2026-08-30T00:00:00.000Z',
-    messageId: `fixture-message-${fixtureKey}`, turn: acceptedTurnFor(run.taskBinding),
+    kind: 'send',
+    disposition: 'executed',
+    firstObservedAt: '2026-08-30T00:00:00.000Z',
+    messageId: `fixture-message-${fixtureKey}`,
+    turn: acceptedTurnFor(run.taskBinding),
   });
 }
 
 function room() {
   let result = createRoom({
-    id: 'room-1', title: 'Review', memberships: members, seedLeaderIds: ['lead'],
+    id: 'room-1',
+    title: 'Review',
+    memberships: members,
+    seedLeaderIds: ['lead'],
     participants: [
       { id: 'lead', name: 'Lead', kind: 'agent' },
       { id: 'review', name: 'Review', kind: 'agent' },
@@ -91,11 +120,15 @@ function room() {
   result = addRoomRun(result, { runId: 'lead-run', memberId: 'lead', title: 'Lead run', status: 'creating' });
   result = addRoomRun(result, { runId: 'review-run', memberId: 'review', title: 'Review run', status: 'creating' });
   result = acceptRoomRunPresence(
-    result, 'lead-run', binding('lead', identities.lead),
+    result,
+    'lead-run',
+    binding('lead', identities.lead),
     createStoredRoomRunDetailsUrl({ url: 'app:task/lead', target: 'host' }),
   );
   result = acceptRoomRunPresence(
-    result, 'review-run', binding('review', identities.review),
+    result,
+    'review-run',
+    binding('review', identities.review),
     createStoredRoomRunDetailsUrl({ url: 'app:task/review', target: 'host' }),
   );
   result = acceptConversationTurn(result, 'lead-run');
@@ -103,26 +136,42 @@ function room() {
 }
 
 const event = (runBinding, sequence, extra) => ({
-  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json', contract: 'cordisx.agent-loop-event/v4', schemaVersion: 4,
+  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json',
+  contract: 'cordisx.agent-loop-event/v4',
+  schemaVersion: 4,
   eventId: `event-${runBinding.binding.bindingId}-${sequence}`,
-  binding: runBinding.binding, sequence, occurredAt: '2026-08-30T00:00:00.000Z',
+  binding: runBinding.binding,
+  sequence,
+  occurredAt: '2026-08-30T00:00:00.000Z',
   ...extra,
-  ...(extra.type === 'message' ? {
-    turn: acceptedTurnFor(runBinding),
-    message: { purpose: 'conversation', ...extra.message },
-  } : {}),
+  ...(extra.type === 'message'
+    ? {
+      turn: acceptedTurnFor(runBinding),
+      message: { purpose: 'conversation', ...extra.message },
+    }
+    : {}),
 });
 
 test('keeps per-run cursors independent while Room assigns one public timeline sequence', () => {
   const initial = room();
   const leadBinding = initial.runs[0].taskBinding;
   const reviewBinding = initial.runs[1].taskBinding;
-  const lead = projectAgentLoopEvent(initial, 'lead-run', event(leadBinding, 0, {
-    type: 'message', message: { messageId: 'lead-0', role: 'assistant', content: [{ kind: 'text', text: 'Lead answer' }] },
-  })).room;
-  const review = projectAgentLoopEvent(lead, 'review-run', event(reviewBinding, 0, {
-    type: 'message', message: { messageId: 'review-0', role: 'assistant', content: [{ kind: 'text', text: 'Review answer' }] },
-  })).room;
+  const lead = projectAgentLoopEvent(
+    initial,
+    'lead-run',
+    event(leadBinding, 0, {
+      type: 'message',
+      message: { messageId: 'lead-0', role: 'assistant', content: [{ kind: 'text', text: 'Lead answer' }] },
+    }),
+  ).room;
+  const review = projectAgentLoopEvent(
+    lead,
+    'review-run',
+    event(reviewBinding, 0, {
+      type: 'message',
+      message: { messageId: 'review-0', role: 'assistant', content: [{ kind: 'text', text: 'Review answer' }] },
+    }),
+  ).room;
 
   assert.deepEqual(review.runs.map(run => run.agentLoopCursor), [0, 0]);
   assert.deepEqual(review.items.map(item => item.sequence), [3, 4]);
@@ -142,15 +191,29 @@ test('keeps per-run cursors independent while Room assigns one public timeline s
 test('projects only public assistant content and keeps image-ref opaque/unsupported', () => {
   const initial = room();
   const runBinding = initial.runs[0].taskBinding;
-  const echoed = projectAgentLoopEvent(initial, 'lead-run', event(runBinding, 0, {
-    type: 'message', message: { messageId: 'user-0', role: 'user', content: [{ kind: 'text', text: 'private echo' }] },
-  })).room;
-  const projected = projectAgentLoopEvent(echoed, 'lead-run', event(runBinding, 1, {
-    type: 'message', message: { messageId: 'assistant-1', role: 'assistant', content: [
-      { kind: 'text', text: 'Done' },
-      { kind: 'image-ref', ref: 'Opaque:Image-1', mediaType: 'image/png', alt: 'Screenshot' },
-    ] },
-  })).room;
+  const echoed = projectAgentLoopEvent(
+    initial,
+    'lead-run',
+    event(runBinding, 0, {
+      type: 'message',
+      message: { messageId: 'user-0', role: 'user', content: [{ kind: 'text', text: 'private echo' }] },
+    }),
+  ).room;
+  const projected = projectAgentLoopEvent(
+    echoed,
+    'lead-run',
+    event(runBinding, 1, {
+      type: 'message',
+      message: {
+        messageId: 'assistant-1',
+        role: 'assistant',
+        content: [
+          { kind: 'text', text: 'Done' },
+          { kind: 'image-ref', ref: 'Opaque:Image-1', mediaType: 'image/png', alt: 'Screenshot' },
+        ],
+      },
+    }),
+  ).room;
 
   assert.equal(echoed.items.length, 0);
   assert.equal(projected.items.length, 1);
@@ -163,23 +226,45 @@ test('projects only public assistant content and keeps image-ref opaque/unsuppor
 test('projects approval and turn lifecycle while keeping a completed turn active and reusable', () => {
   const initial = room();
   const runBinding = initial.runs[0].taskBinding;
-  const pending = projectAgentLoopEvent(initial, 'lead-run', event(runBinding, 0, {
-    type: 'approval', turn: 'turn-1', approval: { approvalId: 'approval-1', kind: 'command', state: 'pending' },
-  })).room;
+  const pending = projectAgentLoopEvent(
+    initial,
+    'lead-run',
+    event(runBinding, 0, {
+      type: 'approval',
+      turn: 'turn-1',
+      approval: { approvalId: 'approval-1', kind: 'command', state: 'pending' },
+    }),
+  ).room;
   const planned = planApprovalDecision(pending, {
-    runId: 'lead-run', turn: 'turn-1', approvalId: 'approval-1', decision: 'approved',
+    runId: 'lead-run',
+    turn: 'turn-1',
+    approvalId: 'approval-1',
+    decision: 'approved',
   });
   const operationId = planned.approvalDecisions[0].operationId;
   const accepted = updateApprovalDecision(planned, operationId, decision => ({
-    ...decision, state: 'accepted', disposition: 'executed',
+    ...decision,
+    state: 'accepted',
+    disposition: 'executed',
   }));
-  const resolved = projectAgentLoopEvent(accepted, 'lead-run', event(runBinding, 1, {
-    type: 'approval', turn: 'turn-1', causation: { operationId },
-    approval: { approvalId: 'approval-1', kind: 'command', state: 'resolved', outcome: 'approved' },
-  })).room;
-  const completed = projectAgentLoopEvent(resolved, 'lead-run', event(runBinding, 2, {
-    type: 'lifecycle', lifecycle: { phase: 'turn.completed' },
-  })).room;
+  const resolved = projectAgentLoopEvent(
+    accepted,
+    'lead-run',
+    event(runBinding, 1, {
+      type: 'approval',
+      turn: 'turn-1',
+      causation: { operationId },
+      approval: { approvalId: 'approval-1', kind: 'command', state: 'resolved', outcome: 'approved' },
+    }),
+  ).room;
+  const completed = projectAgentLoopEvent(
+    resolved,
+    'lead-run',
+    event(runBinding, 2, {
+      type: 'lifecycle',
+      lifecycle: { phase: 'turn.completed' },
+    }),
+  ).room;
 
   assert.equal(completed.items.length, 1);
   assert.equal(completed.items[0].kind, 'approval');
@@ -193,19 +278,32 @@ test('projects approval and turn lifecycle while keeping a completed turn active
     binding: { bindingId: 'Opaque:Binding-approval-rebound', generation: 2 },
   };
   const rebound = acceptRoomRunPresence(
-    completed, 'lead-run', reboundBinding,
+    completed,
+    'lead-run',
+    reboundBinding,
     createStoredRoomRunDetailsUrl({ url: 'app:task/approval-rebound', target: 'host' }),
   );
-  const replayedPending = projectAgentLoopEvent(rebound, 'lead-run', event(reboundBinding, 10, {
-    eventId: 'event-approval-rebound-pending',
-    type: 'approval', turn: 'turn-1',
-    approval: { approvalId: 'approval-1', kind: 'command', state: 'pending' },
-  })).room;
-  const replayedResolved = projectAgentLoopEvent(replayedPending, 'lead-run', event(reboundBinding, 11, {
-    eventId: 'event-approval-rebound-resolved',
-    type: 'approval', turn: 'turn-1', causation: { operationId },
-    approval: { approvalId: 'approval-1', kind: 'command', state: 'resolved', outcome: 'approved' },
-  })).room;
+  const replayedPending = projectAgentLoopEvent(
+    rebound,
+    'lead-run',
+    event(reboundBinding, 10, {
+      eventId: 'event-approval-rebound-pending',
+      type: 'approval',
+      turn: 'turn-1',
+      approval: { approvalId: 'approval-1', kind: 'command', state: 'pending' },
+    }),
+  ).room;
+  const replayedResolved = projectAgentLoopEvent(
+    replayedPending,
+    'lead-run',
+    event(reboundBinding, 11, {
+      eventId: 'event-approval-rebound-resolved',
+      type: 'approval',
+      turn: 'turn-1',
+      causation: { operationId },
+      approval: { approvalId: 'approval-1', kind: 'command', state: 'resolved', outcome: 'approved' },
+    }),
+  ).room;
   assert.equal(replayedResolved.items.length, 1);
   assert.equal(new Set(replayedResolved.items.map(item => item.itemId)).size, 1);
   assert.equal(replayedResolved.runs[0].agentLoopCursor, 11);
@@ -214,46 +312,102 @@ test('projects approval and turn lifecycle while keeping a completed turn active
 test('rejects cross-run generations, duplicate sequences, and post-close events', () => {
   const initial = room();
   const runBinding = initial.runs[0].taskBinding;
-  assert.equal(projectAgentLoopEvent(initial, 'review-run', event(runBinding, 0, {
-    type: 'lifecycle', lifecycle: { phase: 'turn.started' },
-  })).accepted, false);
-  assert.equal(projectAgentLoopEvent(initial, 'lead-run', event({ ...runBinding, binding: { ...runBinding.binding, generation: 2 } }, 0, {
-    type: 'lifecycle', lifecycle: { phase: 'turn.started' },
-  })).accepted, false);
-  const accepted = projectAgentLoopEvent(initial, 'lead-run', event(runBinding, 0, {
-    type: 'lifecycle', lifecycle: { phase: 'turn.started' },
-  })).room;
-  assert.equal(projectAgentLoopEvent(accepted, 'lead-run', event(runBinding, 0, {
-    type: 'lifecycle', lifecycle: { phase: 'turn.completed' },
-  })).accepted, false);
-  const closed = projectAgentLoopEvent(accepted, 'lead-run', event(runBinding, 1, {
-    type: 'lifecycle', lifecycle: { phase: 'binding.closed' },
-  })).room;
-  assert.equal(createRoomConversationModel(closed).selection.activeRuns
-    .some(run => run.runId === 'lead-run'), false);
-  assert.equal(projectAgentLoopEvent(closed, 'lead-run', event(runBinding, 2, {
-    type: 'message', message: { messageId: 'late', role: 'assistant', content: [{ kind: 'text', text: 'Late' }] },
-  })).accepted, false);
+  assert.equal(
+    projectAgentLoopEvent(
+      initial,
+      'review-run',
+      event(runBinding, 0, {
+        type: 'lifecycle',
+        lifecycle: { phase: 'turn.started' },
+      }),
+    ).accepted,
+    false,
+  );
+  assert.equal(
+    projectAgentLoopEvent(
+      initial,
+      'lead-run',
+      event({ ...runBinding, binding: { ...runBinding.binding, generation: 2 } }, 0, {
+        type: 'lifecycle',
+        lifecycle: { phase: 'turn.started' },
+      }),
+    ).accepted,
+    false,
+  );
+  const accepted = projectAgentLoopEvent(
+    initial,
+    'lead-run',
+    event(runBinding, 0, {
+      type: 'lifecycle',
+      lifecycle: { phase: 'turn.started' },
+    }),
+  ).room;
+  assert.equal(
+    projectAgentLoopEvent(
+      accepted,
+      'lead-run',
+      event(runBinding, 0, {
+        type: 'lifecycle',
+        lifecycle: { phase: 'turn.completed' },
+      }),
+    ).accepted,
+    false,
+  );
+  const closed = projectAgentLoopEvent(
+    accepted,
+    'lead-run',
+    event(runBinding, 1, {
+      type: 'lifecycle',
+      lifecycle: { phase: 'binding.closed' },
+    }),
+  ).room;
+  assert.equal(
+    createRoomConversationModel(closed).selection.activeRuns
+      .some(run => run.runId === 'lead-run'),
+    false,
+  );
+  assert.equal(
+    projectAgentLoopEvent(
+      closed,
+      'lead-run',
+      event(runBinding, 2, {
+        type: 'message',
+        message: { messageId: 'late', role: 'assistant', content: [{ kind: 'text', text: 'Late' }] },
+      }),
+    ).accepted,
+    false,
+  );
 });
 
 test('rebind replay advances the new cursor without duplicating stable public items', () => {
   const initial = room();
   const firstBinding = initial.runs[0].taskBinding;
   const message = {
-    eventId: 'event-stable-message', type: 'message', turn: 'turn-stable',
+    eventId: 'event-stable-message',
+    type: 'message',
+    turn: 'turn-stable',
     causation: { operationId: 'operation-stable' },
-    message: { messageId: 'assistant-stable', role: 'assistant', content: [
-      { kind: 'text', text: 'Stable answer' },
-      { kind: 'image-ref', ref: 'Opaque:Image-Stable', mediaType: 'image/png', alt: 'Stable image' },
-    ] },
+    message: {
+      messageId: 'assistant-stable',
+      role: 'assistant',
+      content: [
+        { kind: 'text', text: 'Stable answer' },
+        { kind: 'image-ref', ref: 'Opaque:Image-Stable', mediaType: 'image/png', alt: 'Stable image' },
+      ],
+    },
   };
   const completedLifecycle = {
-    eventId: 'event-stable-completed', type: 'lifecycle', turn: 'turn-stable',
-    causation: { operationId: 'operation-stable' }, lifecycle: { phase: 'turn.completed' },
+    eventId: 'event-stable-completed',
+    type: 'lifecycle',
+    turn: 'turn-stable',
+    causation: { operationId: 'operation-stable' },
+    lifecycle: { phase: 'turn.completed' },
   };
   const projected = projectAgentLoopEvent(initial, 'lead-run', event(firstBinding, 0, message)).room;
   const completed = projectAgentLoopEvent(
-    projected, 'lead-run', event(firstBinding, 1, completedLifecycle),
+    projected,
+    'lead-run',
+    event(firstBinding, 1, completedLifecycle),
   ).room;
   const existingItem = completed.items[0];
   const existingTimelineSequence = completed.timelineSequence;
@@ -262,19 +416,25 @@ test('rebind replay advances the new cursor without duplicating stable public it
     binding: { bindingId: 'Opaque:Binding-lead-rebound', generation: 2 },
   };
   const rebound = acceptRoomRunPresence(
-    completed, 'lead-run', reboundBinding,
+    completed,
+    'lead-run',
+    reboundBinding,
     createStoredRoomRunDetailsUrl({ url: 'app:task/lead-rebound', target: 'host' }),
   );
   assert.equal(rebound.runs[0].agentLoopCursor, -1);
 
   const replayedMessage = projectAgentLoopEvent(
-    rebound, 'lead-run', event(reboundBinding, 10, {
+    rebound,
+    'lead-run',
+    event(reboundBinding, 10, {
       ...message,
       eventId: 'event-rebound-message',
     }),
   ).room;
   const replayedCompleted = projectAgentLoopEvent(
-    replayedMessage, 'lead-run', event(reboundBinding, 11, {
+    replayedMessage,
+    'lead-run',
+    event(reboundBinding, 11, {
       ...completedLifecycle,
       eventId: 'event-rebound-completed',
     }),
@@ -286,13 +446,21 @@ test('rebind replay advances the new cursor without duplicating stable public it
   assert.equal(replayedCompleted.runs[0].agentLoopCursor, 11);
   assert.equal(replayedCompleted.runs[0].status, 'active');
 
-  const next = projectAgentLoopEvent(replayedCompleted, 'lead-run', event(reboundBinding, 12, {
-    eventId: 'event-distinct-message', type: 'message', turn: 'turn-distinct',
-    causation: { operationId: 'operation-distinct' },
-    message: {
-      messageId: 'assistant-distinct', role: 'assistant', content: [{ kind: 'text', text: 'Distinct turn' }],
-    },
-  })).room;
+  const next = projectAgentLoopEvent(
+    replayedCompleted,
+    'lead-run',
+    event(reboundBinding, 12, {
+      eventId: 'event-distinct-message',
+      type: 'message',
+      turn: 'turn-distinct',
+      causation: { operationId: 'operation-distinct' },
+      message: {
+        messageId: 'assistant-distinct',
+        role: 'assistant',
+        content: [{ kind: 'text', text: 'Distinct turn' }],
+      },
+    }),
+  ).room;
   assert.equal(next.items.length, 2);
   assert.equal(new Set(next.items.map(item => item.itemId)).size, next.items.length);
   assert.equal(next.runs[0].agentLoopCursor, 12);
@@ -300,7 +468,9 @@ test('rebind replay advances the new cursor without duplicating stable public it
   const secondRoom = createRoom({ ...room(), id: 'room-2', title: 'Other Room' });
   const secondBinding = secondRoom.runs[0].taskBinding;
   const secondProjected = projectAgentLoopEvent(
-    secondRoom, 'lead-run', event(secondBinding, 0, message),
+    secondRoom,
+    'lead-run',
+    event(secondBinding, 0, message),
   ).room;
   assert.equal(secondProjected.items.length, 1);
   assert.equal(next.items.length, 2, 'another Room projection cannot mutate the first Room');
@@ -310,9 +480,12 @@ test('fails closed when a semantic projection id collides with an incompatible p
   const initial = room();
   const runBinding = initial.runs[0].taskBinding;
   const assistant = event(runBinding, 0, {
-    eventId: 'event-collision-source', type: 'message', turn: 'turn-collision',
+    eventId: 'event-collision-source',
+    type: 'message',
+    turn: 'turn-collision',
     message: {
-      messageId: 'assistant-collision', role: 'assistant',
+      messageId: 'assistant-collision',
+      role: 'assistant',
       content: [{ kind: 'text', text: 'Must not be swallowed' }],
     },
   });
@@ -322,8 +495,12 @@ test('fails closed when a semantic projection id collides with an incompatible p
     ...initial,
     timelineSequence: initial.timelineSequence + 1,
     items: [{
-      kind: 'status', itemId, sequence: initial.timelineSequence + 1,
-      label: { fallback: 'Unrelated status' }, state: 'info', ariaLive: 'off',
+      kind: 'status',
+      itemId,
+      sequence: initial.timelineSequence + 1,
+      label: { fallback: 'Unrelated status' },
+      state: 'info',
+      ariaLive: 'off',
     }],
   });
 
@@ -331,14 +508,16 @@ test('fails closed when a semantic projection id collides with an incompatible p
     () => projectAgentLoopEvent(collision, 'lead-run', assistant),
     /projection identity collided/,
   );
-  assert.throws(() => createRoom({
-    ...initial,
-    items: [projected.items[0], projected.items[0]],
-  }), /timeline item ids must be unique/);
-  assert.throws(() => createRoom({
-    ...projected,
-    items: collision.items,
-  }), /projection does not match its visible timeline item/);
+  assert.throws(() =>
+    createRoom({
+      ...initial,
+      items: [projected.items[0], projected.items[0]],
+    }), /timeline item ids must be unique/);
+  assert.throws(() =>
+    createRoom({
+      ...projected,
+      items: collision.items,
+    }), /projection does not match its visible timeline item/);
 
   const truncated = createRoom({ ...projected, items: [], imageReferences: [] });
   const reboundBinding = {
@@ -346,15 +525,21 @@ test('fails closed when a semantic projection id collides with an incompatible p
     binding: { bindingId: 'Opaque:Binding-truncated-rebound', generation: 2 },
   };
   const rebound = acceptRoomRunPresence(
-    truncated, 'lead-run', reboundBinding,
+    truncated,
+    'lead-run',
+    reboundBinding,
     createStoredRoomRunDetailsUrl({ url: 'app:task/truncated-rebound', target: 'host' }),
   );
-  const replayed = projectAgentLoopEvent(rebound, 'lead-run', event(reboundBinding, 10, {
-    eventId: 'event-truncated-replay',
-    type: assistant.type,
-    turn: assistant.turn,
-    message: assistant.message,
-  })).room;
+  const replayed = projectAgentLoopEvent(
+    rebound,
+    'lead-run',
+    event(reboundBinding, 10, {
+      eventId: 'event-truncated-replay',
+      type: assistant.type,
+      turn: assistant.turn,
+      message: assistant.message,
+    }),
+  ).room;
   assert.equal(replayed.items.length, 0, 'a valid truncated correlation suppresses only its exact replay');
   assert.equal(replayed.runs[0].agentLoopCursor, 10);
 });
@@ -363,7 +548,9 @@ test('fails closed when an approval status id collides with a different status p
   const initial = room();
   const runBinding = initial.runs[0].taskBinding;
   const approval = event(runBinding, 0, {
-    eventId: 'event-approval-collision', type: 'approval', turn: 'turn-approval-collision',
+    eventId: 'event-approval-collision',
+    type: 'approval',
+    turn: 'turn-approval-collision',
     approval: { approvalId: 'approval-collision', kind: 'command', state: 'pending' },
   });
   const projected = projectAgentLoopEvent(initial, 'lead-run', approval).room;
@@ -371,8 +558,12 @@ test('fails closed when an approval status id collides with a different status p
     ...initial,
     timelineSequence: initial.timelineSequence + 1,
     items: [{
-      kind: 'status', itemId: projected.items[0].itemId, sequence: initial.timelineSequence + 1,
-      label: { fallback: 'Unrelated status' }, state: 'error', ariaLive: 'off',
+      kind: 'status',
+      itemId: projected.items[0].itemId,
+      sequence: initial.timelineSequence + 1,
+      label: { fallback: 'Unrelated status' },
+      state: 'error',
+      ariaLive: 'off',
     }],
   });
   assert.throws(() => projectAgentLoopEvent(collision, 'lead-run', approval), /projection identity collided/);
@@ -408,17 +599,23 @@ test('keeps more than the visible timeline window replay-idempotent across a new
     binding: { bindingId: 'Opaque:Binding-window-rebound', generation: 2 },
   };
   let replayed = acceptRoomRunPresence(
-    projected, 'lead-run', reboundBinding,
+    projected,
+    'lead-run',
+    reboundBinding,
     createStoredRoomRunDetailsUrl({ url: 'app:task/window-rebound', target: 'host' }),
   );
   const baselineItems = replayed.items;
   const baselineImages = replayed.imageReferences;
   const baselineTimelineSequence = replayed.timelineSequence;
   for (const [index, message] of messages.entries()) {
-    replayed = projectAgentLoopEvent(replayed, 'lead-run', event(reboundBinding, 1000 + index, {
-      ...message,
-      eventId: `event-rebound-${index}`,
-    })).room;
+    replayed = projectAgentLoopEvent(
+      replayed,
+      'lead-run',
+      event(reboundBinding, 1000 + index, {
+        ...message,
+        eventId: `event-rebound-${index}`,
+      }),
+    ).room;
   }
   assert.deepEqual(replayed.items, baselineItems);
   assert.deepEqual(replayed.imageReferences, baselineImages);
@@ -426,13 +623,20 @@ test('keeps more than the visible timeline window replay-idempotent across a new
   assert.equal(replayed.runs[0].agentLoopCursor, 1500);
   assert.equal(replayed.runs[0].publicProjections.length, 501);
 
-  const next = projectAgentLoopEvent(replayed, 'lead-run', event(reboundBinding, 1501, {
-    eventId: 'event-new-after-window', type: 'message', turn: 'turn-new-after-window',
-    message: {
-      messageId: 'assistant-new-after-window', role: 'assistant',
-      content: [{ kind: 'text', text: 'New answer after replay' }],
-    },
-  })).room;
+  const next = projectAgentLoopEvent(
+    replayed,
+    'lead-run',
+    event(reboundBinding, 1501, {
+      eventId: 'event-new-after-window',
+      type: 'message',
+      turn: 'turn-new-after-window',
+      message: {
+        messageId: 'assistant-new-after-window',
+        role: 'assistant',
+        content: [{ kind: 'text', text: 'New answer after replay' }],
+      },
+    }),
+  ).room;
   assert.equal(next.items.length, 500);
   assert.equal(next.timelineSequence, baselineTimelineSequence + 1);
   assert.equal(next.runs[0].publicProjections.length, 502);
@@ -445,19 +649,25 @@ test('fails closed instead of silently truncating the bounded durable replay led
     kind: 'status',
     association: 'status:overflow',
   }));
-  assert.throws(() => createRoom({
-    ...initial,
-    runs: initial.runs.map(run => run.runId === 'lead-run' ? { ...run, publicProjections: overflow } : run),
-  }), /projection replay limit/);
+  assert.throws(() =>
+    createRoom({
+      ...initial,
+      runs: initial.runs.map(run => run.runId === 'lead-run' ? { ...run, publicProjections: overflow } : run),
+    }), /projection replay limit/);
   const duplicate = createChatroomOpaqueId('agent-status', 'lead-run', 'duplicate');
-  assert.throws(() => createRoom({
-    ...initial,
-    runs: initial.runs.map(run => run.runId === 'lead-run' ? {
-      ...run,
-      publicProjections: [
-        { itemId: duplicate, kind: 'status', association: 'status:duplicate' },
-        { itemId: duplicate, kind: 'status', association: 'status:duplicate' },
-      ],
-    } : run),
-  }), /projection identities must be unique/);
+  assert.throws(() =>
+    createRoom({
+      ...initial,
+      runs: initial.runs.map(run =>
+        run.runId === 'lead-run'
+          ? {
+            ...run,
+            publicProjections: [
+              { itemId: duplicate, kind: 'status', association: 'status:duplicate' },
+              { itemId: duplicate, kind: 'status', association: 'status:duplicate' },
+            ],
+          }
+          : run
+      ),
+    }), /projection identities must be unique/);
 });

@@ -1,10 +1,10 @@
 import type {
-  AgentConversationShellBinding,
-  AgentConversationShellCommandContext,
   AgentConversationItem,
-  AgentConversationShellPage,
   AgentConversationRoomSettingsUpdateRequest,
   AgentConversationRoomSettingsUpdateResult,
+  AgentConversationShellBinding,
+  AgentConversationShellCommandContext,
+  AgentConversationShellPage,
   AgentConversationShellSnapshot,
   AgentConversationShellSource,
   AgentConversationShellSubscribeRuntimeResult,
@@ -17,25 +17,22 @@ import {
   CHATROOM_COMMAND_APPROVAL_CANCEL,
   CHATROOM_COMMAND_APPROVAL_DENY,
   CHATROOM_COMMAND_SUBMIT,
+  type ChatroomConversationModel,
   createConversationSnapshot,
   createNoRoomConversationModel,
   createRoomConversationModel,
   projectRoomParticipant,
-  type ChatroomConversationModel,
 } from './conversation-model.js';
+import { CHATROOM_DEFAULT_AGENT_CONFIGURATION, type ChatroomAgentConfiguration } from './agent-definition.js';
 import {
-  CHATROOM_DEFAULT_AGENT_CONFIGURATION,
-  type ChatroomAgentConfiguration,
-} from './agent-definition.js';
-import {
+  addRoomRun,
   CHATROOM_MAX_PLAYGROUND_APPROVAL_DECISION_ATTEMPTS,
   ChatroomRoomRegistry,
-  addRoomRun,
-  createRoom,
   createChatroomOpaqueId,
+  createRoom,
   expandRoomMemberships,
-  roomRunPublicProjectionForItem,
   type Room,
+  roomRunPublicProjectionForItem,
 } from './room.js';
 import {
   resolveExplicitRoomAgentDispatch,
@@ -61,10 +58,37 @@ export interface ChatroomCommandDelivery {
 export type ChatroomComposerAdmissionMode = 'v8' | 'v9';
 
 export type ChatroomCommandIntent =
-  { readonly kind: 'send-message'; readonly roomId: string; readonly roomCreated: boolean; readonly deliveries: readonly [ChatroomCommandDelivery, ...ChatroomCommandDelivery[]]; readonly userItemId: string; readonly bindingId: string; readonly generation: string; readonly dispatchText: string }
-  | { readonly kind: 'approval-decision'; readonly roomId: string; readonly runId: string; readonly turn: string; readonly approvalId: string; readonly decision: 'approved' | 'denied' | 'cancelled' }
-  | { readonly kind: 'playground-approval-decision'; readonly roomId: string; readonly itemId: string; readonly operationId: string; readonly decision: 'approved' | 'denied' | 'cancelled' }
-  | { readonly kind: 'target-error'; readonly roomId?: string; readonly code: 'empty' | 'no-recipients' | 'missing' | 'ambiguous' | 'empty-targeted-message'; readonly mention?: string };
+  | {
+    readonly kind: 'send-message';
+    readonly roomId: string;
+    readonly roomCreated: boolean;
+    readonly deliveries: readonly [ChatroomCommandDelivery, ...ChatroomCommandDelivery[]];
+    readonly userItemId: string;
+    readonly bindingId: string;
+    readonly generation: string;
+    readonly dispatchText: string;
+  }
+  | {
+    readonly kind: 'approval-decision';
+    readonly roomId: string;
+    readonly runId: string;
+    readonly turn: string;
+    readonly approvalId: string;
+    readonly decision: 'approved' | 'denied' | 'cancelled';
+  }
+  | {
+    readonly kind: 'playground-approval-decision';
+    readonly roomId: string;
+    readonly itemId: string;
+    readonly operationId: string;
+    readonly decision: 'approved' | 'denied' | 'cancelled';
+  }
+  | {
+    readonly kind: 'target-error';
+    readonly roomId?: string;
+    readonly code: 'empty' | 'no-recipients' | 'missing' | 'ambiguous' | 'empty-targeted-message';
+    readonly mention?: string;
+  };
 
 export interface ChatroomPlaygroundSourceCorrelation {
   /** Exact Session identity for route-independent Room discovery. */
@@ -86,7 +110,14 @@ export type ChatroomPlaygroundSourceInspection =
   }
   | {
     readonly status: 'unavailable';
-    readonly code: 'missing' | 'deleted' | 'archived' | 'retired' | 'stale-binding' | 'generation-invalid' | 'correlation-invalid';
+    readonly code:
+      | 'missing'
+      | 'deleted'
+      | 'archived'
+      | 'retired'
+      | 'stale-binding'
+      | 'generation-invalid'
+      | 'correlation-invalid';
   };
 
 export type ChatroomPlaygroundMessagePlan =
@@ -100,7 +131,7 @@ export type ChatroomPlaygroundMessagePlan =
     readonly text: string;
     readonly replayed: boolean;
   }
-  | { readonly status: 'conflict'; readonly code: 'operation-conflict' };
+  | { readonly status: 'conflict'; readonly code: 'operation-conflict'; };
 
 export interface ChatroomPlaygroundAgentReplyCorrelation {
   readonly turnId?: string;
@@ -135,13 +166,13 @@ export type ChatroomPlaygroundAgentReplyProjection =
     readonly code: 'missing' | 'ambiguous' | 'empty-targeted-message' | 'self-target';
     readonly mention: string;
   }
-  | { readonly status: 'conflict'; readonly code: 'operation-conflict' };
+  | { readonly status: 'conflict'; readonly code: 'operation-conflict'; };
 
 export interface ChatroomPlaygroundDelegationContext {
-  readonly source: { readonly memberId: string; readonly label: string; readonly runId: string };
-  readonly target: { readonly memberId: string; readonly label: string; readonly runId: string };
-  readonly reportsTo?: { readonly memberId: string; readonly label: string };
-  readonly availableTargets: readonly { readonly memberId: string; readonly label: string }[];
+  readonly source: { readonly memberId: string; readonly label: string; readonly runId: string; };
+  readonly target: { readonly memberId: string; readonly label: string; readonly runId: string; };
+  readonly reportsTo?: { readonly memberId: string; readonly label: string; };
+  readonly availableTargets: readonly { readonly memberId: string; readonly label: string; }[];
   readonly communicationMode: 'explicit-mention-required';
   readonly approvalMode: 'reports-to-hierarchy';
 }
@@ -163,8 +194,8 @@ export type ChatroomPlaygroundAgentDelegationProjection =
     readonly timestamp: string;
     readonly replayed: boolean;
   }
-  | { readonly status: 'missing-target' }
-  | { readonly status: 'conflict'; readonly code: 'operation-conflict' };
+  | { readonly status: 'missing-target'; }
+  | { readonly status: 'conflict'; readonly code: 'operation-conflict'; };
 
 export type ChatroomPlaygroundAgentApprovalProjection =
   | {
@@ -182,27 +213,37 @@ export type ChatroomPlaygroundAgentApprovalProjection =
     readonly replayed: boolean;
     readonly decisionOperationId?: string;
   }
-  | { readonly status: 'missing' }
-  | { readonly status: 'conflict'; readonly code: 'operation-conflict' | 'approval-conflict' | 'decision-capacity' };
+  | { readonly status: 'missing'; }
+  | { readonly status: 'conflict'; readonly code: 'operation-conflict' | 'approval-conflict' | 'decision-capacity'; };
 
 const sourceKey = (binding: Readonly<AgentConversationShellBinding>, generation: string) =>
   `${binding.bindingId}:${binding.ownerGeneration}:${generation}`;
 
 const roomUsesOperationId = (room: Room, operationId: string): boolean =>
-  room.items.some(item => item.kind === 'message'
+  room.items.some(item =>
+    item.kind === 'message'
     && item.semantic.purpose === 'conversation'
-    && item.semantic.causation?.operationId === operationId)
+    && item.semantic.causation?.operationId === operationId
+  )
   || room.deliveries.some(delivery => delivery.operationId === operationId)
-  || room.outbox.some(delivery => delivery.send.operationId === operationId
-    || (delivery.create.state !== 'not-required' && delivery.create.operationId === operationId))
-  || room.approvalDecisions.some(decision => decision.operationId === operationId
-    || decision.requestOperationId === operationId)
-  || room.runs.some(run => run.rebind?.operationId === operationId
+  || room.outbox.some(delivery =>
+    delivery.send.operationId === operationId
+    || (delivery.create.state !== 'not-required' && delivery.create.operationId === operationId)
+  )
+  || room.approvalDecisions.some(decision =>
+    decision.operationId === operationId
+    || decision.requestOperationId === operationId
+  )
+  || room.runs.some(run =>
+    run.rebind?.operationId === operationId
     || run.selfIntroduction?.operationId === operationId
-    || run.selfIntroduction?.cancellation?.operationId === operationId)
+    || run.selfIntroduction?.cancellation?.operationId === operationId
+  )
   || (room.playgroundAgentEgresses ?? []).some(egress => egress.operationId === operationId)
-  || (room.playgroundAgentApprovals ?? []).some(approval => approval.operationId === operationId
-    || approval.decisionAttempts.some(attempt => attempt.operationId === operationId));
+  || (room.playgroundAgentApprovals ?? []).some(approval =>
+    approval.operationId === operationId
+    || approval.decisionAttempts.some(attempt => attempt.operationId === operationId)
+  );
 
 // A snapshot can contain up to 500 ordered items. Reserving that bounded
 // window lets a no-room source later replace itself with a complete Room
@@ -249,7 +290,7 @@ class ChatroomSubscriptionStream {
     this.enqueue({ kind: 'snapshot-replaced', sequence: snapshot.snapshotSequence, snapshot });
   }
 
-  publish(update: Extract<AgentConversationShellUpdate, { kind: 'item-appended' | 'item-updated' }>): void {
+  publish(update: Extract<AgentConversationShellUpdate, { kind: 'item-appended' | 'item-updated'; }>): void {
     if (this.terminal) return;
     this.enqueue(update);
   }
@@ -275,7 +316,9 @@ class ChatroomSubscriptionStream {
     }
     while (true) {
       if (this.updates.length === 0) {
-        await new Promise<void>(resolve => { this.resolveNext = resolve; });
+        await new Promise<void>(resolve => {
+          this.resolveNext = resolve;
+        });
       }
       const update = this.updates.shift();
       if (update === undefined) continue;
@@ -331,7 +374,9 @@ export class ChatroomConversationSource implements AgentConversationShellSource 
     // replay log. A stale cursor must be re-bound by the Host rather than
     // receiving a discontinuous replay page.
     if (this.disposed || afterSequence !== this.snapshotValue.snapshotSequence) {
-      return { result: { type: 'subscribe', status: 'unavailable', code: this.disposed ? 'disposed' : 'generation-replaced' } };
+      return {
+        result: { type: 'subscribe', status: 'unavailable', code: this.disposed ? 'disposed' : 'generation-replaced' },
+      };
     }
     const subscription: AgentConversationShellSubscription = {
       subscriptionId: `chatroom-${this.subscriptionCount += 1}`,
@@ -351,7 +396,11 @@ export class ChatroomConversationSource implements AgentConversationShellSource 
     };
   }
 
-  async updateRoomSettings(request: Parameters<AgentConversationShellSource['updateRoomSettings']>[0]): Promise<ReturnType<AgentConversationShellSource['updateRoomSettings']> extends Promise<infer Result> ? Result : never> {
+  async updateRoomSettings(
+    request: Parameters<AgentConversationShellSource['updateRoomSettings']>[0],
+  ): Promise<
+    ReturnType<AgentConversationShellSource['updateRoomSettings']> extends Promise<infer Result> ? Result : never
+  > {
     const fence = {
       type: 'update-room-settings' as const,
       requestId: request.requestId,
@@ -361,8 +410,10 @@ export class ChatroomConversationSource implements AgentConversationShellSource 
       expectedSnapshotSequence: request.expectedSnapshotSequence,
     };
     if (this.disposed) return { ...fence, status: 'unavailable', code: 'disposed' };
-    if (request.binding.bindingId !== this.binding.bindingId
-      || request.binding.ownerGeneration !== this.binding.ownerGeneration) {
+    if (
+      request.binding.bindingId !== this.binding.bindingId
+      || request.binding.ownerGeneration !== this.binding.ownerGeneration
+    ) {
       return { ...fence, status: 'conflict', code: 'owner-conflict' };
     }
     if (request.generation !== this.snapshotValue.generation) {
@@ -386,7 +437,9 @@ export class ChatroomConversationSource implements AgentConversationShellSource 
     }
     if (request.expectedSnapshotSequence !== this.snapshotValue.snapshotSequence) {
       return {
-        ...fence, status: 'conflict', code: 'snapshot-conflict',
+        ...fence,
+        status: 'conflict',
+        code: 'snapshot-conflict',
         currentSnapshotSequence: this.snapshotValue.snapshotSequence,
       };
     }
@@ -413,22 +466,32 @@ export class ChatroomConversationSource implements AgentConversationShellSource 
     this.snapshotValue = next;
     const sameSelection = JSON.stringify(previous.selection) === JSON.stringify(next.selection);
     const prefixUnchanged = previous.items.every((item, index) =>
-      JSON.stringify(item) === JSON.stringify(next.items[index]));
+      JSON.stringify(item) === JSON.stringify(next.items[index])
+    );
     if (sameSelection && next.items.length === previous.items.length + 1 && prefixUnchanged) {
       const item = next.items.at(-1)!;
-      for (const stream of this.streams) stream.publish({
-        kind: 'item-appended', sequence: next.snapshotSequence, item,
-      });
+      for (const stream of this.streams) {
+        stream.publish({
+          kind: 'item-appended',
+          sequence: next.snapshotSequence,
+          item,
+        });
+      }
       return;
     }
     const changed = previous.items.flatMap((item, index) =>
-      JSON.stringify(item) === JSON.stringify(next.items[index]) ? [] : [index]);
+      JSON.stringify(item) === JSON.stringify(next.items[index]) ? [] : [index]
+    );
     if (sameSelection && previous.items.length === next.items.length && changed.length === 1) {
       const index = changed[0];
       if (previous.items[index].itemId === next.items[index].itemId) {
-        for (const stream of this.streams) stream.publish({
-          kind: 'item-updated', sequence: next.snapshotSequence, item: next.items[index],
-        });
+        for (const stream of this.streams) {
+          stream.publish({
+            kind: 'item-updated',
+            sequence: next.snapshotSequence,
+            item: next.items[index],
+          });
+        }
         return;
       }
     }
@@ -481,9 +544,11 @@ export class ChatroomConversationController {
     );
     this.nextMessageNumber = this.nextNumericId(
       hydrated.flatMap(room => [
-        ...room.items.flatMap(item => item.kind === 'message'
-          ? [item.itemId, item.messageId]
-          : [item.itemId]),
+        ...room.items.flatMap(item =>
+          item.kind === 'message'
+            ? [item.itemId, item.messageId]
+            : [item.itemId]
+        ),
         ...room.acknowledgements.map(item => item.userItemId),
         ...room.deliveries.map(item => item.userItemId),
         ...room.outbox.map(item => item.userItemId),
@@ -499,7 +564,7 @@ export class ChatroomConversationController {
 
   createSource(
     binding: Readonly<AgentConversationShellBinding>,
-    options: Readonly<{ admissionMode?: ChatroomComposerAdmissionMode }> = {},
+    options: Readonly<{ admissionMode?: ChatroomComposerAdmissionMode; }> = {},
   ): ChatroomConversationSource {
     if (this.ownerGenerationValue !== binding.ownerGeneration) {
       this.ownerGenerationValue = binding.ownerGeneration;
@@ -528,7 +593,9 @@ export class ChatroomConversationController {
       },
     );
     this.sources.set(key, {
-      binding, source, admissionMode: options.admissionMode,
+      binding,
+      source,
+      admissionMode: options.admissionMode,
       roomId: binding.routeSelection.selectedRoomParam,
     });
     this.playgroundSourceCorrelations.set(key, {
@@ -558,30 +625,49 @@ export class ChatroomConversationController {
     if (active === undefined) return undefined;
 
     if (context.scope === 'approval') {
-      const decision = context.command.id === CHATROOM_COMMAND_APPROVAL_APPROVE ? 'approved'
-        : context.command.id === CHATROOM_COMMAND_APPROVAL_DENY ? 'denied'
-          : context.command.id === CHATROOM_COMMAND_APPROVAL_CANCEL ? 'cancelled' : undefined;
+      const decision = context.command.id === CHATROOM_COMMAND_APPROVAL_APPROVE
+        ? 'approved'
+        : context.command.id === CHATROOM_COMMAND_APPROVAL_DENY
+        ? 'denied'
+        : context.command.id === CHATROOM_COMMAND_APPROVAL_CANCEL
+        ? 'cancelled'
+        : undefined;
       const roomId = active.binding.routeSelection.selectedRoomParam;
       const room = roomId === undefined ? undefined : this.rooms.get(roomId);
       const item = room?.items
         .find(candidate => candidate.itemId === context.itemId);
-      if (decision === undefined || roomId === undefined || item?.kind !== 'approval'
+      if (
+        decision === undefined || roomId === undefined || item?.kind !== 'approval'
         || item.state !== 'pending'
-        || !item.actions.some(action => action.decision === context.command.id.split('.').at(-1)
-          && action.command.id === context.command.id)) return undefined;
+        || !item.actions.some(action =>
+          action.decision === context.command.id.split('.').at(-1)
+          && action.command.id === context.command.id
+        )
+      ) return undefined;
       const playgroundApproval = room?.playgroundAgentApprovals
         ?.find(candidate => candidate.itemId === item.itemId && candidate.approvalId === item.approvalId);
       if (playgroundApproval !== undefined) {
         return {
-          kind: 'playground-approval-decision', roomId, itemId: item.itemId, decision,
+          kind: 'playground-approval-decision',
+          roomId,
+          itemId: item.itemId,
+          decision,
           operationId: approvalDecisionOperationId(
-            roomId, item.runId, item.turn, item.approvalId, decision,
+            roomId,
+            item.runId,
+            item.turn,
+            item.approvalId,
+            decision,
           ),
         };
       }
       return {
-        kind: 'approval-decision', roomId, runId: item.runId, turn: item.turn,
-        approvalId: item.approvalId, decision,
+        kind: 'approval-decision',
+        roomId,
+        runId: item.runId,
+        turn: item.turn,
+        approvalId: item.approvalId,
+        decision,
       };
     }
     if (context.scope !== 'composer-submit' || context.command.id !== CHATROOM_COMMAND_SUBMIT) return undefined;
@@ -611,7 +697,9 @@ export class ChatroomConversationController {
       ? this.createRoomWithFirstMessage(submitPayload)
       : this.appendPendingMessage(selectedRoomId, submitPayload);
     if ('error' in prepared) {
-      if (selectedRoomId !== undefined) this.appendTargetError(selectedRoomId, prepared.error, 'mention' in prepared ? prepared.mention : undefined);
+      if (selectedRoomId !== undefined) {
+        this.appendTargetError(selectedRoomId, prepared.error, 'mention' in prepared ? prepared.mention : undefined);
+      }
       return {
         kind: 'target-error',
         ...(selectedRoomId === undefined ? {} : { roomId: selectedRoomId }),
@@ -622,38 +710,49 @@ export class ChatroomConversationController {
     const { room, deliveries, dispatchText, userItemId } = prepared;
     this.rooms.upsert(room);
     const intent: ChatroomCommandIntent = {
-      kind: 'send-message', roomId: room.id, roomCreated: selectedRoomId === undefined,
-      deliveries, userItemId,
-      bindingId: correlationId, generation, dispatchText,
+      kind: 'send-message',
+      roomId: room.id,
+      roomCreated: selectedRoomId === undefined,
+      deliveries,
+      userItemId,
+      bindingId: correlationId,
+      generation,
+      dispatchText,
     };
     this.pending.push(intent);
     return intent;
   }
 
-  selectedRoomId(context: Readonly<{
-    binding: { readonly bindingId: string; readonly ownerGeneration: string };
-    generation: string;
-  }>): string | undefined {
+  selectedRoomId(
+    context: Readonly<{
+      binding: { readonly bindingId: string; readonly ownerGeneration: string; };
+      generation: string;
+    }>,
+  ): string | undefined {
     return this.sources.get(
       `${context.binding.bindingId}:${context.binding.ownerGeneration}:${context.generation}`,
     )?.roomId;
   }
 
   /** Versioned Shell sources never downgrade a composer submit to v6/v7 admission. */
-  requiresAdmissionOrigin(context: Readonly<{
-    binding: { readonly bindingId: string; readonly ownerGeneration: string };
-    generation: string;
-  }>): boolean {
+  requiresAdmissionOrigin(
+    context: Readonly<{
+      binding: { readonly bindingId: string; readonly ownerGeneration: string; };
+      generation: string;
+    }>,
+  ): boolean {
     return this.sources.get(
       `${context.binding.bindingId}:${context.binding.ownerGeneration}:${context.generation}`,
     )?.admissionMode !== undefined;
   }
 
   /** The exact public Shell admission contract selected for this live source. */
-  composerAdmissionMode(context: Readonly<{
-    binding: { readonly bindingId: string; readonly ownerGeneration: string };
-    generation: string;
-  }>): ChatroomComposerAdmissionMode | undefined {
+  composerAdmissionMode(
+    context: Readonly<{
+      binding: { readonly bindingId: string; readonly ownerGeneration: string; };
+      generation: string;
+    }>,
+  ): ChatroomComposerAdmissionMode | undefined {
     return this.sources.get(
       `${context.binding.bindingId}:${context.binding.ownerGeneration}:${context.generation}`,
     )?.admissionMode;
@@ -677,21 +776,27 @@ export class ChatroomConversationController {
     correlation: Readonly<ChatroomPlaygroundSourceCorrelation>,
   ): ChatroomPlaygroundSourceInspection {
     if (correlation.sessionId !== undefined) {
-      const matches = this.rooms.snapshot().flatMap(room => room.runs
-        .filter(run => run.sessionId === correlation.sessionId)
-        .map(run => ({ room, run })));
+      const matches = this.rooms.snapshot().flatMap(room =>
+        room.runs
+          .filter(run => run.sessionId === correlation.sessionId)
+          .map(run => ({ room, run }))
+      );
       if (matches.length !== 1) {
         return { status: 'unavailable', code: matches.length === 0 ? 'missing' : 'correlation-invalid' };
       }
       const { room, run } = matches[0]!;
-      if (room.id !== correlation.roomId || run.runId !== correlation.runId
-        || run.memberId !== correlation.memberId) {
+      if (
+        room.id !== correlation.roomId || run.runId !== correlation.runId
+        || run.memberId !== correlation.memberId
+      ) {
         return { status: 'unavailable', code: 'correlation-invalid' };
       }
       if (room.archived) return { status: 'unavailable', code: 'archived' };
       const member = room.memberships.find(candidate => candidate.memberId === run.memberId);
-      if (member === undefined || this.isRunLocallyUnavailable(room.id, run.runId)
-        || (run.presence.state !== 'joined' && run.presence.state !== 'ready')) {
+      if (
+        member === undefined || this.isRunLocallyUnavailable(room.id, run.runId)
+        || (run.presence.state !== 'joined' && run.presence.state !== 'ready')
+      ) {
         return { status: 'unavailable', code: 'retired' };
       }
       return { status: 'available', room, run, member };
@@ -700,7 +805,8 @@ export class ChatroomConversationController {
     const source = this.sources.get(key) ?? this.playgroundSourceCorrelations.get(key);
     if (source === undefined) {
       const sameBinding = [...this.playgroundSourceCorrelations.values()].filter(candidate =>
-        candidate.binding.bindingId === correlation.bindingId);
+        candidate.binding.bindingId === correlation.bindingId
+      );
       if (sameBinding.some(candidate => candidate.binding.ownerGeneration === correlation.ownerGeneration)) {
         return { status: 'unavailable', code: 'generation-invalid' };
       }
@@ -709,8 +815,10 @@ export class ChatroomConversationController {
         code: sameBinding.length === 0 ? 'stale-binding' : 'retired',
       };
     }
-    if (source.roomId !== correlation.roomId
-      || source.binding.routeSelection.selectedRoomParam !== correlation.roomId) {
+    if (
+      source.roomId !== correlation.roomId
+      || source.binding.routeSelection.selectedRoomParam !== correlation.roomId
+    ) {
       return { status: 'unavailable', code: 'correlation-invalid' };
     }
     const room = this.rooms.get(correlation.roomId);
@@ -728,8 +836,10 @@ export class ChatroomConversationController {
     }
     const hasRuntimeIdentity = run.sessionId !== undefined
       || (run.taskBinding?.state === 'active' && run.detailsUrl !== undefined);
-    if (this.isRunLocallyUnavailable(room.id, run.runId) || !hasRuntimeIdentity
-      || (run.presence.state !== 'joined' && run.presence.state !== 'ready')) {
+    if (
+      this.isRunLocallyUnavailable(room.id, run.runId) || !hasRuntimeIdentity
+      || (run.presence.state !== 'joined' && run.presence.state !== 'ready')
+    ) {
       return { status: 'unavailable', code: 'retired' };
     }
     return { status: 'available', room, run, member };
@@ -749,15 +859,21 @@ export class ChatroomConversationController {
     if (text === '') throw new Error('Playground message text is empty.');
     const itemId = createChatroomOpaqueId('simulator-entry', operationId);
     const messageId = createChatroomOpaqueId('simulator-message', operationId);
-    const existingInAnotherRoom = this.rooms.snapshot().some(room => room.id !== correlation.roomId
+    const existingInAnotherRoom = this.rooms.snapshot().some(room =>
+      room.id !== correlation.roomId
       && (room.deliveries.some(delivery => delivery.operationId === operationId)
-        || room.items.some(item => item.kind === 'message'
+        || room.items.some(item =>
+          item.kind === 'message'
           && item.semantic.purpose === 'conversation'
-          && item.semantic.causation?.operationId === operationId)));
+          && item.semantic.causation?.operationId === operationId
+        ))
+    );
     if (existingInAnotherRoom) return { status: 'conflict', code: 'operation-conflict' };
-    const existing = inspection.room.items.find(item => item.kind === 'message'
+    const existing = inspection.room.items.find(item =>
+      item.kind === 'message'
       && item.semantic.purpose === 'conversation'
-      && item.semantic.causation?.operationId === operationId);
+      && item.semantic.causation?.operationId === operationId
+    );
     if (existing?.kind === 'message') {
       const exactBody = existing.body.length === 1 && existing.body[0].kind === 'text'
         && existing.body[0].text.fallback === text;
@@ -768,18 +884,27 @@ export class ChatroomConversationController {
       const exactDelivery = delivery === undefined || (delivery.stage === 'send'
         && delivery.userItemId === existing.itemId && delivery.memberId === correlation.memberId
         && delivery.runId === correlation.runId);
-      if (!exactBody || !exactTarget || !exactDelivery
-        || existing.itemId !== itemId || existing.messageId !== messageId) {
+      if (
+        !exactBody || !exactTarget || !exactDelivery
+        || existing.itemId !== itemId || existing.messageId !== messageId
+      ) {
         return { status: 'conflict', code: 'operation-conflict' };
       }
       return {
-        status: 'accepted', roomId: correlation.roomId, runId: correlation.runId,
-        memberId: correlation.memberId, userItemId: existing.itemId,
-        messageId: existing.messageId, text, replayed: true,
+        status: 'accepted',
+        roomId: correlation.roomId,
+        runId: correlation.runId,
+        memberId: correlation.memberId,
+        userItemId: existing.itemId,
+        messageId: existing.messageId,
+        text,
+        replayed: true,
       };
     }
-    if (inspection.room.deliveries.some(delivery => delivery.operationId === operationId)
-      || inspection.room.outbox.some(delivery => delivery.send.operationId === operationId)) {
+    if (
+      inspection.room.deliveries.some(delivery => delivery.operationId === operationId)
+      || inspection.room.outbox.some(delivery => delivery.send.operationId === operationId)
+    ) {
       return { status: 'conflict', code: 'operation-conflict' };
     }
     const participants = inspection.room.participants.some(participant => participant.id === 'user')
@@ -787,15 +912,24 @@ export class ChatroomConversationController {
       : [...inspection.room.participants, { id: 'user', name: 'You', kind: 'human' as const }];
     const sequence = inspection.room.timelineSequence + 1;
     const item: AgentConversationItem = {
-      kind: 'message', itemId, messageId, sequence, source: 'agent-loop',
+      kind: 'message',
+      itemId,
+      messageId,
+      sequence,
+      source: 'agent-loop',
       semantic: { purpose: 'conversation', causation: { operationId } },
       author: {
-        participantId: 'user', role: 'human',
+        participantId: 'user',
+        role: 'human',
         displayName: { namespace: 'chatroom', key: 'participant.name', fallback: 'You' },
       },
       body: [{ kind: 'text', text: { namespace: 'chatroom', key: 'message.user', fallback: text } }],
-      reactions: [], timestamp: now(), deliveryState: 'pending', runState: 'idle',
-      ariaLive: 'off', actions: [],
+      reactions: [],
+      timestamp: now(),
+      deliveryState: 'pending',
+      runState: 'idle',
+      ariaLive: 'off',
+      actions: [],
     };
     this.rooms.upsert(createRoom({
       ...inspection.room,
@@ -804,8 +938,14 @@ export class ChatroomConversationController {
       timelineSequence: sequence,
     }));
     return {
-      status: 'accepted', roomId: correlation.roomId, runId: correlation.runId,
-      memberId: correlation.memberId, userItemId: itemId, messageId, text, replayed: false,
+      status: 'accepted',
+      roomId: correlation.roomId,
+      runId: correlation.runId,
+      memberId: correlation.memberId,
+      userItemId: itemId,
+      messageId,
+      text,
+      replayed: false,
     };
   }
 
@@ -841,7 +981,8 @@ export class ChatroomConversationController {
         ? dispatch.recipients.map(recipient => recipient.memberId)
         : [];
       const existingTargetMemberIds = existing.recipients?.map(recipient => recipient.targetMemberId) ?? [];
-      if (existing.participantId !== inspection.member.participantId
+      if (
+        existing.participantId !== inspection.member.participantId
         || existing.memberId !== correlation.memberId
         || existing.runId !== correlation.runId
         || existing.shellBindingId !== correlation.bindingId
@@ -852,14 +993,21 @@ export class ChatroomConversationController {
         || JSON.stringify(existingTargetMemberIds) !== JSON.stringify(expectedTargetMemberIds)
         || existing.turnId !== turnId
         || existing.sourceMessageId !== sourceMessageId
-        || existing.inReplyToMessageId !== inReplyToMessageId) {
+        || existing.inReplyToMessageId !== inReplyToMessageId
+      ) {
         return { status: 'conflict', code: 'operation-conflict' };
       }
       return {
-        status: 'accepted', roomId: correlation.roomId, runId: correlation.runId,
-        memberId: correlation.memberId, participantId: existing.participantId,
-        itemId: existing.itemId, messageId: existing.messageId, text: existing.text,
-        timestamp: existing.timestamp, replayed: true,
+        status: 'accepted',
+        roomId: correlation.roomId,
+        runId: correlation.runId,
+        memberId: correlation.memberId,
+        participantId: existing.participantId,
+        itemId: existing.itemId,
+        messageId: existing.messageId,
+        text: existing.text,
+        timestamp: existing.timestamp,
+        replayed: true,
         ...(existing.recipients === undefined ? {} : { recipients: existing.recipients }),
         ...(existing.turnId === undefined ? {} : { turnId: existing.turnId }),
         ...(existing.sourceMessageId === undefined ? {} : { sourceMessageId: existing.sourceMessageId }),
@@ -896,8 +1044,7 @@ export class ChatroomConversationController {
             recipient.memberId,
           );
           targetRunId = createChatroomOpaqueId('agent-message-run', operationId, recipient.memberId);
-          const targetMember = roomWithRecipients.memberships.find(member =>
-            member.memberId === recipient.memberId)!;
+          const targetMember = roomWithRecipients.memberships.find(member => member.memberId === recipient.memberId)!;
           roomWithRecipients = addRoomRun(roomWithRecipients, {
             runId: targetRunId,
             memberId: recipient.memberId,
@@ -913,16 +1060,24 @@ export class ChatroomConversationController {
         });
       })
       : undefined;
-    const item: Extract<AgentConversationItem, { kind: 'message' }> = {
-      kind: 'message', itemId, messageId: itemId, sequence, source: 'agent-loop',
+    const item: Extract<AgentConversationItem, { kind: 'message'; }> = {
+      kind: 'message',
+      itemId,
+      messageId: itemId,
+      sequence,
+      source: 'agent-loop',
       semantic: { purpose: 'conversation', causation: { operationId } },
       author: participant,
       body: [{
         kind: 'text',
         text: { namespace: 'chatroom', key: 'message.playground-agent-egress', fallback: text },
       }],
-      reactions: [], timestamp, deliveryState: 'delivered', runState: 'idle',
-      ariaLive: 'polite', actions: [],
+      reactions: [],
+      timestamp,
+      deliveryState: 'delivered',
+      runState: 'idle',
+      ariaLive: 'polite',
+      actions: [],
     };
     const publicProjection = roomRunPublicProjectionForItem(item);
     const egress = {
@@ -946,9 +1101,11 @@ export class ChatroomConversationController {
       ...roomWithRecipients,
       items: [...roomWithRecipients.items, item],
       timelineSequence: sequence,
-      runs: roomWithRecipients.runs.map(run => run.runId === correlation.runId
-        ? { ...run, publicProjections: [...(run.publicProjections ?? []), publicProjection] }
-        : run),
+      runs: roomWithRecipients.runs.map(run =>
+        run.runId === correlation.runId
+          ? { ...run, publicProjections: [...(run.publicProjections ?? []), publicProjection] }
+          : run
+      ),
       playgroundAgentEgresses: [...(roomWithRecipients.playgroundAgentEgresses ?? []), {
         ...egress,
         ...(recipients === undefined ? {} : { recipients }),
@@ -956,9 +1113,16 @@ export class ChatroomConversationController {
     });
     await this.commitDirectRoom(next);
     return {
-      status: 'accepted', roomId: correlation.roomId, runId: correlation.runId,
-      memberId: correlation.memberId, participantId: inspection.member.participantId,
-      itemId, messageId: itemId, text, timestamp, replayed: false,
+      status: 'accepted',
+      roomId: correlation.roomId,
+      runId: correlation.runId,
+      memberId: correlation.memberId,
+      participantId: inspection.member.participantId,
+      itemId,
+      messageId: itemId,
+      text,
+      timestamp,
+      replayed: false,
       ...(recipients === undefined ? {} : { recipients }),
       ...(turnId === undefined ? {} : { turnId }),
       ...(sourceMessageId === undefined ? {} : { sourceMessageId }),
@@ -981,12 +1145,14 @@ export class ChatroomConversationController {
     const task = textValue.trim();
     if (task === '') throw new Error('Delegated task text is empty.');
     const targetMember = inspection.room.memberships.find(candidate =>
-      candidate.memberId === targetMemberId && candidate.memberId !== correlation.memberId);
+      candidate.memberId === targetMemberId && candidate.memberId !== correlation.memberId
+    );
     if (targetMember === undefined) return { status: 'missing-target' };
     const announcement = `已向 @${targetMember.label} 下发任务：${task}${/[。！？.!?]$/u.test(task) ? '' : '。'}`;
     const targetRunId = createChatroomOpaqueId('session-delegation-run', operationId);
     const itemId = createChatroomOpaqueId('session-agent-delegation', operationId);
-    const reportsTo = targetMember.reportsToMemberId === undefined ? undefined
+    const reportsTo = targetMember.reportsToMemberId === undefined
+      ? undefined
       : inspection.room.memberships.find(member => member.memberId === targetMember.reportsToMemberId);
     const context: ChatroomPlaygroundDelegationContext = Object.freeze({
       source: Object.freeze({
@@ -1002,22 +1168,26 @@ export class ChatroomConversationController {
       ...(reportsTo === undefined ? {} : {
         reportsTo: Object.freeze({ memberId: reportsTo.memberId, label: reportsTo.label }),
       }),
-      availableTargets: Object.freeze(inspection.room.memberships
-        .filter(member => member.memberId !== targetMember.memberId)
-        .map(member => Object.freeze({ memberId: member.memberId, label: member.label }))),
+      availableTargets: Object.freeze(
+        inspection.room.memberships
+          .filter(member => member.memberId !== targetMember.memberId)
+          .map(member => Object.freeze({ memberId: member.memberId, label: member.label })),
+      ),
       communicationMode: 'explicit-mention-required',
       approvalMode: 'reports-to-hierarchy',
     });
     const existingItem = inspection.room.items.find(item => item.itemId === itemId);
     const existingRun = inspection.room.runs.find(run => run.runId === targetRunId);
     if (existingItem !== undefined || existingRun !== undefined) {
-      if (existingItem?.kind !== 'message'
+      if (
+        existingItem?.kind !== 'message'
         || existingItem.source !== 'chatroom-acknowledgement'
         || existingItem.author.participantId !== inspection.member.participantId
         || existingItem.body.length !== 1
         || existingItem.body[0].kind !== 'text'
         || existingItem.body[0].text.fallback !== announcement
-        || existingRun?.memberId !== targetMemberId) {
+        || existingRun?.memberId !== targetMemberId
+      ) {
         return { status: 'conflict', code: 'operation-conflict' };
       }
       let replayItem = existingItem;
@@ -1032,12 +1202,20 @@ export class ChatroomConversationController {
         }));
       }
       return {
-        status: 'accepted', roomId: correlation.roomId,
-        sourceRunId: correlation.runId, sourceMemberId: correlation.memberId,
+        status: 'accepted',
+        roomId: correlation.roomId,
+        sourceRunId: correlation.runId,
+        sourceMemberId: correlation.memberId,
         sourceParticipantId: inspection.member.participantId,
-        targetRunId, targetMemberId, targetParticipantId: targetMember.participantId,
-        itemId, messageId: replayItem.messageId, text: task, context,
-        timestamp: replayItem.timestamp, replayed: true,
+        targetRunId,
+        targetMemberId,
+        targetParticipantId: targetMember.participantId,
+        itemId,
+        messageId: replayItem.messageId,
+        text: task,
+        context,
+        timestamp: replayItem.timestamp,
+        replayed: true,
       };
     }
     const participant = projectRoomParticipant(
@@ -1054,8 +1232,11 @@ export class ChatroomConversationController {
     // addRoomRun consumes the next Room sequence for member presence; the
     // delegation acknowledgement follows it in the same atomic commit.
     const sequence = Math.max(inspection.room.timelineSequence + 2, presentationSequence ?? -1);
-    const item: Extract<AgentConversationItem, { kind: 'message' }> = {
-      kind: 'message', itemId, messageId: itemId, sequence,
+    const item: Extract<AgentConversationItem, { kind: 'message'; }> = {
+      kind: 'message',
+      itemId,
+      messageId: itemId,
+      sequence,
       source: 'chatroom-acknowledgement',
       semantic: { purpose: 'chatroom-acknowledgement' },
       author: participant,
@@ -1063,29 +1244,45 @@ export class ChatroomConversationController {
         kind: 'text',
         text: { namespace: 'chatroom', key: 'message.agent-session-delegation', fallback: announcement },
       }],
-      reactions: [], timestamp, deliveryState: 'delivered', runState: 'idle',
-      ariaLive: 'polite', actions: [],
+      reactions: [],
+      timestamp,
+      deliveryState: 'delivered',
+      runState: 'idle',
+      ariaLive: 'polite',
+      actions: [],
     };
-    const withTargetRun = addRoomRun(this.retireLocallyUnavailableRuns(
-      inspection.room,
-      targetMemberId,
-    ), {
-      runId: targetRunId,
-      memberId: targetMemberId,
-      title: `${targetMember.label} delegated run`,
-      status: 'creating',
-    });
+    const withTargetRun = addRoomRun(
+      this.retireLocallyUnavailableRuns(
+        inspection.room,
+        targetMemberId,
+      ),
+      {
+        runId: targetRunId,
+        memberId: targetMemberId,
+        title: `${targetMember.label} delegated run`,
+        status: 'creating',
+      },
+    );
     await this.commitDirectRoom(createRoom({
       ...withTargetRun,
       items: [...withTargetRun.items, item],
       timelineSequence: sequence,
     }));
     return {
-      status: 'accepted', roomId: correlation.roomId,
-      sourceRunId: correlation.runId, sourceMemberId: correlation.memberId,
+      status: 'accepted',
+      roomId: correlation.roomId,
+      sourceRunId: correlation.runId,
+      sourceMemberId: correlation.memberId,
       sourceParticipantId: inspection.member.participantId,
-      targetRunId, targetMemberId, targetParticipantId: targetMember.participantId,
-      itemId, messageId: itemId, text: task, context, timestamp, replayed: false,
+      targetRunId,
+      targetMemberId,
+      targetParticipantId: targetMember.participantId,
+      itemId,
+      messageId: itemId,
+      text: task,
+      context,
+      timestamp,
+      replayed: false,
     };
   }
 
@@ -1103,7 +1300,8 @@ export class ChatroomConversationController {
     const task = textValue.trim();
     if (task === '') throw new Error('Playground delegated task text is empty.');
     const targetMember = inspection.room.memberships.find(candidate =>
-      candidate.memberId === targetMemberId && candidate.memberId !== correlation.memberId);
+      candidate.memberId === targetMemberId && candidate.memberId !== correlation.memberId
+    );
     if (targetMember === undefined) return { status: 'missing-target' };
     const announcementTask = task.replace(/[。！？.!?]+$/u, '');
     const work = announcementTask.replace(/^完成(?:一下)?/u, '').trimStart();
@@ -1112,7 +1310,8 @@ export class ChatroomConversationController {
       : `我会通知 @${targetMember.label} 去完成${work}的工作。`;
     const targetRunId = createChatroomOpaqueId('delegation-run', operationId);
     const itemId = createChatroomOpaqueId('simulator-agent-delegation', operationId);
-    const reportsTo = targetMember.reportsToMemberId === undefined ? undefined
+    const reportsTo = targetMember.reportsToMemberId === undefined
+      ? undefined
       : inspection.room.memberships.find(member => member.memberId === targetMember.reportsToMemberId);
     const context: ChatroomPlaygroundDelegationContext = Object.freeze({
       source: Object.freeze({
@@ -1128,9 +1327,11 @@ export class ChatroomConversationController {
       ...(reportsTo === undefined ? {} : {
         reportsTo: Object.freeze({ memberId: reportsTo.memberId, label: reportsTo.label }),
       }),
-      availableTargets: Object.freeze(inspection.room.memberships
-        .filter(member => member.memberId !== targetMember.memberId)
-        .map(member => Object.freeze({ memberId: member.memberId, label: member.label }))),
+      availableTargets: Object.freeze(
+        inspection.room.memberships
+          .filter(member => member.memberId !== targetMember.memberId)
+          .map(member => Object.freeze({ memberId: member.memberId, label: member.label })),
+      ),
       communicationMode: 'explicit-mention-required',
       approvalMode: 'reports-to-hierarchy',
     });
@@ -1138,7 +1339,8 @@ export class ChatroomConversationController {
       ?.find(egress => egress.operationId === operationId);
     if (existing !== undefined) {
       const targetRun = inspection.room.runs.find(run => run.runId === targetRunId);
-      if (existing.participantId !== inspection.member.participantId
+      if (
+        existing.participantId !== inspection.member.participantId
         || existing.memberId !== correlation.memberId
         || existing.runId !== correlation.runId
         || existing.shellBindingId !== correlation.bindingId
@@ -1154,23 +1356,32 @@ export class ChatroomConversationController {
         || existing.delegation?.targetRunId !== targetRunId
         || (existing.delegation.task ?? existing.text) !== task
         || JSON.stringify(existing.delegation.context) !== JSON.stringify(context)
-        || targetRun?.memberId !== targetMemberId) {
+        || targetRun?.memberId !== targetMemberId
+      ) {
         return { status: 'conflict', code: 'operation-conflict' };
       }
       return {
-        status: 'accepted', roomId: correlation.roomId,
-        sourceRunId: correlation.runId, sourceMemberId: correlation.memberId,
+        status: 'accepted',
+        roomId: correlation.roomId,
+        sourceRunId: correlation.runId,
+        sourceMemberId: correlation.memberId,
         sourceParticipantId: existing.participantId,
-        targetRunId, targetMemberId, targetParticipantId: targetMember.participantId,
-        itemId: existing.itemId, messageId: existing.messageId,
+        targetRunId,
+        targetMemberId,
+        targetParticipantId: targetMember.participantId,
+        itemId: existing.itemId,
+        messageId: existing.messageId,
         text: existing.delegation.task ?? existing.text,
         context,
-        timestamp: existing.timestamp, replayed: true,
+        timestamp: existing.timestamp,
+        replayed: true,
       };
     }
-    if (this.rooms.snapshot().some(room => roomUsesOperationId(room, operationId))
+    if (
+      this.rooms.snapshot().some(room => roomUsesOperationId(room, operationId))
       || inspection.room.runs.some(run => run.runId === targetRunId)
-      || inspection.room.items.some(item => item.itemId === itemId)) {
+      || inspection.room.items.some(item => item.itemId === itemId)
+    ) {
       return { status: 'conflict', code: 'operation-conflict' };
     }
     const participant = projectRoomParticipant(
@@ -1187,29 +1398,42 @@ export class ChatroomConversationController {
     }
     const timestamp = now();
     const sequence = inspection.room.timelineSequence + 1;
-    const item: Extract<AgentConversationItem, { kind: 'message' }> = {
-      kind: 'message', itemId, messageId: itemId, sequence, source: 'agent-loop',
+    const item: Extract<AgentConversationItem, { kind: 'message'; }> = {
+      kind: 'message',
+      itemId,
+      messageId: itemId,
+      sequence,
+      source: 'agent-loop',
       semantic: { purpose: 'conversation', causation: { operationId } },
       author: participant,
       body: [{
         kind: 'text',
         text: {
-          namespace: 'chatroom', key: 'message.playground-agent-delegation', fallback: announcement,
+          namespace: 'chatroom',
+          key: 'message.playground-agent-delegation',
+          fallback: announcement,
         },
       }],
-      reactions: [], timestamp, deliveryState: 'delivered', runState: 'idle',
-      ariaLive: 'polite', actions: [],
+      reactions: [],
+      timestamp,
+      deliveryState: 'delivered',
+      runState: 'idle',
+      ariaLive: 'polite',
+      actions: [],
     };
     const publicProjection = roomRunPublicProjectionForItem(item);
-    const withTargetRun = addRoomRun(this.retireLocallyUnavailableRuns(
-      inspection.room,
-      targetMemberId,
-    ), {
-      runId: targetRunId,
-      memberId: targetMemberId,
-      title: `${targetMember.label} delegated run`,
-      status: 'creating',
-    });
+    const withTargetRun = addRoomRun(
+      this.retireLocallyUnavailableRuns(
+        inspection.room,
+        targetMemberId,
+      ),
+      {
+        runId: targetRunId,
+        memberId: targetMemberId,
+        title: `${targetMember.label} delegated run`,
+        status: 'creating',
+      },
+    );
     const egress = {
       operationId,
       participantId: inspection.member.participantId,
@@ -1229,18 +1453,29 @@ export class ChatroomConversationController {
       ...withTargetRun,
       items: [...withTargetRun.items, item],
       timelineSequence: sequence,
-      runs: withTargetRun.runs.map(run => run.runId === correlation.runId
-        ? { ...run, publicProjections: [...(run.publicProjections ?? []), publicProjection] }
-        : run),
+      runs: withTargetRun.runs.map(run =>
+        run.runId === correlation.runId
+          ? { ...run, publicProjections: [...(run.publicProjections ?? []), publicProjection] }
+          : run
+      ),
       playgroundAgentEgresses: [...(withTargetRun.playgroundAgentEgresses ?? []), egress],
     });
     await this.commitDirectRoom(next);
     return {
-      status: 'accepted', roomId: correlation.roomId,
-      sourceRunId: correlation.runId, sourceMemberId: correlation.memberId,
+      status: 'accepted',
+      roomId: correlation.roomId,
+      sourceRunId: correlation.runId,
+      sourceMemberId: correlation.memberId,
       sourceParticipantId: inspection.member.participantId,
-      targetRunId, targetMemberId, targetParticipantId: targetMember.participantId,
-      itemId, messageId: itemId, text: task, context, timestamp, replayed: false,
+      targetRunId,
+      targetMemberId,
+      targetParticipantId: targetMember.participantId,
+      itemId,
+      messageId: itemId,
+      text: task,
+      context,
+      timestamp,
+      replayed: false,
     };
   }
 
@@ -1259,20 +1494,29 @@ export class ChatroomConversationController {
     const existing = inspection.room.playgroundAgentApprovals
       ?.find(approval => approval.operationId === operationId);
     if (existing !== undefined) {
-      if (existing.participantId !== inspection.member.participantId
+      if (
+        existing.participantId !== inspection.member.participantId
         || existing.memberId !== correlation.memberId
         || existing.runId !== correlation.runId
         || existing.shellBindingId !== correlation.bindingId
         || existing.ownerGeneration !== correlation.ownerGeneration
         || existing.shellGeneration !== correlation.generation
-        || existing.reason !== reason) {
+        || existing.reason !== reason
+      ) {
         return { status: 'conflict', code: 'operation-conflict' };
       }
       return {
-        status: 'accepted', roomId: correlation.roomId, runId: correlation.runId,
-        memberId: correlation.memberId, participantId: existing.participantId,
-        itemId: existing.itemId, turnId: existing.turnId, approvalId: existing.approvalId,
-        reason: existing.reason, state: existing.state, timestamp: existing.timestamp,
+        status: 'accepted',
+        roomId: correlation.roomId,
+        runId: correlation.runId,
+        memberId: correlation.memberId,
+        participantId: existing.participantId,
+        itemId: existing.itemId,
+        turnId: existing.turnId,
+        approvalId: existing.approvalId,
+        reason: existing.reason,
+        state: existing.state,
+        timestamp: existing.timestamp,
         replayed: true,
         ...(existing.decisionAttempts.at(-1)?.operationId === undefined ? {} : {
           decisionOperationId: existing.decisionAttempts.at(-1)!.operationId,
@@ -1291,7 +1535,7 @@ export class ChatroomConversationController {
     const approvalId = createChatroomOpaqueId('simulator-agent-approval-id', operationId);
     const timestamp = now();
     const sequence = inspection.room.timelineSequence + 1;
-    const item: Extract<AgentConversationItem, { kind: 'approval' }> = {
+    const item: Extract<AgentConversationItem, { kind: 'approval'; }> = {
       kind: 'approval',
       itemId,
       sequence,
@@ -1337,16 +1581,27 @@ export class ChatroomConversationController {
       ...inspection.room,
       items: [...inspection.room.items, item],
       timelineSequence: sequence,
-      runs: inspection.room.runs.map(run => run.runId === correlation.runId
-        ? { ...run, publicProjections: [...(run.publicProjections ?? []), publicProjection] }
-        : run),
+      runs: inspection.room.runs.map(run =>
+        run.runId === correlation.runId
+          ? { ...run, publicProjections: [...(run.publicProjections ?? []), publicProjection] }
+          : run
+      ),
       playgroundAgentApprovals: [...(inspection.room.playgroundAgentApprovals ?? []), approval],
     });
     await this.commitDirectRoom(next);
     return {
-      status: 'accepted', roomId: correlation.roomId, runId: correlation.runId,
-      memberId: correlation.memberId, participantId: inspection.member.participantId,
-      itemId, turnId, approvalId, reason, state: 'pending', timestamp, replayed: false,
+      status: 'accepted',
+      roomId: correlation.roomId,
+      runId: correlation.runId,
+      memberId: correlation.memberId,
+      participantId: inspection.member.participantId,
+      itemId,
+      turnId,
+      approvalId,
+      reason,
+      state: 'pending',
+      timestamp,
+      replayed: false,
     };
   }
 
@@ -1364,16 +1619,22 @@ export class ChatroomConversationController {
     const approval = inspection.room.playgroundAgentApprovals
       ?.find(candidate => candidate.approvalId === approvalId);
     if (approval === undefined) return { status: 'missing' };
-    if (approval.participantId !== inspection.member.participantId
+    if (
+      approval.participantId !== inspection.member.participantId
       || approval.memberId !== correlation.memberId
       || approval.runId !== correlation.runId
       || approval.shellBindingId !== correlation.bindingId
       || approval.ownerGeneration !== correlation.ownerGeneration
-      || approval.shellGeneration !== correlation.generation) {
+      || approval.shellGeneration !== correlation.generation
+    ) {
       return { status: 'conflict', code: 'approval-conflict' };
     }
     return await this.completePlaygroundAgentApproval(
-      inspection.room, approval, operationId, decision, now,
+      inspection.room,
+      approval,
+      operationId,
+      decision,
+      now,
     );
   }
 
@@ -1394,11 +1655,17 @@ export class ChatroomConversationController {
     const item = room?.items.find(candidate => candidate.itemId === itemId);
     const approval = room?.playgroundAgentApprovals
       ?.find(candidate => candidate.itemId === itemId);
-    if (room === undefined || item?.kind !== 'approval' || approval === undefined
+    if (
+      room === undefined || item?.kind !== 'approval' || approval === undefined
       || item.approvalId !== approval.approvalId || item.runId !== approval.runId
-      || item.memberId !== approval.memberId) return { status: 'missing' };
+      || item.memberId !== approval.memberId
+    ) return { status: 'missing' };
     return await this.completePlaygroundAgentApproval(
-      room, approval, operationId, decision, now,
+      room,
+      approval,
+      operationId,
+      decision,
+      now,
     );
   }
 
@@ -1416,11 +1683,19 @@ export class ChatroomConversationController {
         return { status: 'conflict', code: 'operation-conflict' };
       }
       return {
-        status: 'accepted', roomId: room.id, runId: approval.runId,
-        memberId: approval.memberId, participantId: approval.participantId,
-        itemId: approval.itemId, turnId: approval.turnId, approvalId: approval.approvalId,
-        reason: approval.reason, state: approval.state, timestamp: approval.timestamp,
-        replayed: true, decisionOperationId: operationId,
+        status: 'accepted',
+        roomId: room.id,
+        runId: approval.runId,
+        memberId: approval.memberId,
+        participantId: approval.participantId,
+        itemId: approval.itemId,
+        turnId: approval.turnId,
+        approvalId: approval.approvalId,
+        reason: approval.reason,
+        state: approval.state,
+        timestamp: approval.timestamp,
+        replayed: true,
+        decisionOperationId: operationId,
       };
     }
     if (this.rooms.snapshot().some(candidate => roomUsesOperationId(candidate, operationId))) {
@@ -1442,7 +1717,7 @@ export class ChatroomConversationController {
     if (item?.kind !== 'approval') {
       throw new Error('Playground Agent approval card is unavailable.');
     }
-    let nextItem: Extract<AgentConversationItem, { kind: 'approval' }> = item;
+    let nextItem: Extract<AgentConversationItem, { kind: 'approval'; }> = item;
     if (approval.state === 'pending') {
       if (item.state !== 'pending') {
         throw new Error('Playground Agent approval state is inconsistent.');
@@ -1453,14 +1728,23 @@ export class ChatroomConversationController {
       ...room,
       items: room.items.map(candidate => candidate.itemId === approval.itemId ? nextItem : candidate),
       playgroundAgentApprovals: room.playgroundAgentApprovals!.map(candidate =>
-        candidate.operationId === approval.operationId ? nextApproval : candidate),
+        candidate.operationId === approval.operationId ? nextApproval : candidate
+      ),
     }));
     return {
-      status: 'accepted', roomId: room.id, runId: approval.runId,
-      memberId: approval.memberId, participantId: approval.participantId,
-      itemId: approval.itemId, turnId: approval.turnId, approvalId: approval.approvalId,
-      reason: approval.reason, state: decision, timestamp: approval.timestamp,
-      replayed: approval.state !== 'pending', decisionOperationId: operationId,
+      status: 'accepted',
+      roomId: room.id,
+      runId: approval.runId,
+      memberId: approval.memberId,
+      participantId: approval.participantId,
+      itemId: approval.itemId,
+      turnId: approval.turnId,
+      approvalId: approval.approvalId,
+      reason: approval.reason,
+      state: decision,
+      timestamp: approval.timestamp,
+      replayed: approval.state !== 'pending',
+      decisionOperationId: operationId,
     };
   }
 
@@ -1487,20 +1771,28 @@ export class ChatroomConversationController {
     for (const active of this.sources.values()) {
       if (active.roomId === roomId) {
         const room = this.rooms.get(roomId);
-        active.source.replace(room === undefined
-          ? createNoRoomConversationModel()
-          : createRoomConversationModel(
-            room,
-            runId => this.isRunLocallyUnavailable(room.id, runId),
-          ));
+        active.source.replace(
+          room === undefined
+            ? createNoRoomConversationModel()
+            : createRoomConversationModel(
+              room,
+              runId => this.isRunLocallyUnavailable(room.id, runId),
+            ),
+        );
       }
     }
   }
 
   private createRoomWithFirstMessage(text: string): {
-    readonly room: Room; readonly deliveries: readonly [ChatroomCommandDelivery, ...ChatroomCommandDelivery[]];
-    readonly displayText: string; readonly dispatchText: string; readonly userItemId: string;
-  } | { readonly error: 'empty' | 'no-recipients' | 'missing' | 'ambiguous' | 'empty-targeted-message'; readonly mention?: string } {
+    readonly room: Room;
+    readonly deliveries: readonly [ChatroomCommandDelivery, ...ChatroomCommandDelivery[]];
+    readonly displayText: string;
+    readonly dispatchText: string;
+    readonly userItemId: string;
+  } | {
+    readonly error: 'empty' | 'no-recipients' | 'missing' | 'ambiguous' | 'empty-targeted-message';
+    readonly mention?: string;
+  } {
     let roomId = `room-${this.nextRoomNumber++}`;
     while (this.rooms.get(roomId) !== undefined) roomId = `room-${this.nextRoomNumber++}`;
     const memberships = expandRoomMemberships(this.configuration);
@@ -1524,18 +1816,30 @@ export class ChatroomConversationController {
   }
 
   private appendPendingMessage(roomId: string, value: string): {
-    readonly room: Room; readonly deliveries: readonly [ChatroomCommandDelivery, ...ChatroomCommandDelivery[]];
-    readonly displayText: string; readonly dispatchText: string; readonly userItemId: string;
-  } | { readonly error: 'empty' | 'no-recipients' | 'missing' | 'ambiguous' | 'empty-targeted-message'; readonly mention?: string } {
+    readonly room: Room;
+    readonly deliveries: readonly [ChatroomCommandDelivery, ...ChatroomCommandDelivery[]];
+    readonly displayText: string;
+    readonly dispatchText: string;
+    readonly userItemId: string;
+  } | {
+    readonly error: 'empty' | 'no-recipients' | 'missing' | 'ambiguous' | 'empty-targeted-message';
+    readonly mention?: string;
+  } {
     const room = this.rooms.get(roomId);
     if (room === undefined) throw new Error('Selected Room is unavailable.');
     return this.appendPendingMessageToRoom(room, value);
   }
 
   private appendPendingMessageToRoom(roomInput: Room, value: string): {
-    readonly room: Room; readonly deliveries: readonly [ChatroomCommandDelivery, ...ChatroomCommandDelivery[]];
-    readonly displayText: string; readonly dispatchText: string; readonly userItemId: string;
-  } | { readonly error: 'empty' | 'no-recipients' | 'missing' | 'ambiguous' | 'empty-targeted-message'; readonly mention?: string } {
+    readonly room: Room;
+    readonly deliveries: readonly [ChatroomCommandDelivery, ...ChatroomCommandDelivery[]];
+    readonly displayText: string;
+    readonly dispatchText: string;
+    readonly userItemId: string;
+  } | {
+    readonly error: 'empty' | 'no-recipients' | 'missing' | 'ambiguous' | 'empty-targeted-message';
+    readonly mention?: string;
+  } {
     let room = roomInput;
     const locallyUnavailableRunIds = this.locallyUnavailableRunIds(room);
     const resolution = resolveRoomMessageDispatch(room, value, [], locallyUnavailableRunIds);
@@ -1576,30 +1880,45 @@ export class ChatroomConversationController {
     const sequence = room.timelineSequence + 1;
     const userItemId = this.nextMessageId();
     const item: AgentConversationItem = {
-      kind: 'message', itemId: userItemId, messageId: this.nextMessageId(), sequence,
+      kind: 'message',
+      itemId: userItemId,
+      messageId: this.nextMessageId(),
+      sequence,
       source: 'agent-loop',
       semantic: { purpose: 'conversation' },
       author: {
-        participantId: 'user', role: 'human',
+        participantId: 'user',
+        role: 'human',
         displayName: { namespace: 'chatroom', key: 'participant.name', fallback: 'You' },
       },
       body: [{ kind: 'text', text: { namespace: 'chatroom', key: 'message.user', fallback: displayText } }],
       reactions: [],
-      timestamp: new Date().toISOString(), deliveryState: 'pending', runState: 'idle', ariaLive: 'off', actions: [],
+      timestamp: new Date().toISOString(),
+      deliveryState: 'pending',
+      runState: 'idle',
+      ariaLive: 'off',
+      actions: [],
     };
-    return { room: createRoom({
-      ...room,
-      participants,
-      items: [...room.items, item],
-      timelineSequence: sequence,
-    }), deliveries: deliveries as [ChatroomCommandDelivery, ...ChatroomCommandDelivery[]],
-    displayText, dispatchText: resolution.content, userItemId };
+    return {
+      room: createRoom({
+        ...room,
+        participants,
+        items: [...room.items, item],
+        timelineSequence: sequence,
+      }),
+      deliveries: deliveries as [ChatroomCommandDelivery, ...ChatroomCommandDelivery[]],
+      displayText,
+      dispatchText: resolution.content,
+      userItemId,
+    };
   }
 
   private locallyUnavailableRunIds(room: Room): ReadonlySet<string> {
-    return new Set(room.runs
-      .filter(run => this.isRunLocallyUnavailable(room.id, run.runId))
-      .map(run => run.runId));
+    return new Set(
+      room.runs
+        .filter(run => this.isRunLocallyUnavailable(room.id, run.runId))
+        .map(run => run.runId),
+    );
   }
 
   private retireLocallyUnavailableRuns(room: Room, memberId: string): Room {
@@ -1621,12 +1940,16 @@ export class ChatroomConversationController {
     const sequence = room.timelineSequence + 1;
     const target = mention === undefined ? '' : ` ${mention}`;
     const item: AgentConversationItem = {
-      kind: 'status', itemId: `target-error-${this.nextMessageId()}`, sequence,
+      kind: 'status',
+      itemId: `target-error-${this.nextMessageId()}`,
+      sequence,
       label: {
-        namespace: 'chatroom', key: `target.${code}`,
+        namespace: 'chatroom',
+        key: `target.${code}`,
         fallback: `Message target${target} is ${code.replaceAll('-', ' ')}.`,
       },
-      state: 'error', ariaLive: 'polite',
+      state: 'error',
+      ariaLive: 'polite',
     };
     this.rooms.upsert(createRoom({ ...room, items: [...room.items, item], timelineSequence: sequence }));
   }

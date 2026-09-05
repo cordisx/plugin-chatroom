@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  CHATROOM_DEFAULT_AGENT_CONFIGURATION,
   acknowledgeBehaviorForMember,
+  CHATROOM_DEFAULT_AGENT_CONFIGURATION,
   parseChatroomAgentConfiguration,
 } from '../dist/agent-definition.js';
 import {
@@ -28,11 +28,13 @@ import {
 } from '../dist/room-engagement.js';
 import { addRoomRun, createRoom } from '../dist/room.js';
 
-const definitionFor = memberId => CHATROOM_DEFAULT_AGENT_CONFIGURATION.members
-  .find(member => member.memberId === memberId).definition;
+const definitionFor = memberId =>
+  CHATROOM_DEFAULT_AGENT_CONFIGURATION.members
+    .find(member => member.memberId === memberId).definition;
 
 const taskBinding = (number, memberId = 'leader', generation = 1) => ({
-  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-task-binding.v2.schema.json',
+  $schema:
+    'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-task-binding.v2.schema.json',
   contract: 'cordisx.agent-loop-task-binding/v2',
   schemaVersion: 2,
   binding: { bindingId: `Opaque:Binding-${number}`, generation },
@@ -44,10 +46,16 @@ const taskBinding = (number, memberId = 'leader', generation = 1) => ({
 function roomWithRuns() {
   let room = createRoom({ id: 'room-1', title: 'Room' });
   room = addRoomRun(room, {
-    runId: 'lead-run', memberId: 'leader', title: 'Lead', status: 'creating',
+    runId: 'lead-run',
+    memberId: 'leader',
+    title: 'Lead',
+    status: 'creating',
   });
   room = addRoomRun(room, {
-    runId: 'review-run', memberId: 'reviewer', title: 'Review', status: 'creating',
+    runId: 'review-run',
+    memberId: 'reviewer',
+    title: 'Review',
+    status: 'creating',
   });
   return room;
 }
@@ -63,7 +71,8 @@ test('keeps engagement configuration outside AgentDefinition prompts', () => {
     members: CHATROOM_DEFAULT_AGENT_CONFIGURATION.members.map(member =>
       member.memberId === 'reviewer'
         ? { ...member, acknowledge: { mode: 'none' } }
-        : member),
+        : member
+    ),
   });
 
   assert.deepEqual(acknowledgeBehaviorForMember(parsed, 'leader'), {
@@ -86,7 +95,8 @@ test('updates one presence lifecycle and commits binding plus details URL before
 
   const firstBinding = taskBinding(1);
   const firstDetails = createStoredRoomRunDetailsUrl({
-    url: 'app:task/one', target: 'host',
+    url: 'app:task/one',
+    target: 'host',
   });
   room = acceptRoomRunPresence(room, 'lead-run', firstBinding, firstDetails);
   assert.equal(room.runs[0].presence.eventKey, eventKey);
@@ -107,14 +117,20 @@ test('updates one presence lifecycle and commits binding plus details URL before
   assert.equal(room.runs[0].agentLoopCursor, -1);
 
   const failed = failRoomRunPresence(room, 'review-run', {
-    code: 'provider-unavailable', retryable: true,
+    code: 'provider-unavailable',
+    retryable: true,
   });
   assert.deepEqual(failed.runs[1].presence.failure, {
-    code: 'provider-unavailable', retryable: true,
+    code: 'provider-unavailable',
+    retryable: true,
   });
-  assert.equal(failRoomRunPresence(failed, 'review-run', {
-    code: 'provider-unavailable', retryable: true,
-  }), failed);
+  assert.equal(
+    failRoomRunPresence(failed, 'review-run', {
+      code: 'provider-unavailable',
+      retryable: true,
+    }),
+    failed,
+  );
 });
 
 test('persists one acknowledgement correlation and updates its reaction in place', () => {
@@ -145,13 +161,15 @@ test('persists one acknowledgement correlation and updates its reaction in place
   const claimed = claimRoomAcknowledgementDispatch(prepared.room, key);
   assert.equal(claimed.claimed, true);
   assert.deepEqual(claimRoomAcknowledgementDispatch(claimed.room, key), {
-    room: claimed.room, claimed: false,
+    room: claimed.room,
+    claimed: false,
   });
   const sent = markRoomAcknowledgementSent(claimed.room, key);
   const completed = completeRoomAcknowledgement(sent, key);
   assert.equal(completed.acknowledgements.length, 1);
   assert.deepEqual(completed.acknowledgements[0].presentation.value, {
-    kind: 'emoji', emoji: '✅',
+    kind: 'emoji',
+    emoji: '✅',
   });
   assert.equal(completed.acknowledgements[0].dispatchState, 'accepted');
 
@@ -159,7 +177,8 @@ test('persists one acknowledgement correlation and updates its reaction in place
   assert.equal(failed.acknowledgements.length, 1);
   assert.equal(failed.acknowledgements[0].presentation.state, 'failed');
   assert.deepEqual(failed.acknowledgements[0].presentation.value, {
-    kind: 'emoji', emoji: '⚠️',
+    kind: 'emoji',
+    emoji: '⚠️',
   });
 });
 
@@ -192,16 +211,19 @@ test('plans exact durable create/send operations and reconciles without minting 
     operation: createOperation,
   });
   assert.match(canonicalRoomDeliveryOperation(createOperation), /^sha256\.[0-9a-f]{64}$/);
-  assert.equal(planRoomDelivery(plannedCreate.room, {
-    deliveryId: 'delivery-1',
-    operationId: 'create-1',
-    userItemId: 'user-delivery',
-    participantId: 'leader',
-    memberId: 'leader',
-    runId: 'lead-run',
-    issuedAt: '2026-08-31T00:00:00.000Z',
-    operation: createOperation,
-  }).created, false);
+  assert.equal(
+    planRoomDelivery(plannedCreate.room, {
+      deliveryId: 'delivery-1',
+      operationId: 'create-1',
+      userItemId: 'user-delivery',
+      participantId: 'leader',
+      memberId: 'leader',
+      runId: 'lead-run',
+      issuedAt: '2026-08-31T00:00:00.000Z',
+      operation: createOperation,
+    }).created,
+    false,
+  );
 
   let room = acceptRoomDelivery(plannedCreate.room, 'create-1', {
     kind: 'create',
@@ -233,13 +255,17 @@ test('plans exact durable create/send operations and reconciles without minting 
   });
   const unknown = markRoomDeliverySendingUnknown(plannedSend.room, 'send-1');
   const hydrated = hydrateRoomDeliveries(unknown, {
-    now: '2026-08-31T00:00:03.000Z', durableApiAvailable: true,
+    now: '2026-08-31T00:00:03.000Z',
+    durableApiAvailable: true,
   });
   assert.deepEqual(hydrated.reconciliations.map(item => item.operationId), ['send-1']);
-  assert.equal(hydrateRoomDeliveries(unknown, {
-    now: '2026-08-31T00:00:03.000Z', durableApiAvailable: false,
-  }).room.deliveries.find(item => item.operationId === 'send-1').attention.code,
-  'reconciliation-required');
+  assert.equal(
+    hydrateRoomDeliveries(unknown, {
+      now: '2026-08-31T00:00:03.000Z',
+      durableApiAvailable: false,
+    }).room.deliveries.find(item => item.operationId === 'send-1').attention.code,
+    'reconciliation-required',
+  );
 
   const accepted = acceptRoomDelivery(unknown, 'send-1', {
     kind: 'send',

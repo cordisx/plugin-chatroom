@@ -49,49 +49,86 @@ function roomActions(room: Room, mode: ChatroomRoomNavigationMode): NavigationCo
   const roomArguments = { roomId: room.id } as const;
   const direct = mode === 'active'
     ? [{
-        kind: 'command' as const, id: 'pin',
-        label: localized(room.pinned ? 'action.unpin' : 'action.pin', room.pinned ? 'Unpin' : 'Pin'),
-        icon: (room.pinned ? 'host:pinned' : 'host:pin') as 'host:pin' | 'host:pinned', placement: 'direct' as const, tone: 'neutral' as const,
-        pressed: room.pinned, disabled: { value: false },
-        command: { id: CHATROOM_COMMAND_ROOM_PIN, arguments: roomArguments },
-        feedback: feedback(room.pinned ? 'feedback.unpinned' : 'feedback.pinned', room.pinned ? 'Room unpinned' : 'Room pinned', 'feedback.pin-failed', 'Could not update pin'),
-      }, {
-        kind: 'command' as const, id: 'archive', label: localized('action.archive', 'Archive'),
-        icon: 'host:archive' as const, placement: 'direct' as const, tone: 'neutral' as const,
-        pressed: false, disabled: { value: false },
-        command: { id: CHATROOM_COMMAND_ROOM_ARCHIVE, arguments: roomArguments },
-        feedback: feedback('feedback.archived', 'Room archived', 'feedback.archive-failed', 'Could not archive Room'),
-      }]
+      kind: 'command' as const,
+      id: 'pin',
+      label: localized(room.pinned ? 'action.unpin' : 'action.pin', room.pinned ? 'Unpin' : 'Pin'),
+      icon: (room.pinned ? 'host:pinned' : 'host:pin') as 'host:pin' | 'host:pinned',
+      placement: 'direct' as const,
+      tone: 'neutral' as const,
+      pressed: room.pinned,
+      disabled: { value: false },
+      command: { id: CHATROOM_COMMAND_ROOM_PIN, arguments: roomArguments },
+      feedback: feedback(
+        room.pinned ? 'feedback.unpinned' : 'feedback.pinned',
+        room.pinned ? 'Room unpinned' : 'Room pinned',
+        'feedback.pin-failed',
+        'Could not update pin',
+      ),
+    }, {
+      kind: 'command' as const,
+      id: 'archive',
+      label: localized('action.archive', 'Archive'),
+      icon: 'host:archive' as const,
+      placement: 'direct' as const,
+      tone: 'neutral' as const,
+      pressed: false,
+      disabled: { value: false },
+      command: { id: CHATROOM_COMMAND_ROOM_ARCHIVE, arguments: roomArguments },
+      feedback: feedback('feedback.archived', 'Room archived', 'feedback.archive-failed', 'Could not archive Room'),
+    }]
     : [{
-        kind: 'command' as const, id: 'restore', label: localized('action.restore', 'Restore'),
-        icon: 'host:restore' as const, placement: 'direct' as const, tone: 'neutral' as const,
-        pressed: false, disabled: { value: false },
-        command: { id: CHATROOM_COMMAND_ROOM_RESTORE, arguments: roomArguments },
-        feedback: feedback('feedback.restored', 'Room restored', 'feedback.restore-failed', 'Could not restore Room'),
-      }];
+      kind: 'command' as const,
+      id: 'restore',
+      label: localized('action.restore', 'Restore'),
+      icon: 'host:restore' as const,
+      placement: 'direct' as const,
+      tone: 'neutral' as const,
+      pressed: false,
+      disabled: { value: false },
+      command: { id: CHATROOM_COMMAND_ROOM_RESTORE, arguments: roomArguments },
+      feedback: feedback('feedback.restored', 'Room restored', 'feedback.restore-failed', 'Could not restore Room'),
+    }];
   return Object.freeze([
     ...direct,
     {
-      kind: 'copy-route-link', id: 'copy-link', label: localized('action.copy-link', 'Copy deep link'),
+      kind: 'copy-route-link',
+      id: 'copy-link',
+      label: localized('action.copy-link', 'Copy deep link'),
       icon: 'host:link',
-      placement: 'overflow', tone: 'neutral', pressed: false, disabled: { value: false },
+      placement: 'overflow',
+      tone: 'neutral',
+      pressed: false,
+      disabled: { value: false },
       feedback: feedback('feedback.link-copied', 'Deep link copied', 'feedback.copy-failed', 'Could not copy'),
     },
     {
-      kind: 'copy-text', id: 'copy-id', label: localized('action.copy-id', 'Copy Room ID'),
+      kind: 'copy-text',
+      id: 'copy-id',
+      label: localized('action.copy-id', 'Copy Room ID'),
       icon: 'host:copy',
-      placement: 'overflow', tone: 'neutral', pressed: false, disabled: { value: false },
+      placement: 'overflow',
+      tone: 'neutral',
+      pressed: false,
+      disabled: { value: false },
       text: { value: room.id },
       feedback: feedback('feedback.id-copied', 'Room ID copied', 'feedback.copy-failed', 'Could not copy'),
     },
     {
-      kind: 'command', id: 'delete', label: localized('action.delete', 'Delete'),
+      kind: 'command',
+      id: 'delete',
+      label: localized('action.delete', 'Delete'),
       icon: 'host:delete',
-      placement: 'overflow', tone: 'danger', pressed: false, disabled: { value: false },
+      placement: 'overflow',
+      tone: 'danger',
+      pressed: false,
+      disabled: { value: false },
       command: { id: CHATROOM_COMMAND_ROOM_DELETE, arguments: roomArguments },
       confirmation: {
         title: localized('confirmation.delete.title', 'Delete this Room?'),
-        description: localized('confirmation.delete.description', 'Messages and Room state will be permanently deleted.'),
+        description: localized(
+          'confirmation.delete.description',
+          'Messages and Room state will be permanently deleted.',
+        ),
         confirmLabel: localized('confirmation.delete.confirm', 'Delete Room'),
       },
       feedback: feedback('feedback.deleted', 'Room deleted', 'feedback.delete-failed', 'Could not delete Room'),
@@ -121,9 +158,11 @@ export class ChatroomRoomNavigationCollection implements CordisXNavigationCollec
   snapshot(): CordisXNavigationCollectionSnapshotV3 {
     const rooms = this.rooms.snapshot()
       .filter(room => room.archived === (this.mode === 'archived'))
-      .sort((left, right) => Number(right.pinned) - Number(left.pinned)
+      .sort((left, right) =>
+        Number(right.pinned) - Number(left.pinned)
         || (latestRoomMessage(right)?.sequence ?? -1) - (latestRoomMessage(left)?.sequence ?? -1)
-        || left.id.localeCompare(right.id))
+        || left.id.localeCompare(right.id)
+      )
       .slice(0, 500);
     return {
       revision: this.revision,

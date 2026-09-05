@@ -59,7 +59,7 @@ export function composerShortcutPolicyFromConfig(value: unknown): ChatroomCompos
   if (typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Chatroom configuration must be an object.');
   }
-  const shortcutPolicy = (value as { readonly shortcutPolicy?: unknown }).shortcutPolicy;
+  const shortcutPolicy = (value as { readonly shortcutPolicy?: unknown; }).shortcutPolicy;
   if (shortcutPolicy === undefined) return CHATROOM_DEFAULT_COMPOSER_SHORTCUT_POLICY;
   if (shortcutPolicy === 'enter' || shortcutPolicy === 'mod-enter') return shortcutPolicy;
   throw new Error('Chatroom shortcutPolicy is invalid.');
@@ -97,7 +97,9 @@ export class ChatroomComposerSettings {
   subscribe(listener: (policy: ChatroomComposerShortcutPolicy) => void): () => void {
     if (this.disposed) return () => {};
     this.listeners.add(listener);
-    return () => { this.listeners.delete(listener); };
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   dispose(): void {

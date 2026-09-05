@@ -12,16 +12,24 @@ const digests = new Map([
   ['chatroom.qa', 'sha256:161da39865680f98bad1aef6aab6036b0d9921dfe7a88150d9252c06cce7d521'],
 ]);
 const binding = {
-  profileId: 'preview', installationId: 'chatroom-local', pluginId: 'chatroom', pluginGeneration: 3,
+  profileId: 'preview',
+  installationId: 'chatroom-local',
+  pluginId: 'chatroom',
+  pluginGeneration: 3,
 };
 const owner = {
-  profileId: binding.profileId, installationId: binding.installationId, pluginId: binding.pluginId,
+  profileId: binding.profileId,
+  installationId: binding.installationId,
+  pluginId: binding.pluginId,
 };
 
 const snapshot = () => ({
-  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-registry-snapshot.v1.schema.json',
-  contract: 'cordisx.entity-registry-snapshot/v1', schemaVersion: 1,
-  binding, registryRevision: 5,
+  $schema:
+    'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-registry-snapshot.v1.schema.json',
+  contract: 'cordisx.entity-registry-snapshot/v1',
+  schemaVersion: 1,
+  binding,
+  registryRevision: 5,
   entities: CHATROOM_DEFAULT_AGENT_CONFIGURATION.definitions.map(definition => {
     const revision = digests.get(definition.identity.agentId);
     const rebound = {
@@ -29,13 +37,18 @@ const snapshot = () => ({
       identity: { agentId: definition.identity.agentId, revision },
       ...(definition.extends === undefined ? {} : {
         extends: definition.extends.map(parent => ({
-          agentId: parent.agentId, revision: digests.get(parent.agentId),
+          agentId: parent.agentId,
+          revision: digests.get(parent.agentId),
         })),
       }),
     };
     return {
-      identity: rebound.identity, digest: revision, definition: rebound,
-      owner, access: 'owned', origin: 'materialized-template',
+      identity: rebound.identity,
+      digest: revision,
+      definition: rebound,
+      owner,
+      access: 'owned',
+      origin: 'materialized-template',
     };
   }),
 });
@@ -67,13 +80,19 @@ test('current owned EntityRecords replace inline definitions and member revision
   ]);
   assert.deepEqual(configuration.definitions, current.entities.slice(0, 5).map(record => record.definition));
   assert.deepEqual(configuration.members.map(member => member.reportsToMemberId), [
-    undefined, 'leader', 'leader', 'reviewer', 'integrator',
+    undefined,
+    'leader',
+    'leader',
+    'reviewer',
+    'integrator',
   ]);
 });
 
 test('activation fails closed when a configured entity is absent', () => {
   const current = snapshot();
   current.entities = current.entities.filter(record => record.identity.agentId !== 'chatroom.qa');
-  assert.throws(() => configurationFromEntitySnapshot(CHATROOM_DEFAULT_AGENT_CONFIGURATION, current),
-    /Entity registry is missing chatroom\.qa/);
+  assert.throws(
+    () => configurationFromEntitySnapshot(CHATROOM_DEFAULT_AGENT_CONFIGURATION, current),
+    /Entity registry is missing chatroom\.qa/,
+  );
 });

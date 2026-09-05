@@ -12,7 +12,7 @@ import {
 import type { ProjectedItem } from './agent-session-projection.js';
 import type { ChatroomComposerSettings, ChatroomComposerShortcutPolicy } from './composer-settings.js';
 import { createRoomConversationModel } from './conversation-model.js';
-import type { ChatroomConversationController, ChatroomCommandIntent } from './conversation-source.js';
+import type { ChatroomCommandIntent, ChatroomConversationController } from './conversation-source.js';
 import { approvalDecisionOperationId } from './room-agent-operations.js';
 import type { Room } from './room.js';
 
@@ -30,8 +30,12 @@ export interface ChatroomPageSnapshot {
 }
 
 export type ChatroomPageSubmitResult =
-  | { readonly status: 'accepted'; readonly roomId: string; readonly roomCreated: boolean }
-  | { readonly status: 'target-error'; readonly code: Extract<ChatroomCommandIntent, { readonly kind: 'target-error' }>['code']; readonly mention?: string };
+  | { readonly status: 'accepted'; readonly roomId: string; readonly roomCreated: boolean; }
+  | {
+    readonly status: 'target-error';
+    readonly code: Extract<ChatroomCommandIntent, { readonly kind: 'target-error'; }>['code'];
+    readonly mention?: string;
+  };
 
 function itemTime(item: ChatroomPageItem): number | undefined {
   if (item.kind !== 'message') return undefined;
@@ -89,8 +93,9 @@ export class ChatroomPageSource {
     const projection = room === undefined
       ? { activeRuns: [], items: [] }
       : this.sessions.projectionForRoom(room.id);
-    const projectedMessageIds = new Set(projection.items.flatMap(item =>
-      item.kind === 'message' ? [item.messageId] : []));
+    const projectedMessageIds = new Set(
+      projection.items.flatMap(item => item.kind === 'message' ? [item.messageId] : []),
+    );
     const domainItems = model?.items.filter(item => {
       if (item.kind === 'message') return !projectedMessageIds.has(item.messageId);
       if (item.kind !== 'approval') return true;
@@ -101,9 +106,11 @@ export class ChatroomPageSource {
       ...(roomId === undefined ? {} : { roomId }),
       ...(room === undefined ? {} : { room }),
       missing: roomId !== undefined && room === undefined,
-      participants: Object.freeze(model?.selection.kind === 'room'
-        ? model.selection.participants.map(participant => Object.freeze({ ...participant }))
-        : []),
+      participants: Object.freeze(
+        model?.selection.kind === 'room'
+          ? model.selection.participants.map(participant => Object.freeze({ ...participant }))
+          : [],
+      ),
       activeRuns: Object.freeze([...projection.activeRuns]),
       items: chronologicalItems([
         ...domainItems,
@@ -124,7 +131,9 @@ export class ChatroomPageSource {
   subscribe(listener: () => void): () => void {
     if (this.disposed) return () => {};
     this.listeners.add(listener);
-    return () => { this.listeners.delete(listener); };
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   async submit(roomId: string | undefined, value: string): Promise<ChatroomPageSubmitResult> {
@@ -149,16 +158,18 @@ export class ChatroomPageSource {
     }
     let failure: unknown;
     try {
-      const outcomes = await Promise.all(intent.deliveries.map(async delivery => Object.freeze({
-        memberId: delivery.memberId,
-        runId: delivery.runId,
-        outcome: await this.sessions.sendToRoom(
-          intent.roomId,
-          delivery.runId,
-          intent.userItemId,
-          intent.dispatchText,
-        ),
-      })));
+      const outcomes = await Promise.all(intent.deliveries.map(async delivery =>
+        Object.freeze({
+          memberId: delivery.memberId,
+          runId: delivery.runId,
+          outcome: await this.sessions.sendToRoom(
+            intent.roomId,
+            delivery.runId,
+            intent.userItemId,
+            intent.dispatchText,
+          ),
+        })
+      ));
       assertChatroomAdmissionDeliveriesAccepted(outcomes);
     } catch (error) {
       failure = error;
@@ -191,8 +202,11 @@ export class ChatroomPageSource {
       );
       return result.status === 'accepted';
     }
-    const outcome = decision === 'approved' ? 'allowed-once'
-      : decision === 'denied' ? 'rejected' : 'cancelled';
+    const outcome = decision === 'approved'
+      ? 'allowed-once'
+      : decision === 'denied'
+      ? 'rejected'
+      : 'cancelled';
     return this.sessions.answerApprovalItem(roomId, itemId, outcome);
   }
 

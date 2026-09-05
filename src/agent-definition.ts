@@ -6,16 +6,16 @@ import type {
   AgentObjectInheritanceMode,
 } from '@cordisx/protocol/agent-loop/v4';
 import {
-  cloneAgentAvatarRef,
-  resolveAgentDefinitionAvatar,
   type AgentAvatarInheritanceMode,
   type AgentAvatarRef,
+  cloneAgentAvatarRef,
+  resolveAgentDefinitionAvatar,
 } from '@cordisx/protocol/agent-avatar/v1';
 import {
-  parseChatroomAcknowledgeOverride,
-  resolveChatroomAcknowledgeBehavior,
   type ChatroomAcknowledgeBehavior,
   type ChatroomAcknowledgeOverride,
+  parseChatroomAcknowledgeOverride,
+  resolveChatroomAcknowledgeBehavior,
 } from './engagement-config.js';
 
 export type {
@@ -104,65 +104,94 @@ function parseFilter(value: unknown, field: string): AgentFilter | undefined {
   if (!isRecord(value)) throw new Error(`${field} must be a filter.`);
   const include = stringList(value.include, `${field}.include`);
   const exclude = stringList(value.exclude, `${field}.exclude`);
-  return Object.freeze({ ...(include === undefined ? {} : { include }), ...(exclude === undefined ? {} : { exclude }) });
+  return Object.freeze({
+    ...(include === undefined ? {} : { include }),
+    ...(exclude === undefined ? {} : { exclude }),
+  });
 }
 
 const orderedModes = new Set<AgentInheritanceMode>(['append', 'prepend', 'merge', 'replace', 'none']);
 const objectModes = new Set<AgentObjectInheritanceMode>(['merge', 'replace', 'none']);
 const avatarModes = new Set<AgentAvatarInheritanceMode>(['inherit', 'none']);
 const promptKinds = new Set<NonNullable<AgentDefinition['promptSections']>[number]['kind']>([
-  'introduction', 'personality', 'role', 'operations', 'tools', 'knowledge', 'memory-policy', 'memory', 'other',
+  'introduction',
+  'personality',
+  'role',
+  'operations',
+  'tools',
+  'knowledge',
+  'memory-policy',
+  'memory',
+  'other',
 ]);
 
 function mode<T extends string>(value: unknown, field: string, accepted: ReadonlySet<T>): T {
-  if (typeof value !== 'string' || !accepted.has(value as T)) throw new Error(`${field} has an unsupported inheritance mode.`);
+  if (typeof value !== 'string' || !accepted.has(value as T)) {
+    throw new Error(`${field} has an unsupported inheritance mode.`);
+  }
   return value as T;
 }
 
 function parseDefinition(value: unknown, index: number): AgentDefinition {
   const field = `definitions[${index}]`;
   if (!isRecord(value)) throw new Error(`${field} must be an AgentDefinition.`);
-  if (value.$schema !== AGENT_DEFINITION_SCHEMA || value.contract !== AGENT_DEFINITION_CONTRACT || value.schemaVersion !== 1) {
+  if (
+    value.$schema !== AGENT_DEFINITION_SCHEMA || value.contract !== AGENT_DEFINITION_CONTRACT
+    || value.schemaVersion !== 1
+  ) {
     throw new Error(`${field} does not use the AgentDefinition v1 contract.`);
   }
   if (!isRecord(value.inherit)) throw new Error(`${field}.inherit is required.`);
   const parents = value.extends === undefined
     ? undefined
     : Array.isArray(value.extends)
-      ? Object.freeze(value.extends.map((item, parentIndex) => parseIdentity(item, `${field}.extends[${parentIndex}]`)))
-      : (() => { throw new Error(`${field}.extends must be an array.`); })();
+    ? Object.freeze(value.extends.map((item, parentIndex) => parseIdentity(item, `${field}.extends[${parentIndex}]`)))
+    : (() => {
+      throw new Error(`${field}.extends must be an array.`);
+    })();
   const promptSections = value.promptSections === undefined
     ? undefined
     : Array.isArray(value.promptSections)
-      ? Object.freeze(value.promptSections.map((item, sectionIndex) => {
-        if (!isRecord(item)) throw new Error(`${field}.promptSections[${sectionIndex}] must be a section.`);
-        const kind = requiredString(item.kind, `${field}.promptSections[${sectionIndex}].kind`);
-        if (!promptKinds.has(kind as NonNullable<AgentDefinition['promptSections']>[number]['kind'])) {
-          throw new Error(`${field}.promptSections[${sectionIndex}].kind is unsupported.`);
-        }
-        return Object.freeze({
-          sectionId: requiredString(item.sectionId, `${field}.promptSections[${sectionIndex}].sectionId`),
-          kind: kind as NonNullable<AgentDefinition['promptSections']>[number]['kind'],
-          text: requiredString(item.text, `${field}.promptSections[${sectionIndex}].text`),
-        });
-      }))
-      : (() => { throw new Error(`${field}.promptSections must be an array.`); })();
-  if (promptSections !== undefined && new Set(promptSections.map(section => section.sectionId)).size !== promptSections.length) {
+    ? Object.freeze(value.promptSections.map((item, sectionIndex) => {
+      if (!isRecord(item)) throw new Error(`${field}.promptSections[${sectionIndex}] must be a section.`);
+      const kind = requiredString(item.kind, `${field}.promptSections[${sectionIndex}].kind`);
+      if (!promptKinds.has(kind as NonNullable<AgentDefinition['promptSections']>[number]['kind'])) {
+        throw new Error(`${field}.promptSections[${sectionIndex}].kind is unsupported.`);
+      }
+      return Object.freeze({
+        sectionId: requiredString(item.sectionId, `${field}.promptSections[${sectionIndex}].sectionId`),
+        kind: kind as NonNullable<AgentDefinition['promptSections']>[number]['kind'],
+        text: requiredString(item.text, `${field}.promptSections[${sectionIndex}].text`),
+      });
+    }))
+    : (() => {
+      throw new Error(`${field}.promptSections must be an array.`);
+    })();
+  if (
+    promptSections !== undefined
+    && new Set(promptSections.map(section => section.sectionId)).size !== promptSections.length
+  ) {
     throw new Error(`${field}.promptSections contains a duplicate sectionId.`);
   }
   const runtime = value.runtimeDefaults;
   if (runtime !== undefined && !isRecord(runtime)) throw new Error(`${field}.runtimeDefaults must be an object.`);
   const runtimeDefaults = runtime === undefined ? undefined : Object.freeze({
-    ...(runtime.adapterId === undefined ? {} : { adapterId: requiredString(runtime.adapterId, `${field}.runtimeDefaults.adapterId`) }),
+    ...(runtime.adapterId === undefined
+      ? {}
+      : { adapterId: requiredString(runtime.adapterId, `${field}.runtimeDefaults.adapterId`) }),
     ...(runtime.model === undefined ? {} : (() => {
       if (!isRecord(runtime.model)) throw new Error(`${field}.runtimeDefaults.model must be an object.`);
-      return { model: Object.freeze({
-        providerId: requiredString(runtime.model.providerId, `${field}.runtimeDefaults.model.providerId`),
-        modelId: requiredString(runtime.model.modelId, `${field}.runtimeDefaults.model.modelId`),
-      }) };
+      return {
+        model: Object.freeze({
+          providerId: requiredString(runtime.model.providerId, `${field}.runtimeDefaults.model.providerId`),
+          modelId: requiredString(runtime.model.modelId, `${field}.runtimeDefaults.model.modelId`),
+        }),
+      };
     })()),
     ...(runtime.effort === undefined ? {} : (() => {
-      if (!['low', 'medium', 'high', 'xhigh'].includes(String(runtime.effort))) throw new Error(`${field}.runtimeDefaults.effort is unsupported.`);
+      if (!['low', 'medium', 'high', 'xhigh'].includes(String(runtime.effort))) {
+        throw new Error(`${field}.runtimeDefaults.effort is unsupported.`);
+      }
       return { effort: runtime.effort as 'low' | 'medium' | 'high' | 'xhigh' };
     })()),
   });
@@ -202,7 +231,10 @@ function parseDefinition(value: unknown, index: number): AgentDefinition {
   });
 }
 
-function validateCatalog(selections: readonly AgentDefinitionIdentity[], definitions: readonly AgentDefinition[]): void {
+function validateCatalog(
+  selections: readonly AgentDefinitionIdentity[],
+  definitions: readonly AgentDefinition[],
+): void {
   const catalog = new Map<string, AgentDefinition>();
   for (const candidate of definitions) {
     const key = identityKey(candidate.identity);
@@ -355,7 +387,10 @@ export function parseChatroomAgentConfiguration(value: unknown): ChatroomAgentCo
   if (!Array.isArray(value.definitions) || value.definitions.length === 0) {
     throw new Error('definitions must be a non-empty array.');
   }
-  const definitions = Object.freeze(value.definitions.map(parseDefinition)) as readonly [AgentDefinition, ...AgentDefinition[]];
+  const definitions = Object.freeze(value.definitions.map(parseDefinition)) as readonly [
+    AgentDefinition,
+    ...AgentDefinition[],
+  ];
   validateCatalog(members.map(member => member.definition), definitions);
   return Object.freeze({
     seedLeaderIds: Object.freeze([...seedLeaderIds]) as readonly [string, ...string[]],
@@ -367,188 +402,268 @@ export function parseChatroomAgentConfiguration(value: unknown): ChatroomAgentCo
   });
 }
 
-export const CHATROOM_DEFAULT_AGENT = Object.freeze({
-  $schema: AGENT_DEFINITION_SCHEMA,
-  contract: AGENT_DEFINITION_CONTRACT,
-  schemaVersion: 1,
-  identity: Object.freeze({ agentId: 'chatroom.generalist', revision: 'chatroom-internal-v1' }),
-  name: 'Chatroom Agent',
-  description: 'An internal Agent for focused Room conversations.',
-  avatar: cloneAgentAvatarRef({
-    kind: 'asset',
-    ref: 'oneworks-avatar:asset.red-fox.v1',
-    revision: 'oneworks-avatar:editor-red-fox-2b30c25a3fcd29bf349fed927df85f1ba4b0a6096a9dfc1d2d1088e05654d8aa',
-  }),
-  extends: Object.freeze([]),
-  inherit: Object.freeze({
-    promptSections: 'append', rules: 'merge', skills: 'merge',
-    tools: 'replace', mcpServers: 'replace', runtimeDefaults: 'merge',
-  }),
-  promptSections: Object.freeze([
-    Object.freeze({ sectionId: 'introduction', kind: 'introduction', text: 'You are the Agent assigned to this Chatroom Room.' }),
-    Object.freeze({ sectionId: 'personality', kind: 'personality', text: 'Be concise, direct, and honest about unavailable capabilities.' }),
-    Object.freeze({ sectionId: 'memory', kind: 'memory', text: 'Use only the context of the TaskBinding attached to this Room.' }),
-  ]),
-  rules: Object.freeze(['chatroom.room-isolation', 'chatroom.no-fabricated-replies']),
-  skills: Object.freeze([]),
-  tools: Object.freeze({ include: Object.freeze(['read', 'search']), exclude: Object.freeze(['external-channel']) }),
-  mcpServers: Object.freeze({ exclude: Object.freeze(['external-channel']) }),
-  runtimeDefaults: Object.freeze({ adapterId: 'codex', effort: 'medium' }),
-} as const satisfies AgentDefinition);
+export const CHATROOM_DEFAULT_AGENT = Object.freeze(
+  {
+    $schema: AGENT_DEFINITION_SCHEMA,
+    contract: AGENT_DEFINITION_CONTRACT,
+    schemaVersion: 1,
+    identity: Object.freeze({ agentId: 'chatroom.generalist', revision: 'chatroom-internal-v1' }),
+    name: 'Chatroom Agent',
+    description: 'An internal Agent for focused Room conversations.',
+    avatar: cloneAgentAvatarRef({
+      kind: 'asset',
+      ref: 'oneworks-avatar:asset.red-fox.v1',
+      revision: 'oneworks-avatar:editor-red-fox-2b30c25a3fcd29bf349fed927df85f1ba4b0a6096a9dfc1d2d1088e05654d8aa',
+    }),
+    extends: Object.freeze([]),
+    inherit: Object.freeze({
+      promptSections: 'append',
+      rules: 'merge',
+      skills: 'merge',
+      tools: 'replace',
+      mcpServers: 'replace',
+      runtimeDefaults: 'merge',
+    }),
+    promptSections: Object.freeze([
+      Object.freeze({
+        sectionId: 'introduction',
+        kind: 'introduction',
+        text: 'You are the Agent assigned to this Chatroom Room.',
+      }),
+      Object.freeze({
+        sectionId: 'personality',
+        kind: 'personality',
+        text: 'Be concise, direct, and honest about unavailable capabilities.',
+      }),
+      Object.freeze({
+        sectionId: 'memory',
+        kind: 'memory',
+        text: 'Use only the context of the TaskBinding attached to this Room.',
+      }),
+    ]),
+    rules: Object.freeze(['chatroom.room-isolation', 'chatroom.no-fabricated-replies']),
+    skills: Object.freeze([]),
+    tools: Object.freeze({ include: Object.freeze(['read', 'search']), exclude: Object.freeze(['external-channel']) }),
+    mcpServers: Object.freeze({ exclude: Object.freeze(['external-channel']) }),
+    runtimeDefaults: Object.freeze({ adapterId: 'codex', effort: 'medium' }),
+  } as const satisfies AgentDefinition,
+);
 
-export const CHATROOM_DEFAULT_REVIEWER = Object.freeze({
-  $schema: AGENT_DEFINITION_SCHEMA,
-  contract: AGENT_DEFINITION_CONTRACT,
-  schemaVersion: 1,
-  identity: Object.freeze({ agentId: 'chatroom.reviewer', revision: 'chatroom-internal-v1' }),
-  name: 'Chatroom Reviewer',
-  description: 'A second team member for focused review inside a Room.',
-  avatar: cloneAgentAvatarRef({
-    kind: 'asset',
-    ref: 'oneworks-avatar:asset.arctic-fox.v1',
-    revision: 'oneworks-avatar:editor-arctic-fox-2c262adc567c423a94d497bfea9c9906f2da71cdde0e0cef6d71c263ceaf3011',
-  }),
-  extends: Object.freeze([CHATROOM_DEFAULT_AGENT.identity]),
-  inherit: Object.freeze({
-    promptSections: 'append', rules: 'append', skills: 'append',
-    tools: 'merge', mcpServers: 'merge', runtimeDefaults: 'merge',
-  }),
-  promptSections: Object.freeze([
-    Object.freeze({ sectionId: 'reviewer-role', kind: 'role', text: 'Review the work assigned to your member runs.' }),
-  ]),
-  rules: Object.freeze(['chatroom.public-room-summary-only']),
-} as const satisfies AgentDefinition);
+export const CHATROOM_DEFAULT_REVIEWER = Object.freeze(
+  {
+    $schema: AGENT_DEFINITION_SCHEMA,
+    contract: AGENT_DEFINITION_CONTRACT,
+    schemaVersion: 1,
+    identity: Object.freeze({ agentId: 'chatroom.reviewer', revision: 'chatroom-internal-v1' }),
+    name: 'Chatroom Reviewer',
+    description: 'A second team member for focused review inside a Room.',
+    avatar: cloneAgentAvatarRef({
+      kind: 'asset',
+      ref: 'oneworks-avatar:asset.arctic-fox.v1',
+      revision: 'oneworks-avatar:editor-arctic-fox-2c262adc567c423a94d497bfea9c9906f2da71cdde0e0cef6d71c263ceaf3011',
+    }),
+    extends: Object.freeze([CHATROOM_DEFAULT_AGENT.identity]),
+    inherit: Object.freeze({
+      promptSections: 'append',
+      rules: 'append',
+      skills: 'append',
+      tools: 'merge',
+      mcpServers: 'merge',
+      runtimeDefaults: 'merge',
+    }),
+    promptSections: Object.freeze([
+      Object.freeze({
+        sectionId: 'reviewer-role',
+        kind: 'role',
+        text: 'Review the work assigned to your member runs.',
+      }),
+    ]),
+    rules: Object.freeze(['chatroom.public-room-summary-only']),
+  } as const satisfies AgentDefinition,
+);
 
-export const CHATROOM_DEFAULT_INTEGRATOR = Object.freeze({
-  $schema: AGENT_DEFINITION_SCHEMA,
-  contract: AGENT_DEFINITION_CONTRACT,
-  schemaVersion: 1,
-  identity: Object.freeze({ agentId: 'chatroom.integrator', revision: 'chatroom-internal-v1' }),
-  name: 'Chatroom Integrator',
-  description: 'Coordinates implementation handoffs and integration across Room member runs.',
-  avatar: cloneAgentAvatarRef({
-    kind: 'asset',
-    ref: 'oneworks-avatar:asset.d85c0abccffd4d539da85cb67eb8bcbf.v1',
-    revision: 'oneworks-avatar:editor-syrian-hamster-5eebb3ea9c0131005fd336e7c8494c74fce92903373272632da940f22307c1f7',
-  }),
-  extends: Object.freeze([CHATROOM_DEFAULT_AGENT.identity]),
-  inherit: Object.freeze({
-    promptSections: 'append', rules: 'append', skills: 'append',
-    tools: 'merge', mcpServers: 'merge', runtimeDefaults: 'merge',
-  }),
-  promptSections: Object.freeze([
-    Object.freeze({
-      sectionId: 'integrator-role',
-      kind: 'role',
-      text: 'Integrate compatible work from independent Room member runs without taking over their ownership.',
+export const CHATROOM_DEFAULT_INTEGRATOR = Object.freeze(
+  {
+    $schema: AGENT_DEFINITION_SCHEMA,
+    contract: AGENT_DEFINITION_CONTRACT,
+    schemaVersion: 1,
+    identity: Object.freeze({ agentId: 'chatroom.integrator', revision: 'chatroom-internal-v1' }),
+    name: 'Chatroom Integrator',
+    description: 'Coordinates implementation handoffs and integration across Room member runs.',
+    avatar: cloneAgentAvatarRef({
+      kind: 'asset',
+      ref: 'oneworks-avatar:asset.d85c0abccffd4d539da85cb67eb8bcbf.v1',
+      revision:
+        'oneworks-avatar:editor-syrian-hamster-5eebb3ea9c0131005fd336e7c8494c74fce92903373272632da940f22307c1f7',
     }),
-    Object.freeze({
-      sectionId: 'integrator-operations',
-      kind: 'operations',
-      text: 'Coordinate explicit handoffs, surface cross-branch conflicts, and report integration blockers with exact evidence.',
+    extends: Object.freeze([CHATROOM_DEFAULT_AGENT.identity]),
+    inherit: Object.freeze({
+      promptSections: 'append',
+      rules: 'append',
+      skills: 'append',
+      tools: 'merge',
+      mcpServers: 'merge',
+      runtimeDefaults: 'merge',
     }),
-  ]),
-} as const satisfies AgentDefinition);
+    promptSections: Object.freeze([
+      Object.freeze({
+        sectionId: 'integrator-role',
+        kind: 'role',
+        text: 'Integrate compatible work from independent Room member runs without taking over their ownership.',
+      }),
+      Object.freeze({
+        sectionId: 'integrator-operations',
+        kind: 'operations',
+        text:
+          'Coordinate explicit handoffs, surface cross-branch conflicts, and report integration blockers with exact evidence.',
+      }),
+    ]),
+  } as const satisfies AgentDefinition,
+);
 
-export const CHATROOM_DEFAULT_DOCUMENTATION = Object.freeze({
-  $schema: AGENT_DEFINITION_SCHEMA,
-  contract: AGENT_DEFINITION_CONTRACT,
-  schemaVersion: 1,
-  identity: Object.freeze({ agentId: 'chatroom.documentation', revision: 'chatroom-internal-v1' }),
-  name: 'Chatroom Documentation',
-  description: 'Records accepted decisions, behavior, and reusable Room knowledge.',
-  avatar: cloneAgentAvatarRef({
-    kind: 'asset',
-    ref: 'oneworks-avatar:asset.5089b05857414a4c9f2bf1c0c5079edc.v1',
-    revision: 'oneworks-avatar:editor-asian-small-clawed-otter-4ceef0184bd3d2fd6a469b20decf1d0dd3cd726bbeaf3d07c43389ba5b2bab6f',
-  }),
-  extends: Object.freeze([CHATROOM_DEFAULT_AGENT.identity]),
-  inherit: Object.freeze({
-    promptSections: 'append', rules: 'append', skills: 'append',
-    tools: 'merge', mcpServers: 'merge', runtimeDefaults: 'merge',
-  }),
-  promptSections: Object.freeze([
-    Object.freeze({
-      sectionId: 'documentation-role',
-      kind: 'role',
-      text: 'Document decisions and outcomes assigned to this member run with clear provenance.',
+export const CHATROOM_DEFAULT_DOCUMENTATION = Object.freeze(
+  {
+    $schema: AGENT_DEFINITION_SCHEMA,
+    contract: AGENT_DEFINITION_CONTRACT,
+    schemaVersion: 1,
+    identity: Object.freeze({ agentId: 'chatroom.documentation', revision: 'chatroom-internal-v1' }),
+    name: 'Chatroom Documentation',
+    description: 'Records accepted decisions, behavior, and reusable Room knowledge.',
+    avatar: cloneAgentAvatarRef({
+      kind: 'asset',
+      ref: 'oneworks-avatar:asset.5089b05857414a4c9f2bf1c0c5079edc.v1',
+      revision:
+        'oneworks-avatar:editor-asian-small-clawed-otter-4ceef0184bd3d2fd6a469b20decf1d0dd3cd726bbeaf3d07c43389ba5b2bab6f',
     }),
-    Object.freeze({
-      sectionId: 'documentation-knowledge',
-      kind: 'knowledge',
-      text: 'Use only accepted Room context and linked artifacts; distinguish implemented, verified, and planned behavior.',
+    extends: Object.freeze([CHATROOM_DEFAULT_AGENT.identity]),
+    inherit: Object.freeze({
+      promptSections: 'append',
+      rules: 'append',
+      skills: 'append',
+      tools: 'merge',
+      mcpServers: 'merge',
+      runtimeDefaults: 'merge',
     }),
-  ]),
-} as const satisfies AgentDefinition);
+    promptSections: Object.freeze([
+      Object.freeze({
+        sectionId: 'documentation-role',
+        kind: 'role',
+        text: 'Document decisions and outcomes assigned to this member run with clear provenance.',
+      }),
+      Object.freeze({
+        sectionId: 'documentation-knowledge',
+        kind: 'knowledge',
+        text:
+          'Use only accepted Room context and linked artifacts; distinguish implemented, verified, and planned behavior.',
+      }),
+    ]),
+  } as const satisfies AgentDefinition,
+);
 
-export const CHATROOM_DEFAULT_QA = Object.freeze({
-  $schema: AGENT_DEFINITION_SCHEMA,
-  contract: AGENT_DEFINITION_CONTRACT,
-  schemaVersion: 1,
-  identity: Object.freeze({ agentId: 'chatroom.qa', revision: 'chatroom-internal-v1' }),
-  name: 'Chatroom QA',
-  description: 'Checks assigned behavior and reports reproducible evidence and regressions.',
-  avatar: cloneAgentAvatarRef({
-    kind: 'asset',
-    ref: 'oneworks-avatar:asset.7ca113246df74241ab1bdedc04f6fde9.v1',
-    revision: 'oneworks-avatar:editor-yellow-duckling-a8d6820ff62d33d931b2554f6080126c2685ad84eed34a559ef7407374b447c6',
-  }),
-  extends: Object.freeze([CHATROOM_DEFAULT_AGENT.identity]),
-  inherit: Object.freeze({
-    promptSections: 'append', rules: 'append', skills: 'append',
-    tools: 'merge', mcpServers: 'merge', runtimeDefaults: 'merge',
-  }),
-  promptSections: Object.freeze([
-    Object.freeze({
-      sectionId: 'qa-role',
-      kind: 'role',
-      text: 'Verify the behavior assigned to this member run and keep conclusions scoped to available evidence.',
+export const CHATROOM_DEFAULT_QA = Object.freeze(
+  {
+    $schema: AGENT_DEFINITION_SCHEMA,
+    contract: AGENT_DEFINITION_CONTRACT,
+    schemaVersion: 1,
+    identity: Object.freeze({ agentId: 'chatroom.qa', revision: 'chatroom-internal-v1' }),
+    name: 'Chatroom QA',
+    description: 'Checks assigned behavior and reports reproducible evidence and regressions.',
+    avatar: cloneAgentAvatarRef({
+      kind: 'asset',
+      ref: 'oneworks-avatar:asset.7ca113246df74241ab1bdedc04f6fde9.v1',
+      revision:
+        'oneworks-avatar:editor-yellow-duckling-a8d6820ff62d33d931b2554f6080126c2685ad84eed34a559ef7407374b447c6',
     }),
-    Object.freeze({
-      sectionId: 'qa-operations',
-      kind: 'operations',
-      text: 'Report reproducible failures, expected-versus-observed results, and any unverified conditions.',
+    extends: Object.freeze([CHATROOM_DEFAULT_AGENT.identity]),
+    inherit: Object.freeze({
+      promptSections: 'append',
+      rules: 'append',
+      skills: 'append',
+      tools: 'merge',
+      mcpServers: 'merge',
+      runtimeDefaults: 'merge',
     }),
-  ]),
-} as const satisfies AgentDefinition);
+    promptSections: Object.freeze([
+      Object.freeze({
+        sectionId: 'qa-role',
+        kind: 'role',
+        text: 'Verify the behavior assigned to this member run and keep conclusions scoped to available evidence.',
+      }),
+      Object.freeze({
+        sectionId: 'qa-operations',
+        kind: 'operations',
+        text: 'Report reproducible failures, expected-versus-observed results, and any unverified conditions.',
+      }),
+    ]),
+  } as const satisfies AgentDefinition,
+);
 
 /**
  * New Rooms expand this configuration into a frozen membership snapshot.
  * Existing durable Rooms are intentionally not migrated when these defaults change.
  */
-export const CHATROOM_DEFAULT_AGENT_CONFIGURATION = Object.freeze({
-  seedLeaderIds: Object.freeze(['leader']),
-  acknowledge: Object.freeze({
-    mode: 'reaction', pendingReaction: '👀', completedReaction: '✅', failedReaction: '⚠️',
-    messageTemplate: 'I’ll take a look.',
-  }),
-  members: Object.freeze([
-    Object.freeze({
-      memberId: 'leader', label: 'Lead', definition: CHATROOM_DEFAULT_AGENT.identity,
-      role: 'leader', attentionPolicy: 'ambient', relatedMemberIds: Object.freeze([]),
+export const CHATROOM_DEFAULT_AGENT_CONFIGURATION = Object.freeze(
+  {
+    seedLeaderIds: Object.freeze(['leader']),
+    acknowledge: Object.freeze({
+      mode: 'reaction',
+      pendingReaction: '👀',
+      completedReaction: '✅',
+      failedReaction: '⚠️',
+      messageTemplate: 'I’ll take a look.',
     }),
-    Object.freeze({
-      memberId: 'reviewer', label: 'Reviewer', definition: CHATROOM_DEFAULT_REVIEWER.identity,
-      role: 'member', attentionPolicy: 'mention-only', reportsToMemberId: 'leader', relatedMemberIds: Object.freeze([]),
-    }),
-    Object.freeze({
-      memberId: 'integrator', label: 'Integrator', definition: CHATROOM_DEFAULT_INTEGRATOR.identity,
-      role: 'member', attentionPolicy: 'mention-only', reportsToMemberId: 'leader', relatedMemberIds: Object.freeze([]),
-    }),
-    Object.freeze({
-      memberId: 'documentation', label: 'Documentation', definition: CHATROOM_DEFAULT_DOCUMENTATION.identity,
-      role: 'member', attentionPolicy: 'mention-only', reportsToMemberId: 'reviewer', relatedMemberIds: Object.freeze([]),
-    }),
-    Object.freeze({
-      memberId: 'qa', label: 'QA', definition: CHATROOM_DEFAULT_QA.identity,
-      role: 'member', attentionPolicy: 'mention-only', reportsToMemberId: 'integrator', relatedMemberIds: Object.freeze([]),
-    }),
-  ]),
-  definitions: Object.freeze([
-    CHATROOM_DEFAULT_AGENT,
-    CHATROOM_DEFAULT_REVIEWER,
-    CHATROOM_DEFAULT_INTEGRATOR,
-    CHATROOM_DEFAULT_DOCUMENTATION,
-    CHATROOM_DEFAULT_QA,
-  ]),
-} as const satisfies ChatroomAgentConfiguration);
+    members: Object.freeze([
+      Object.freeze({
+        memberId: 'leader',
+        label: 'Lead',
+        definition: CHATROOM_DEFAULT_AGENT.identity,
+        role: 'leader',
+        attentionPolicy: 'ambient',
+        relatedMemberIds: Object.freeze([]),
+      }),
+      Object.freeze({
+        memberId: 'reviewer',
+        label: 'Reviewer',
+        definition: CHATROOM_DEFAULT_REVIEWER.identity,
+        role: 'member',
+        attentionPolicy: 'mention-only',
+        reportsToMemberId: 'leader',
+        relatedMemberIds: Object.freeze([]),
+      }),
+      Object.freeze({
+        memberId: 'integrator',
+        label: 'Integrator',
+        definition: CHATROOM_DEFAULT_INTEGRATOR.identity,
+        role: 'member',
+        attentionPolicy: 'mention-only',
+        reportsToMemberId: 'leader',
+        relatedMemberIds: Object.freeze([]),
+      }),
+      Object.freeze({
+        memberId: 'documentation',
+        label: 'Documentation',
+        definition: CHATROOM_DEFAULT_DOCUMENTATION.identity,
+        role: 'member',
+        attentionPolicy: 'mention-only',
+        reportsToMemberId: 'reviewer',
+        relatedMemberIds: Object.freeze([]),
+      }),
+      Object.freeze({
+        memberId: 'qa',
+        label: 'QA',
+        definition: CHATROOM_DEFAULT_QA.identity,
+        role: 'member',
+        attentionPolicy: 'mention-only',
+        reportsToMemberId: 'integrator',
+        relatedMemberIds: Object.freeze([]),
+      }),
+    ]),
+    definitions: Object.freeze([
+      CHATROOM_DEFAULT_AGENT,
+      CHATROOM_DEFAULT_REVIEWER,
+      CHATROOM_DEFAULT_INTEGRATOR,
+      CHATROOM_DEFAULT_DOCUMENTATION,
+      CHATROOM_DEFAULT_QA,
+    ]),
+  } as const satisfies ChatroomAgentConfiguration,
+);

@@ -1,7 +1,4 @@
-import type {
-  AgentAdmission,
-  AgentHandle,
-} from '@cordisx/protocol/agents/v1';
+import type { AgentAdmission, AgentHandle } from '@cordisx/protocol/agents/v1';
 import type {
   AgentAdmissionTarget,
   AgentAdmissionTargetOriginService,
@@ -27,13 +24,19 @@ export interface ChatroomAgentAdmissionV3Request {
 export type ChatroomAgentAdmissionV3Result =
   | {
     readonly status: 'accepted';
-    readonly admission: AgentAdmission & { readonly status: 'accepted' };
+    readonly admission: AgentAdmission & { readonly status: 'accepted'; };
   }
   | {
     readonly status: 'denied';
     readonly stage: 'issue' | 'reserve';
-    readonly code: 'not-owner' | 'origin-denied' | 'target-denied' | 'target-mismatch'
-      | 'stale' | 'command-complete' | 'reused';
+    readonly code:
+      | 'not-owner'
+      | 'origin-denied'
+      | 'target-denied'
+      | 'target-mismatch'
+      | 'stale'
+      | 'command-complete'
+      | 'reused';
   };
 
 /**

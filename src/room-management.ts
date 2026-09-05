@@ -45,21 +45,25 @@ function roomIdFrom(context: CordisXCommandContext): string {
   return record.roomId;
 }
 
-function renameArgumentsFrom(context: CordisXCommandContext): Readonly<{ roomId: string; title: string }> {
+function renameArgumentsFrom(context: CordisXCommandContext): Readonly<{ roomId: string; title: string; }> {
   const record = argumentsFrom(context);
-  if (Object.keys(record).length !== 2
+  if (
+    Object.keys(record).length !== 2
     || typeof record.roomId !== 'string'
     || record.roomId.length === 0
-    || typeof record.title !== 'string') {
+    || typeof record.title !== 'string'
+  ) {
     throw new ChatroomRoomManagementError(
       'invalid-arguments',
       'Room rename requires exact structured roomId and title arguments.',
     );
   }
   const title = record.title.trim();
-  if (title.length === 0
+  if (
+    title.length === 0
     || Array.from(title).length > CHATROOM_ROOM_TITLE_MAX_CODE_POINTS
-    || /[\u0000-\u001F\u007F]/u.test(title)) {
+    || /[\u0000-\u001F\u007F]/u.test(title)
+  ) {
     throw new ChatroomRoomManagementError(
       'invalid-title',
       `Room title must contain 1-${CHATROOM_ROOM_TITLE_MAX_CODE_POINTS} code points without control characters.`,
@@ -71,7 +75,7 @@ function renameArgumentsFrom(context: CordisXCommandContext): Readonly<{ roomId:
 async function updateRoom(
   store: DurableChatroomRoomStore,
   roomId: string,
-  patch: Readonly<{ title?: string; pinned?: boolean; archived?: boolean }>,
+  patch: Readonly<{ title?: string; pinned?: boolean; archived?: boolean; }>,
 ): Promise<void> {
   const room = store.rooms.get(roomId);
   if (room === undefined) throw new ChatroomRoomManagementError('room-unavailable', 'Room is unavailable.');

@@ -1,7 +1,4 @@
-import type {
-  AgentLoopApprovalDecision,
-  AgentLoopTaskBinding,
-} from '@cordisx/protocol/agent-loop/v4';
+import type { AgentLoopApprovalDecision, AgentLoopTaskBinding } from '@cordisx/protocol/agent-loop/v4';
 
 import {
   createRoom,
@@ -21,17 +18,18 @@ export const memberSelfIntroductionOperationId = (
   memberId: string,
   runId: string,
   binding?: AgentLoopTaskBinding,
-) => operationIdFor('introduce', {
-  roomId,
-  participantId,
-  memberId,
-  runId,
-  ...(binding === undefined ? {} : {
-    task: binding.task,
-    bindingId: binding.binding.bindingId,
-    bindingGeneration: String(binding.binding.generation),
-  }),
-});
+) =>
+  operationIdFor('introduce', {
+    roomId,
+    participantId,
+    memberId,
+    runId,
+    ...(binding === undefined ? {} : {
+      task: binding.task,
+      bindingId: binding.binding.bindingId,
+      bindingGeneration: String(binding.binding.generation),
+    }),
+  });
 
 export const memberSelfIntroductionCancellationOperationId = (requestOperationId: string) =>
   operationIdFor('introduce-cancel', { requestOperationId });
@@ -64,22 +62,33 @@ export function planMemberSelfIntroduction(room: Room, runId: string): Room {
     throw new Error('Member self-introduction requires a committed active binding and details URL.');
   }
   const legacyOperationId = memberSelfIntroductionOperationId(
-    room.id, member.participantId, member.memberId, run.runId,
+    room.id,
+    member.participantId,
+    member.memberId,
+    run.runId,
   );
   if (run.selfIntroduction !== undefined) {
     const existing = run.selfIntroduction;
     const scopedExistingOperationId = memberSelfIntroductionOperationId(
-      room.id, member.participantId, member.memberId, run.runId, existing.binding,
+      room.id,
+      member.participantId,
+      member.memberId,
+      run.runId,
+      existing.binding,
     );
-    if (existing.operationId !== legacyOperationId
-      && existing.operationId !== scopedExistingOperationId
+    if (
+      existing.operationId !== legacyOperationId
+        && existing.operationId !== scopedExistingOperationId
       || existing.participantId !== member.participantId
       || existing.memberId !== member.memberId
-      || existing.runId !== run.runId) {
+      || existing.runId !== run.runId
+    ) {
       throw new Error('Member self-introduction operation correlation changed.');
     }
-    if (!sameBinding(existing.binding, run.taskBinding)
-      && (existing.state === 'planned' || existing.state === 'sending-unknown')) {
+    if (
+      !sameBinding(existing.binding, run.taskBinding)
+      && (existing.state === 'planned' || existing.state === 'sending-unknown')
+    ) {
       return replaceRoomRun(room, runId, {
         ...run,
         selfIntroduction: {
@@ -95,7 +104,11 @@ export function planMemberSelfIntroduction(room: Room, runId: string): Room {
     return room;
   }
   const operationId = memberSelfIntroductionOperationId(
-    room.id, member.participantId, member.memberId, run.runId, run.taskBinding,
+    room.id,
+    member.participantId,
+    member.memberId,
+    run.runId,
+    run.taskBinding,
   );
   return replaceRoomRun(room, runId, {
     ...run,
@@ -135,14 +148,16 @@ export function acceptMemberSelfIntroduction(
 ): Room {
   const { run } = exactRun(room, runId);
   const existing = run.selfIntroduction;
-  if (existing === undefined
+  if (
+    existing === undefined
     || existing.operationId !== input.operationId
     || existing.participantId !== input.participantId
     || existing.memberId !== input.memberId
     || existing.runId !== runId
     || !sameBinding(existing.binding, input.binding)
     || (existing.projection !== undefined
-      && (existing.projection.turn !== input.turn || existing.projection.messageId !== input.messageId))) {
+      && (existing.projection.turn !== input.turn || existing.projection.messageId !== input.messageId))
+  ) {
     throw new Error('Accepted member self-introduction did not match its durable request.');
   }
   // Cancellation is terminal. A provider may finish the original request
@@ -220,7 +235,8 @@ export function memberSelfIntroductionMatchesProjection(
       && existing.acceptance.turn === input.turn && existing.acceptance.messageId === input.messageId)
       || (existing.projection !== undefined
         && existing.projection.turn === input.turn && existing.projection.messageId === input.messageId));
-  if (existing === undefined
+  if (
+    existing === undefined
     || existing.operationId !== input.operationId
     || existing.participantId !== input.participantId
     || existing.memberId !== input.memberId
@@ -228,7 +244,8 @@ export function memberSelfIntroductionMatchesProjection(
     || (!exactStoredBinding && !exactCurrentRebind)
     || (existing.acceptance !== undefined
       && (existing.acceptance.turn !== input.turn || existing.acceptance.messageId !== input.messageId))
-    || existing.state === 'cancelled') return false;
+    || existing.state === 'cancelled'
+  ) return false;
   return true;
 }
 
@@ -263,11 +280,18 @@ export function planApprovalDecision(
   const { run, member } = exactRun(room, input.runId);
   if (run.taskBinding?.state !== 'active') throw new Error('Approval decision requires an active binding.');
   const operationId = approvalDecisionOperationId(
-    room.id, input.runId, input.turn, input.approvalId, input.decision,
+    room.id,
+    input.runId,
+    input.turn,
+    input.approvalId,
+    input.decision,
   );
-  const competing = room.approvalDecisions.find(candidate => candidate.runId === input.runId
-    && candidate.turn === input.turn && candidate.approvalId === input.approvalId);
-  const requestCollision = input.requestOperationId === undefined ? undefined
+  const competing = room.approvalDecisions.find(candidate =>
+    candidate.runId === input.runId
+    && candidate.turn === input.turn && candidate.approvalId === input.approvalId
+  );
+  const requestCollision = input.requestOperationId === undefined
+    ? undefined
     : room.approvalDecisions.find(candidate => candidate.requestOperationId === input.requestOperationId);
   if (requestCollision !== undefined && requestCollision !== competing) {
     throw new Error('Approval request operation belongs to a different durable decision.');
@@ -315,6 +339,7 @@ export function updateApprovalDecision(
   return createRoom({
     ...room,
     approvalDecisions: room.approvalDecisions.map(candidate =>
-      candidate.operationId === operationId ? update(candidate) : candidate),
+      candidate.operationId === operationId ? update(candidate) : candidate
+    ),
   });
 }

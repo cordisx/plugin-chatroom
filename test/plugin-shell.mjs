@@ -24,7 +24,10 @@ test('registers one plugin-owned React Room page through public CordisX modules'
   assert.match(page, /ChatroomAvatar/u);
   assert.match(page, /ChatroomCompositeAvatar/u);
   assert.match(css, /@media \(max-width: 760px\)/u);
-  assert.doesNotMatch(`${entry}\n${page}\n${pageSource}`, /ctx\.visuals|agentConversationShell|AgentConversationRenderer|renderer\/host-ui|data-cordisx-app-theme/u);
+  assert.doesNotMatch(
+    `${entry}\n${page}\n${pageSource}`,
+    /ctx\.visuals|agentConversationShell|AgentConversationRenderer|renderer\/host-ui|data-cordisx-app-theme/u,
+  );
 });
 
 test('preserves direct Agent Session delivery, replay, approval and first-message ordering', async () => {
@@ -42,8 +45,10 @@ test('preserves direct Agent Session delivery, replay, approval and first-messag
   assert.match(pageSource, /sessions\.answerApprovalItem/u);
   assert.match(pageSource, /decidePlaygroundAgentApprovalFromRoom/u);
   assert.match(sessions, /SessionEvent remains the durable fact/u);
-  assert.ok(page.indexOf('await source.submit(roomId, draft)')
-    < page.indexOf("await navigation.navigate({ id: 'room'"));
+  assert.ok(
+    page.indexOf('await source.submit(roomId, draft)')
+      < page.indexOf("await navigation.navigate({ id: 'room'"),
+  );
   assert.match(entry, /pageSource\.dispose\(\)/u);
 });
 

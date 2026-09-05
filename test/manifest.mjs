@@ -21,20 +21,30 @@ const authorityRequesterScope = {
 
 test('publishes v8 package and source manifests with correlated Lead authority route', () => {
   const packageManifest = JSON.parse(readFileSync(
-    new URL('../cordisx-package.json', import.meta.url), 'utf8',
+    new URL('../cordisx-package.json', import.meta.url),
+    'utf8',
   ));
   const runtimeManifest = JSON.parse(readFileSync(
-    new URL(`../${packageManifest.runtimeManifest.path.slice(2)}`, import.meta.url), 'utf8',
+    new URL(`../${packageManifest.runtimeManifest.path.slice(2)}`, import.meta.url),
+    'utf8',
   ));
   const staticCapabilities = runtimeManifest.capabilities;
   assert.equal(packageManifest.schemaVersion, 8);
   assert.equal(runtimeManifest.schemaVersion, 8);
-  assert.equal(packageManifest.runtimeManifest.schema,
-    'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v8.schema.json');
+  assert.equal(
+    packageManifest.runtimeManifest.schema,
+    'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v8.schema.json',
+  );
   assert.deepEqual(staticCapabilities.map(item => item.name), [
-    'agents.create', 'agents.resume', 'agents.get', 'agents.message.submit',
-    'agents.message.cancel', 'sessions.get', 'sessions.subscribe',
-    'approvals.request', 'approvals.answer',
+    'agents.create',
+    'agents.resume',
+    'agents.get',
+    'agents.message.submit',
+    'agents.message.cancel',
+    'sessions.get',
+    'sessions.subscribe',
+    'approvals.request',
+    'approvals.answer',
   ]);
   assert.equal(staticCapabilities.slice(0, 7).every(item => item.required === true), true);
   assert.deepEqual(staticCapabilities.slice(7), [

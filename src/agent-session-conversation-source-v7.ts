@@ -11,9 +11,9 @@ import type {
   AgentConversationShellPage,
   AgentConversationShellSnapshot,
   AgentConversationShellSource,
+  AgentConversationShellSubscribeRuntimeResult,
   AgentConversationShellSubscription,
   AgentConversationShellSubscriptionClosed,
-  AgentConversationShellSubscribeRuntimeResult,
   AgentConversationShellUpdate,
 } from '@cordisx/protocol/agent-conversation-shell/v7';
 
@@ -24,16 +24,18 @@ import type { ChatroomComposerShortcutPolicy } from './composer-settings.js';
 const closeEnvelope = (
   subscription: AgentConversationShellSubscription,
   code: AgentConversationShellSubscriptionClosed['code'],
-): AgentConversationShellSubscriptionClosed => Object.freeze({
-  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-conversation-shell-subscription-close.v7.schema.json',
-  contract: 'cordisx.agent-conversation-shell-subscription-close/v7',
-  schemaVersion: 7,
-  subscriptionId: subscription.subscriptionId,
-  binding: subscription.binding,
-  generation: subscription.generation,
-  status: 'closed',
-  code,
-});
+): AgentConversationShellSubscriptionClosed =>
+  Object.freeze({
+    $schema:
+      'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-conversation-shell-subscription-close.v7.schema.json',
+    contract: 'cordisx.agent-conversation-shell-subscription-close/v7',
+    schemaVersion: 7,
+    subscriptionId: subscription.subscriptionId,
+    binding: subscription.binding,
+    generation: subscription.generation,
+    status: 'closed',
+    code,
+  });
 
 class V7Stream {
   private cursor: number;
@@ -41,12 +43,16 @@ class V7Stream {
   private readonly updates: AgentConversationShellUpdate[] = [];
   private wake?: () => void;
   private close!: (value: AgentConversationShellSubscriptionClosed) => void;
-  readonly closed = new Promise<AgentConversationShellSubscriptionClosed>(resolve => { this.close = resolve; });
+  readonly closed = new Promise<AgentConversationShellSubscriptionClosed>(resolve => {
+    this.close = resolve;
+  });
 
   constructor(
     readonly subscription: AgentConversationShellSubscription,
     private readonly onTerminal: () => void,
-  ) { this.cursor = subscription.afterSequence; }
+  ) {
+    this.cursor = subscription.afterSequence;
+  }
 
   readonly pages: AsyncIterable<AgentConversationShellPage> = {
     [Symbol.asyncIterator]: () => this.iterate(),
@@ -87,7 +93,9 @@ class V7Stream {
   private async *iterate(): AsyncGenerator<AgentConversationShellPage> {
     while (true) {
       if (this.updates.length === 0 && this.terminal === undefined) {
-        await new Promise<void>(resolve => { this.wake = resolve; });
+        await new Promise<void>(resolve => {
+          this.wake = resolve;
+        });
       }
       const update = this.updates.shift();
       if (update !== undefined) {
@@ -182,7 +190,7 @@ function chronologicalRoomItems(items: readonly AgentConversationItem[]): readon
  */
 function applyAdmissionAppendAnchors(
   items: readonly AgentConversationItem[],
-  anchors: readonly Readonly<{ itemId: string; appendAfterItemId: string }>[],
+  anchors: readonly Readonly<{ itemId: string; appendAfterItemId: string; }>[],
 ): readonly AgentConversationItem[] {
   const ordered = [...items];
   for (const anchor of anchors) {
@@ -237,7 +245,9 @@ export class ChatroomAgentSessionConversationSourceV7 implements AgentConversati
   async subscribe(afterSequence: number): Promise<AgentConversationShellSubscribeRuntimeResult> {
     const snapshot = await this.snapshot();
     if (this.disposed || afterSequence !== snapshot.snapshotSequence) {
-      return { result: { type: 'subscribe', status: 'unavailable', code: this.disposed ? 'disposed' : 'generation-replaced' } };
+      return {
+        result: { type: 'subscribe', status: 'unavailable', code: this.disposed ? 'disposed' : 'generation-replaced' },
+      };
     }
     const subscription: AgentConversationShellSubscription = {
       subscriptionId: `chatroom-session-${++this.subscriptions}`,
@@ -273,7 +283,12 @@ export class ChatroomAgentSessionConversationSourceV7 implements AgentConversati
       expectedSnapshotSequence: request.expectedSnapshotSequence,
     };
     if (request.expectedSnapshotSequence !== current.snapshotSequence) {
-      return { ...fence, status: 'conflict', code: 'snapshot-conflict', currentSnapshotSequence: current.snapshotSequence };
+      return {
+        ...fence,
+        status: 'conflict',
+        code: 'snapshot-conflict',
+        currentSnapshotSequence: current.snapshotSequence,
+      };
     }
     const domainSnapshot = await this.domain.snapshot();
     const result = await this.domain.updateRoomSettings({
@@ -286,7 +301,12 @@ export class ChatroomAgentSessionConversationSourceV7 implements AgentConversati
     });
     await this.refresh();
     if (result.status === 'applied') {
-      return { ...fence, status: 'applied', code: 'applied', snapshotSequence: (await this.snapshot()).snapshotSequence };
+      return {
+        ...fence,
+        status: 'applied',
+        code: 'applied',
+        snapshotSequence: (await this.snapshot()).snapshotSequence,
+      };
     }
     if (result.status === 'unavailable') return { ...fence, status: 'unavailable', code: result.code };
     return {
@@ -294,7 +314,8 @@ export class ChatroomAgentSessionConversationSourceV7 implements AgentConversati
       status: 'conflict',
       code: result.code,
       ...(result.currentSnapshotSequence === undefined
-        ? {} : { currentSnapshotSequence: (await this.snapshot()).snapshotSequence }),
+        ? {}
+        : { currentSnapshotSequence: (await this.snapshot()).snapshotSequence }),
     };
   }
 
@@ -410,7 +431,7 @@ export class ChatroomAgentSessionConversationSourceV7 implements AgentConversati
     };
     if (this.snapshotValue !== undefined && JSON.stringify(this.snapshotValue) === JSON.stringify(snapshot)) return;
     this.snapshotValue = snapshot;
-    if (publish) for (const stream of this.streams) stream.replace(snapshot);
+    if (publish) { for (const stream of this.streams) stream.replace(snapshot); }
   }
 }
 
@@ -423,6 +444,7 @@ export const v3BindingFor = (
   routeSelection: {
     scope: binding.routeSelection.scope,
     ...(binding.routeSelection.selectedRoomParam === undefined
-      ? {} : { selectedRoomParam: binding.routeSelection.selectedRoomParam }),
+      ? {}
+      : { selectedRoomParam: binding.routeSelection.selectedRoomParam }),
   },
 });

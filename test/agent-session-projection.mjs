@@ -22,7 +22,10 @@ function roomFixture() {
     ],
   });
   room = addRoomRun(room, {
-    runId: 'review-run', memberId: 'reviewer', title: 'Reviewer', status: 'creating',
+    runId: 'review-run',
+    memberId: 'reviewer',
+    title: 'Reviewer',
+    status: 'creating',
   });
   room = bindRoomRunSession(room, 'review-run', sessionId);
   return room;
@@ -30,15 +33,27 @@ function roomFixture() {
 
 const event = (seq, type, data, extra = {}) => ({
   $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/session-event.v1.schema.json',
-  contract: 'cordisx.session-event/v1', schemaVersion: 1,
-  sessionId, seq, time: 1_788_000_000_000 + seq, type, data, ...extra,
+  contract: 'cordisx.session-event/v1',
+  schemaVersion: 1,
+  sessionId,
+  seq,
+  time: 1_788_000_000_000 + seq,
+  type,
+  data,
+  ...extra,
 });
 
 const page = (phase, events, replayThrough = events.at(-1)?.seq ?? -1) => ({
-  $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/session-subscription-page.v1.schema.json',
-  contract: 'cordisx.session-subscription-page/v1', schemaVersion: 1,
-  sessionId, sessionGeneration: 2, subscriptionGeneration: 3,
-  replayThrough, phase, events,
+  $schema:
+    'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/session-subscription-page.v1.schema.json',
+  contract: 'cordisx.session-subscription-page/v1',
+  schemaVersion: 1,
+  sessionId,
+  sessionGeneration: 2,
+  subscriptionGeneration: 3,
+  replayThrough,
+  phase,
+  events,
 });
 
 test('projects exact SessionEvent message identity and explicit self-introduction causation into Shell v6', () => {
@@ -58,16 +73,24 @@ test('projects exact SessionEvent message identity and explicit self-introductio
   );
   const projected = projector.project(page('replay', [
     event(0, 'user/message', {
-      id: 'intro-request', role: 'user', content: [{ type: 'text', text: 'Introduce yourself' }],
+      id: 'intro-request',
+      role: 'user',
+      content: [{ type: 'text', text: 'Introduce yourself' }],
       source: {
-        kind: 'plugin', pluginId: 'chatroom', generation: 7, form: 'instructions',
+        kind: 'plugin',
+        pluginId: 'chatroom',
+        generation: 7,
+        form: 'instructions',
         correlation: { namespace: 'chatroom.member-self-introduction', id: 'intro-correlation' },
       },
     }),
     event(1, 'assistant/message', {
-      turn: 1, step: 1,
+      turn: 1,
+      step: 1,
       message: {
-        id: 'assistant-introduction', role: 'assistant', content: [{ type: 'text', text: 'I review changes.' }],
+        id: 'assistant-introduction',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'I review changes.' }],
         source: { kind: 'model', provider: 'provider', model: 'model' },
       },
     }, { sourceEventSeqs: [0] }),
@@ -81,29 +104,45 @@ test('projects exact SessionEvent message identity and explicit self-introductio
   assert.deepEqual(item.semantic, {
     purpose: 'member-self-introduction',
     correlation: { sessionId, requestMessageId: 'intro-request' },
-    participantId: 'reviewer', memberId: 'reviewer', runId: 'review-run',
+    participantId: 'reviewer',
+    memberId: 'reviewer',
+    runId: 'review-run',
   });
   assert.deepEqual(projected.activeRun, {
-    participantId: 'reviewer', memberId: 'reviewer', runId: 'review-run', sessionId,
-    lifecycle: { phase: 'active' }, details: { kind: 'host', ref: 'agent-detail-one' },
+    participantId: 'reviewer',
+    memberId: 'reviewer',
+    runId: 'review-run',
+    sessionId,
+    lifecycle: { phase: 'active' },
+    details: { kind: 'host', ref: 'agent-detail-one' },
   });
 });
 
 test('keeps the submitted Room message before first-run self-introduction and reply', () => {
   const submitted = {
-    kind: 'message', itemId: 'room-user-item', messageId: 'room-user-message', sequence: 1,
+    kind: 'message',
+    itemId: 'room-user-item',
+    messageId: 'room-user-message',
+    sequence: 1,
     source: 'agent-loop',
     author: {
-      participantId: 'user', role: 'human',
+      participantId: 'user',
+      role: 'human',
       displayName: { namespace: 'chatroom', key: 'participant.name', fallback: 'You' },
     },
     semantic: { purpose: 'conversation' },
     body: [{ kind: 'text', text: { namespace: 'chatroom', key: 'message', fallback: 'hi' } }],
-    reactions: [], timestamp: '2026-09-03T00:00:00.000Z', deliveryState: 'pending',
-    runState: 'idle', ariaLive: 'off', actions: [],
+    reactions: [],
+    timestamp: '2026-09-03T00:00:00.000Z',
+    deliveryState: 'pending',
+    runState: 'idle',
+    ariaLive: 'off',
+    actions: [],
   };
   let room = createRoom({
-    id: 'room', title: 'Room', timelineSequence: submitted.sequence,
+    id: 'room',
+    title: 'Room',
+    timelineSequence: submitted.sequence,
     participants: [
       { id: 'user', name: 'You', kind: 'human' },
       { id: 'reviewer', name: 'Reviewer', kind: 'agent' },
@@ -111,44 +150,67 @@ test('keeps the submitted Room message before first-run self-introduction and re
     items: [submitted],
   });
   room = addRoomRun(room, {
-    runId: 'review-run', memberId: 'reviewer', title: 'Reviewer', status: 'creating',
+    runId: 'review-run',
+    memberId: 'reviewer',
+    title: 'Reviewer',
+    status: 'creating',
   });
   room = bindRoomRunSession(room, 'review-run', sessionId);
   room = recordRoomSessionSelfIntroduction(room, 'review-run', {
-    requestMessageId: 'intro-request', correlationId: 'intro-correlation',
+    requestMessageId: 'intro-request',
+    correlationId: 'intro-correlation',
     requestedAt: '2026-09-03T00:00:00.001Z',
   });
   let sequence = room.timelineSequence;
   const projector = new ChatroomAgentSessionProjector(
-    room, room.runs[0], sessionId, () => ++sequence, { generation: 9 },
+    room,
+    room.runs[0],
+    sessionId,
+    () => ++sequence,
+    { generation: 9 },
   );
   const projected = projector.project(page('live', [
     event(1, 'user/message', {
-      id: 'intro-request', role: 'user', content: [{ type: 'text', text: 'Introduce yourself' }],
+      id: 'intro-request',
+      role: 'user',
+      content: [{ type: 'text', text: 'Introduce yourself' }],
       source: {
-        kind: 'plugin', pluginId: 'chatroom', generation: 7, form: 'instructions',
+        kind: 'plugin',
+        pluginId: 'chatroom',
+        generation: 7,
+        form: 'instructions',
         correlation: { namespace: 'chatroom.member-self-introduction', id: 'intro-correlation' },
       },
     }),
     event(2, 'assistant/message', {
-      turn: 1, step: 1,
+      turn: 1,
+      step: 1,
       message: {
-        id: 'assistant-introduction', role: 'assistant',
+        id: 'assistant-introduction',
+        role: 'assistant',
         content: [{ type: 'text', text: 'I review changes.' }],
         source: { kind: 'model', provider: 'provider', model: 'model' },
       },
     }, { sourceEventSeqs: [1] }),
     event(3, 'user/message', {
-      id: 'room-runtime-message', role: 'user', content: [{ type: 'text', text: 'hi' }],
+      id: 'room-runtime-message',
+      role: 'user',
+      content: [{ type: 'text', text: 'hi' }],
       source: {
-        kind: 'plugin', pluginId: 'chatroom', generation: 7, form: 'relay',
+        kind: 'plugin',
+        pluginId: 'chatroom',
+        generation: 7,
+        form: 'relay',
         correlation: { namespace: 'chatroom.room-message', id: submitted.itemId },
       },
     }),
     event(4, 'assistant/message', {
-      turn: 2, step: 1,
+      turn: 2,
+      step: 1,
       message: {
-        id: 'assistant-reply', role: 'assistant', content: [{ type: 'text', text: 'hello' }],
+        id: 'assistant-reply',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'hello' }],
         source: { kind: 'model', provider: 'provider', model: 'model' },
       },
     }, { sourceEventSeqs: [3] }),
@@ -156,7 +218,9 @@ test('keeps the submitted Room message before first-run self-introduction and re
 
   const ordered = [...projected.items].sort((left, right) => left.sequence - right.sequence);
   assert.deepEqual(ordered.map(item => item.messageId), [
-    'room-runtime-message', 'assistant-introduction', 'assistant-reply',
+    'room-runtime-message',
+    'assistant-introduction',
+    'assistant-reply',
   ]);
   assert.equal(ordered[0].sequence, submitted.sequence);
   assert.ok(ordered[0].sequence < ordered[1].sequence);
@@ -166,19 +230,29 @@ test('keeps the submitted Room message before first-run self-introduction and re
 
 test('keeps B visible by exact admission identity while A stays pending, then rejects and cold-replays without duplicates', () => {
   const submitted = {
-    kind: 'message', itemId: 'admitted-room-item', messageId: 'admitted-room-message', sequence: 1,
+    kind: 'message',
+    itemId: 'admitted-room-item',
+    messageId: 'admitted-room-message',
+    sequence: 1,
     source: 'agent-loop',
     author: {
-      participantId: 'user', role: 'human',
+      participantId: 'user',
+      role: 'human',
       displayName: { namespace: 'chatroom', key: 'participant.name', fallback: 'You' },
     },
     semantic: { purpose: 'conversation' },
     body: [{ kind: 'text', text: { namespace: 'chatroom', key: 'message', fallback: 'Room copy must not win' } }],
-    reactions: [], timestamp: '2026-09-04T00:00:00.000Z', deliveryState: 'pending',
-    runState: 'idle', ariaLive: 'off', actions: [],
+    reactions: [],
+    timestamp: '2026-09-04T00:00:00.000Z',
+    deliveryState: 'pending',
+    runState: 'idle',
+    ariaLive: 'off',
+    actions: [],
   };
   let room = createRoom({
-    id: 'room', title: 'Room', timelineSequence: submitted.sequence,
+    id: 'room',
+    title: 'Room',
+    timelineSequence: submitted.sequence,
     participants: [
       { id: 'user', name: 'You', kind: 'human' },
       { id: 'reviewer', name: 'Reviewer', kind: 'agent' },
@@ -186,19 +260,30 @@ test('keeps B visible by exact admission identity while A stays pending, then re
     items: [submitted],
   });
   room = addRoomRun(room, {
-    runId: 'review-run', memberId: 'reviewer', title: 'Reviewer', status: 'creating',
+    runId: 'review-run',
+    memberId: 'reviewer',
+    title: 'Reviewer',
+    status: 'creating',
   });
   room = bindRoomRunSession(room, 'review-run', sessionId);
   const eventData = {
-    id: 'admission-message', role: 'user', content: [{ type: 'text', text: 'Host-authoritative body' }],
+    id: 'admission-message',
+    role: 'user',
+    content: [{ type: 'text', text: 'Host-authoritative body' }],
     source: { kind: 'plugin', pluginId: 'chatroom', generation: 7, form: 'relay' },
   };
   let sequence = room.timelineSequence;
   const projector = new ChatroomAgentSessionProjector(
-    room, room.runs[0], sessionId, () => ++sequence, { generation: 9 },
+    room,
+    room.runs[0],
+    sessionId,
+    () => ++sequence,
+    { generation: 9 },
   );
   const pendingA = event(0, 'approval/asked', {
-    id: 'approval-a', toolName: 'shell', reason: 'A remains pending while B arrives',
+    id: 'approval-a',
+    toolName: 'shell',
+    reason: 'A remains pending while B arrives',
   });
   const admittedB = event(1, 'user/message', eventData);
   const beforeLink = projector.project(page('live', [pendingA, admittedB]));
@@ -207,70 +292,119 @@ test('keeps B visible by exact admission identity while A stays pending, then re
   assert.equal(beforeLink.items[0].state, 'pending');
 
   const linked = recordRoomAdmissionMessageLink(room, {
-    roomId: room.id, itemId: submitted.itemId,
-    participantId: 'reviewer', memberId: 'reviewer', runId: 'review-run',
-    sessionId, messageId: 'admission-message', owner: { pluginId: 'chatroom', generation: 7 },
+    roomId: room.id,
+    itemId: submitted.itemId,
+    participantId: 'reviewer',
+    memberId: 'reviewer',
+    runId: 'review-run',
+    sessionId,
+    messageId: 'admission-message',
+    owner: { pluginId: 'chatroom', generation: 7 },
     appendAfterItemId: 'approval-a-opaque',
   });
-  assert.equal(linked.admissionMessageLinks[0].appendAfterItemId, 'approval-a-opaque',
-    'the owner document retains only an opaque projection ordering fence');
+  assert.equal(
+    linked.admissionMessageLinks[0].appendAfterItemId,
+    'approval-a-opaque',
+    'the owner document retains only an opaque projection ordering fence',
+  );
   const reconciled = projector.reconcileAdmissionLinks(linked, linked.runs[0]);
   assert.equal(reconciled.length, 1);
   assert.equal(reconciled[0].item.kind, 'message');
   assert.equal(reconciled[0].item.messageId, 'admission-message');
   assert.equal(reconciled[0].item.sequence, submitted.sequence);
   assert.equal(reconciled[0].item.timestamp, submitted.timestamp);
-  assert.equal(reconciled[0].item.body[0].text.fallback, 'Host-authoritative body',
-    'the associated Room item orders the message but never supplies its content');
+  assert.equal(
+    reconciled[0].item.body[0].text.fallback,
+    'Host-authoritative body',
+    'the associated Room item orders the message but never supplies its content',
+  );
 
   const afterLink = projector.snapshotItems();
   assert.equal(afterLink.filter(item => item.kind === 'message' && item.messageId === 'admission-message').length, 1);
-  assert.equal(afterLink.find(item => item.kind === 'approval')?.state, 'pending',
-    'an existing A approval never filters B from the Room projection');
+  assert.equal(
+    afterLink.find(item => item.kind === 'approval')?.state,
+    'pending',
+    'an existing A approval never filters B from the Room projection',
+  );
 
   const duplicateLive = projector.project(page('live', [admittedB], 1));
-  assert.equal(duplicateLive.items.filter(item => item.kind === 'message' && item.messageId === 'admission-message').length, 1,
-    'duplicate live/replay delivery dedupes by the exact Session/message tuple');
+  assert.equal(
+    duplicateLive.items.filter(item => item.kind === 'message' && item.messageId === 'admission-message').length,
+    1,
+    'duplicate live/replay delivery dedupes by the exact Session/message tuple',
+  );
 
   const rejected = projector.project(page('live', [event(2, 'approval/decided', {
-    id: 'approval-a', outcome: 'rejected',
+    id: 'approval-a',
+    outcome: 'rejected',
   })], 2));
   assert.equal(rejected.items.length, 2);
   assert.equal(rejected.items.find(item => item.kind === 'approval')?.state, 'denied');
-  assert.equal(rejected.items.filter(item => item.kind === 'message' && item.messageId === 'admission-message').length, 1,
-    'reject updates A in place and retains B');
+  assert.equal(
+    rejected.items.filter(item => item.kind === 'message' && item.messageId === 'admission-message').length,
+    1,
+    'reject updates A in place and retains B',
+  );
 
   let coldSequence = linked.timelineSequence;
   const cold = new ChatroomAgentSessionProjector(
-    linked, linked.runs[0], sessionId, () => ++coldSequence, { generation: 9 },
+    linked,
+    linked.runs[0],
+    sessionId,
+    () => ++coldSequence,
+    { generation: 9 },
   );
-  const replayed = cold.project(page('replay', [pendingA, admittedB, event(2, 'approval/decided', {
-    id: 'approval-a', outcome: 'rejected',
-  })]));
+  const replayed = cold.project(page('replay', [
+    pendingA,
+    admittedB,
+    event(2, 'approval/decided', {
+      id: 'approval-a',
+      outcome: 'rejected',
+    }),
+  ]));
   assert.deepEqual(
-    replayed.items.map(item => [item.kind, item.itemId, item.sequence, item.kind === 'message' ? item.messageId : item.state]),
-    rejected.items.map(item => [item.kind, item.itemId, item.sequence, item.kind === 'message' ? item.messageId : item.state]),
+    replayed.items.map(
+      item => [item.kind, item.itemId, item.sequence, item.kind === 'message' ? item.messageId : item.state],
+    ),
+    rejected.items.map(
+      item => [item.kind, item.itemId, item.sequence, item.kind === 'message' ? item.messageId : item.state],
+    ),
     'cold replay preserves the same item ids, order, and count after rejection',
   );
 
-  const foreignRoom = bindRoomRunSession(addRoomRun(linked, {
-    runId: 'lead-run', memberId: 'leader', title: 'Lead', status: 'creating',
-  }), 'lead-run', 'session-two');
+  const foreignRoom = bindRoomRunSession(
+    addRoomRun(linked, {
+      runId: 'lead-run',
+      memberId: 'leader',
+      title: 'Lead',
+      status: 'creating',
+    }),
+    'lead-run',
+    'session-two',
+  );
   const unprojected = (data, messageSessionId = sessionId) => {
     const domain = messageSessionId === sessionId ? linked : foreignRoom;
-    const run = domain.runs.find(candidate => candidate.runId === (
-      messageSessionId === sessionId ? 'review-run' : 'lead-run'
-    ));
+    const run = domain.runs.find(candidate =>
+      candidate.runId === (
+        messageSessionId === sessionId ? 'review-run' : 'lead-run'
+      )
+    );
     const probe = new ChatroomAgentSessionProjector(domain, run, messageSessionId, () => 99, { generation: 9 });
     const foreignEvent = { ...event(1, 'user/message', data), sessionId: messageSessionId };
     const foreignPage = { ...page('replay', [foreignEvent]), sessionId: messageSessionId, events: [foreignEvent] };
     return probe.project(foreignPage).items;
   };
   assert.equal(unprojected({ ...eventData, id: 'foreign-message' }).length, 0, 'foreign message id is hidden');
-  assert.equal(unprojected({ ...eventData, source: { ...eventData.source, pluginId: 'foreign' } }).length, 0,
-    'foreign plugin owner is hidden');
-  assert.equal(unprojected({ ...eventData, source: { ...eventData.source, generation: 8 } }).length, 0,
-    'stale plugin generation is hidden');
+  assert.equal(
+    unprojected({ ...eventData, source: { ...eventData.source, pluginId: 'foreign' } }).length,
+    0,
+    'foreign plugin owner is hidden',
+  );
+  assert.equal(
+    unprojected({ ...eventData, source: { ...eventData.source, generation: 8 } }).length,
+    0,
+    'stale plugin generation is hidden',
+  );
   assert.equal(unprojected(eventData, 'session-two').length, 0, 'foreign Session is hidden');
 });
 
@@ -278,10 +412,16 @@ test('projects approvals only with real Agent generation and updates from the ma
   const room = roomFixture();
   let sequence = room.timelineSequence;
   const projector = new ChatroomAgentSessionProjector(
-    room, room.runs[0], sessionId, () => ++sequence, { generation: 9 },
+    room,
+    room.runs[0],
+    sessionId,
+    () => ++sequence,
+    { generation: 9 },
   );
   const asked = projector.project(page('live', [event(0, 'approval/asked', {
-    id: 'approval-one', toolName: 'shell', reason: 'Needs permission',
+    id: 'approval-one',
+    toolName: 'shell',
+    reason: 'Needs permission',
   })], 0));
   const pending = asked.changes[0].item;
   assert.equal(pending.kind, 'approval');
@@ -296,7 +436,8 @@ test('projects approvals only with real Agent generation and updates from the ma
   assert.deepEqual(pending.actions.map(action => action.decision), ['approve', 'deny', 'cancel']);
 
   const decided = projector.project(page('live', [event(1, 'approval/decided', {
-    id: 'approval-one', outcome: 'allowed-once',
+    id: 'approval-one',
+    outcome: 'allowed-once',
   })], 0));
   assert.equal(decided.changes[0].kind, 'item-updated');
   assert.equal(decided.changes[0].item.state, 'approved');
@@ -310,14 +451,20 @@ test('cold replay correlates durable asked and decided into one actionless termi
   const room = roomFixture();
   let sequence = room.timelineSequence;
   const projector = new ChatroomAgentSessionProjector(
-    room, room.runs[0], sessionId, () => ++sequence,
+    room,
+    room.runs[0],
+    sessionId,
+    () => ++sequence,
   );
   const projected = projector.project(page('replay', [
     event(22, 'approval/asked', {
-      id: 'approval-cold', toolName: 'shell', reason: 'Needs durable permission',
+      id: 'approval-cold',
+      toolName: 'shell',
+      reason: 'Needs durable permission',
     }),
     event(23, 'approval/decided', {
-      id: 'approval-cold', outcome: 'allowed-once',
+      id: 'approval-cold',
+      outcome: 'allowed-once',
     }),
   ], 34));
 
@@ -338,7 +485,10 @@ test('cold replay projects unavailable as an actionless failed approval with a l
   const room = roomFixture();
   let sequence = room.timelineSequence;
   const projector = new ChatroomAgentSessionProjector(
-    room, room.runs[0], sessionId, () => ++sequence,
+    room,
+    room.runs[0],
+    sessionId,
+    () => ++sequence,
   );
   const projected = projector.project(page('replay', [
     event(4, 'approval/asked', { id: 'approval-failed', toolName: 'shell' }),
@@ -350,7 +500,9 @@ test('cold replay projects unavailable as an actionless failed approval with a l
   assert.equal('agentGeneration' in terminal, false);
   assert.deepEqual(terminal.actions, []);
   assert.deepEqual(terminal.diagnostic, {
-    namespace: 'chatroom', key: 'agent.approval.unavailable', fallback: 'Approval unavailable',
+    namespace: 'chatroom',
+    key: 'agent.approval.unavailable',
+    fallback: 'Approval unavailable',
   });
 });
 
@@ -359,7 +511,10 @@ test('cold replay maps rejected and cancelled outcomes to actionless terminal st
   for (const [outcome, state] of [['rejected', 'denied'], ['cancelled', 'cancelled']]) {
     let sequence = room.timelineSequence;
     const projector = new ChatroomAgentSessionProjector(
-      room, room.runs[0], sessionId, () => ++sequence,
+      room,
+      room.runs[0],
+      sessionId,
+      () => ++sequence,
     );
     const projected = projector.project(page('replay', [
       event(6, 'approval/asked', { id: `approval-${outcome}`, toolName: 'shell' }),
@@ -376,7 +531,10 @@ test('cold replay never turns asked-only, unpaired, duplicate, or out-of-order a
   const createProjector = () => {
     let sequence = room.timelineSequence;
     return new ChatroomAgentSessionProjector(
-      room, room.runs[0], sessionId, () => ++sequence,
+      room,
+      room.runs[0],
+      sessionId,
+      () => ++sequence,
     );
   };
 
@@ -412,19 +570,25 @@ test('cold replay never turns asked-only, unpaired, duplicate, or out-of-order a
   assert.deepEqual(outOfOrder.items, []);
 
   const foreign = createProjector();
-  assert.throws(() => foreign.project({
-    ...page('replay', [event(18, 'approval/asked', {
-      id: 'foreign-session', toolName: 'shell',
-    })], 18),
-    sessionId: 'session-foreign',
-  }), /foreign Session page/u);
+  assert.throws(() =>
+    foreign.project({
+      ...page('replay', [event(18, 'approval/asked', {
+        id: 'foreign-session',
+        toolName: 'shell',
+      })], 18),
+      sessionId: 'session-foreign',
+    }), /foreign Session page/u);
 });
 
 test('hides a persisted delegation context envelope even without source event correlation', () => {
   const room = roomFixture();
   let sequence = room.timelineSequence;
   const projector = new ChatroomAgentSessionProjector(
-    room, room.runs[0], sessionId, () => ++sequence, { generation: 9 },
+    room,
+    room.runs[0],
+    sessionId,
+    () => ++sequence,
+    { generation: 9 },
   );
   const context = JSON.stringify({
     self: { memberId: 'reviewer', label: 'Reviewer', runId: 'review-run' },
@@ -433,7 +597,8 @@ test('hides a persisted delegation context envelope even without source event co
     availableTargets: [{ memberId: 'qa', label: 'QA' }],
     communication: {
       mode: 'explicit-mention-required',
-      rule: 'Prefix an ordinary Room message with @<memberId-or-label> to deliver it only to that entity. Without @, the message is Room-visible only.',
+      rule:
+        'Prefix an ordinary Room message with @<memberId-or-label> to deliver it only to that entity. Without @, the message is Room-visible only.',
     },
     approvals: {
       mode: 'reports-to-hierarchy',
@@ -442,9 +607,11 @@ test('hides a persisted delegation context envelope even without source event co
     },
   });
   const projected = projector.project(page('replay', [event(20, 'assistant/message', {
-    turn: 2, step: 1,
+    turn: 2,
+    step: 1,
     message: {
-      id: 'assistant-delegated', role: 'assistant',
+      id: 'assistant-delegated',
+      role: 'assistant',
       content: [{
         type: 'text',
         text: `Playground Agent/Session fixture reply: [Chatroom delegation context]\n${context}\n\n最终链路验证`,
@@ -455,8 +622,7 @@ test('hides a persisted delegation context envelope even without source event co
 
   const message = projected.changes[0].item;
   assert.equal(message.kind, 'message');
-  assert.equal(message.body[0].text.fallback,
-    'Playground Agent/Session fixture reply: 最终链路验证');
+  assert.equal(message.body[0].text.fallback, 'Playground Agent/Session fixture reply: 最终链路验证');
   assert.doesNotMatch(JSON.stringify(message.body), /Chatroom delegation context|delegatedBy/u);
 });
 
@@ -464,13 +630,20 @@ test('keeps lookalike delegation text visible unless the exact legacy envelope v
   const room = roomFixture();
   let sequence = room.timelineSequence;
   const projector = new ChatroomAgentSessionProjector(
-    room, room.runs[0], sessionId, () => ++sequence, { generation: 9 },
+    room,
+    room.runs[0],
+    sessionId,
+    () => ++sequence,
+    { generation: 9 },
   );
   const lookalike = '[Chatroom delegation context]\n{"delegatedBy":"not-the-envelope"}\n\n保留正文';
   const projected = projector.project(page('replay', [event(21, 'assistant/message', {
-    turn: 2, step: 1,
+    turn: 2,
+    step: 1,
     message: {
-      id: 'assistant-lookalike', role: 'assistant', content: [{ type: 'text', text: lookalike }],
+      id: 'assistant-lookalike',
+      role: 'assistant',
+      content: [{ type: 'text', text: lookalike }],
       source: { kind: 'model', provider: 'provider', model: 'model' },
     },
   }, { sourceEventSeqs: null })], 21));
@@ -485,9 +658,12 @@ test('never invents pending approval generation or self-introduction causation f
   const projected = projector.project(page('replay', [
     event(0, 'approval/asked', { id: 'approval-one', toolName: 'shell' }),
     event(1, 'assistant/message', {
-      turn: 1, step: 1,
+      turn: 1,
+      step: 1,
       message: {
-        id: 'assistant-one', role: 'assistant', content: [{ type: 'text', text: 'A response' }],
+        id: 'assistant-one',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'A response' }],
         source: { kind: 'model', provider: 'provider', model: 'model' },
       },
     }),
@@ -501,10 +677,16 @@ test('marks a Session surface replacement for one atomic Shell snapshot replacem
   let sequence = room.timelineSequence;
   const projector = new ChatroomAgentSessionProjector(room, room.runs[0], sessionId, () => ++sequence);
   projector.project(page('replay', [event(1, 'user/message', {
-    id: 'user-one', role: 'user', content: [{ type: 'text', text: 'Original' }], source: { kind: 'user' },
+    id: 'user-one',
+    role: 'user',
+    content: [{ type: 'text', text: 'Original' }],
+    source: { kind: 'user' },
   })], 1));
   const replaced = projector.project(page('live', [event(2, 'user/message', {
-    id: 'user-two', role: 'user', content: [{ type: 'text', text: 'Replacement' }], source: { kind: 'user' },
+    id: 'user-two',
+    role: 'user',
+    content: [{ type: 'text', text: 'Replacement' }],
+    source: { kind: 'user' },
   }, { surfaceOp: { op: 'replace', start: 1, end: 1 }, sourceEventSeqs: [1] })], 1));
   assert.equal(replaced.requiresSnapshotReplacement, true);
   assert.equal(replaced.items.length, 1);

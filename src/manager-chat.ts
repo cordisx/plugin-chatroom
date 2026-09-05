@@ -51,11 +51,11 @@ export type ChatroomManagerMessages = {
   'manager.search.placeholder': undefined;
   'manager.search.no-match.title': undefined;
   'manager.search.no-match.description': undefined;
-  'manager.room.title': { readonly title: string };
+  'manager.room.title': { readonly title: string; };
   'navigation.rooms': undefined;
-  'navigation.room.title': { readonly title: string };
+  'navigation.room.title': { readonly title: string; };
   'navigation.room.empty': undefined;
-  'navigation.room.summary': { readonly summary: string };
+  'navigation.room.summary': { readonly summary: string; };
   'action.pin': undefined;
   'action.unpin': undefined;
   'action.archive': undefined;
@@ -103,7 +103,9 @@ export const chatroomManagerMessage = (
   key: keyof ChatroomManagerMessages,
   fallback: string,
 ): CordisXLocalizedText => ({
-  namespace: CHATROOM_MANAGER_I18N_NAMESPACE, key, fallback,
+  namespace: CHATROOM_MANAGER_I18N_NAMESPACE,
+  key,
+  fallback,
 });
 
 const message = chatroomManagerMessage;
@@ -112,62 +114,77 @@ export const CHATROOM_MANAGER_ROOMS_ROUTE_ID = 'manager-chat-rooms' as const;
 export const CHATROOM_MANAGER_ARCHIVED_ROUTE_ID = 'manager-chat-archived' as const;
 export const CHATROOM_MANAGER_SETTINGS_ROUTE_ID = 'manager-chat-settings' as const;
 
-const roomsPage = Object.freeze({
-  $schema: CORDISX_PAGE_SCHEMA_V3,
-  schemaVersion: 3,
-  id: CHATROOM_MANAGER_ROOMS_ROUTE_ID,
-  title: message('manager.page.title', 'Manage chats'),
-  description: message('manager.page.rooms.description', 'Manage active chats.'),
-  icon: 'host:chat',
-  chrome: 'standard',
-} as const satisfies CordisXPageMetadataV3);
+const roomsPage = Object.freeze(
+  {
+    $schema: CORDISX_PAGE_SCHEMA_V3,
+    schemaVersion: 3,
+    id: CHATROOM_MANAGER_ROOMS_ROUTE_ID,
+    title: message('manager.page.title', 'Manage chats'),
+    description: message('manager.page.rooms.description', 'Manage active chats.'),
+    icon: 'host:chat',
+    chrome: 'standard',
+  } as const satisfies CordisXPageMetadataV3,
+);
 
-const archivedPage = Object.freeze({
-  ...roomsPage,
-  id: CHATROOM_MANAGER_ARCHIVED_ROUTE_ID,
-  description: message('manager.page.archived.description', 'Find, restore, or delete archived chats.'),
-  icon: 'host:archive',
-} as const satisfies CordisXPageMetadataV3);
+const archivedPage = Object.freeze(
+  {
+    ...roomsPage,
+    id: CHATROOM_MANAGER_ARCHIVED_ROUTE_ID,
+    description: message('manager.page.archived.description', 'Find, restore, or delete archived chats.'),
+    icon: 'host:archive',
+  } as const satisfies CordisXPageMetadataV3,
+);
 
-const settingsPage = Object.freeze({
-  ...roomsPage,
-  id: CHATROOM_MANAGER_SETTINGS_ROUTE_ID,
-  description: message('manager.page.settings.description', 'Choose how the Room composer sends messages.'),
-  icon: 'host:settings',
-} as const satisfies CordisXPageMetadataV3);
+const settingsPage = Object.freeze(
+  {
+    ...roomsPage,
+    id: CHATROOM_MANAGER_SETTINGS_ROUTE_ID,
+    description: message('manager.page.settings.description', 'Choose how the Room composer sends messages.'),
+    icon: 'host:settings',
+  } as const satisfies CordisXPageMetadataV3,
+);
 
-const roomsRoute = Object.freeze({
-  $schema: CORDISX_ROUTE_SCHEMA_V2,
-  schemaVersion: 2,
-  id: CHATROOM_MANAGER_ROOMS_ROUTE_ID,
-  path: '/manager/extensions/chatroom/rooms',
-  outlet: 'manager.content',
-  page: CHATROOM_MANAGER_ROOMS_ROUTE_ID,
-  title: message('manager.navigation.title', 'Manage chats'),
-  description: message('manager.navigation.description', 'Search, organize, archive, restore, and delete Chatroom rooms.'),
-} as const satisfies CordisXRouteDefinitionV2<'manager.content'>);
+const roomsRoute = Object.freeze(
+  {
+    $schema: CORDISX_ROUTE_SCHEMA_V2,
+    schemaVersion: 2,
+    id: CHATROOM_MANAGER_ROOMS_ROUTE_ID,
+    path: '/manager/extensions/chatroom/rooms',
+    outlet: 'manager.content',
+    page: CHATROOM_MANAGER_ROOMS_ROUTE_ID,
+    title: message('manager.navigation.title', 'Manage chats'),
+    description: message(
+      'manager.navigation.description',
+      'Search, organize, archive, restore, and delete Chatroom rooms.',
+    ),
+  } as const satisfies CordisXRouteDefinitionV2<'manager.content'>,
+);
 
-const archivedRoute = Object.freeze({
-  $schema: CORDISX_ROUTE_SCHEMA_V2,
-  schemaVersion: 2,
-  id: CHATROOM_MANAGER_ARCHIVED_ROUTE_ID,
-  path: '/manager/extensions/chatroom/archived',
-  outlet: 'manager.content',
-  page: CHATROOM_MANAGER_ARCHIVED_ROUTE_ID,
-  title: message('manager.tab.archived', 'Archived'),
-  description: message('manager.page.archived.description', 'Find, restore, or delete archived chats.'),
-} as const satisfies CordisXRouteDefinitionV2<'manager.content'>);
+const archivedRoute = Object.freeze(
+  {
+    $schema: CORDISX_ROUTE_SCHEMA_V2,
+    schemaVersion: 2,
+    id: CHATROOM_MANAGER_ARCHIVED_ROUTE_ID,
+    path: '/manager/extensions/chatroom/archived',
+    outlet: 'manager.content',
+    page: CHATROOM_MANAGER_ARCHIVED_ROUTE_ID,
+    title: message('manager.tab.archived', 'Archived'),
+    description: message('manager.page.archived.description', 'Find, restore, or delete archived chats.'),
+  } as const satisfies CordisXRouteDefinitionV2<'manager.content'>,
+);
 
-const settingsRoute = Object.freeze({
-  $schema: CORDISX_ROUTE_SCHEMA_V2,
-  schemaVersion: 2,
-  id: CHATROOM_MANAGER_SETTINGS_ROUTE_ID,
-  path: '/manager/extensions/chatroom/settings',
-  outlet: 'manager.content',
-  page: CHATROOM_MANAGER_SETTINGS_ROUTE_ID,
-  title: message('manager.tab.settings', 'Settings'),
-  description: message('manager.page.settings.description', 'Choose how the Room composer sends messages.'),
-} as const satisfies CordisXRouteDefinitionV2<'manager.content'>);
+const settingsRoute = Object.freeze(
+  {
+    $schema: CORDISX_ROUTE_SCHEMA_V2,
+    schemaVersion: 2,
+    id: CHATROOM_MANAGER_SETTINGS_ROUTE_ID,
+    path: '/manager/extensions/chatroom/settings',
+    outlet: 'manager.content',
+    page: CHATROOM_MANAGER_SETTINGS_ROUTE_ID,
+    title: message('manager.tab.settings', 'Settings'),
+    description: message('manager.page.settings.description', 'Choose how the Room composer sends messages.'),
+  } as const satisfies CordisXRouteDefinitionV2<'manager.content'>,
+);
 
 const tabs = Object.freeze([
   Object.freeze({
@@ -190,38 +207,44 @@ const tabs = Object.freeze([
 export const CHATROOM_MANAGER_CONTENT_DECLARATIONS: readonly (
   CordisXManagerContentNavigationDeclarationV2 | CordisXManagerContentNavigationDeclarationV5
 )[] = Object.freeze([
-  Object.freeze({
-    $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V2,
-    schemaVersion: 2,
-    id: 'rooms',
-    route: { id: CHATROOM_MANAGER_ROOMS_ROUTE_ID },
-    header: { title: { kind: 'route' } },
-    tabs,
-  } satisfies CordisXManagerContentNavigationDeclarationV2),
-  Object.freeze({
-    $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V2,
-    schemaVersion: 2,
-    id: 'archived',
-    route: { id: CHATROOM_MANAGER_ARCHIVED_ROUTE_ID },
-    header: { title: { kind: 'route' } },
-    tabs,
-  } satisfies CordisXManagerContentNavigationDeclarationV2),
-  Object.freeze({
-    $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V5,
-    schemaVersion: 5,
-    id: 'settings',
-    route: { id: CHATROOM_MANAGER_SETTINGS_ROUTE_ID },
-    header: { title: { kind: 'route' } },
-    tabs,
-    body: {
-      kind: 'plugin-config-form',
-      namespace: 'chatroom',
-      defaultMaterialization: {
-        mode: 'missing-only',
-        fields: [{ path: ['shortcutPolicy'], value: 'enter' }],
+  Object.freeze(
+    {
+      $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V2,
+      schemaVersion: 2,
+      id: 'rooms',
+      route: { id: CHATROOM_MANAGER_ROOMS_ROUTE_ID },
+      header: { title: { kind: 'route' } },
+      tabs,
+    } satisfies CordisXManagerContentNavigationDeclarationV2,
+  ),
+  Object.freeze(
+    {
+      $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V2,
+      schemaVersion: 2,
+      id: 'archived',
+      route: { id: CHATROOM_MANAGER_ARCHIVED_ROUTE_ID },
+      header: { title: { kind: 'route' } },
+      tabs,
+    } satisfies CordisXManagerContentNavigationDeclarationV2,
+  ),
+  Object.freeze(
+    {
+      $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V5,
+      schemaVersion: 5,
+      id: 'settings',
+      route: { id: CHATROOM_MANAGER_SETTINGS_ROUTE_ID },
+      header: { title: { kind: 'route' } },
+      tabs,
+      body: {
+        kind: 'plugin-config-form',
+        namespace: 'chatroom',
+        defaultMaterialization: {
+          mode: 'missing-only',
+          fields: [{ path: ['shortcutPolicy'], value: 'enter' }],
+        },
       },
-    },
-  } satisfies CordisXManagerContentNavigationDeclarationV5),
+    } satisfies CordisXManagerContentNavigationDeclarationV5,
+  ),
 ]);
 
 const english: Readonly<Record<keyof ChatroomManagerMessages, string>> = Object.freeze({
@@ -389,7 +412,9 @@ export async function registerChatroomManager(
   const disposers: Array<() => void> = [];
   let disposed = false;
   const retain = (dispose: () => void | Promise<void>): void => {
-    disposers.push(() => { void dispose(); });
+    disposers.push(() => {
+      void dispose();
+    });
   };
   try {
     retain(context.i18n.define<ChatroomManagerMessages>({
@@ -412,32 +437,40 @@ export async function registerChatroomManager(
       );
       retain(context.commands.register({
         id: registration.id,
-        title: message(`manager.action.${registration.id.slice('room.'.length)}` as keyof ChatroomManagerMessages,
-          registration.id.slice('room.'.length)),
+        title: message(
+          `manager.action.${registration.id.slice('room.'.length)}` as keyof ChatroomManagerMessages,
+          registration.id.slice('room.'.length),
+        ),
       }, async commandContext => {
         const result = await managerCommand(commandContext);
         const hostContext = commandContext.hostContext;
-        if (registration.id === CHATROOM_COMMAND_ROOM_DELETE
+        if (
+          registration.id === CHATROOM_COMMAND_ROOM_DELETE
           && result.status === 'applied'
           && hostContext !== undefined
           && 'pointId' in hostContext
-          && hostContext.pointId === 'sidebar.navigation.items') {
+          && hostContext.pointId === 'sidebar.navigation.items'
+        ) {
           await context.routes.navigate({ id: 'new-room' });
         }
         return result;
       }));
     }
 
-    retain(context.pages.register<ChatroomManagerMessages>(roomsPage,
+    retain(context.pages.register<ChatroomManagerMessages>(
+      roomsPage,
       createChatroomManagerCollectionPage(
         CHATROOM_MANAGER_ROOMS_REGISTRATION,
         () => new ChatroomRoomManagerCollectionSource(coordinator, 'active'),
-      )));
-    retain(context.pages.register<ChatroomManagerMessages>(archivedPage,
+      ),
+    ));
+    retain(context.pages.register<ChatroomManagerMessages>(
+      archivedPage,
       createChatroomManagerCollectionPage(
         CHATROOM_MANAGER_ARCHIVED_REGISTRATION,
         () => new ChatroomRoomManagerCollectionSource(coordinator, 'archived'),
-      )));
+      ),
+    ));
     // Navigation v5 replaces this metadata seat before the mount is called;
     // Chatroom deliberately contributes no settings body or form renderer.
     retain(context.pages.register<ChatroomManagerMessages>(settingsPage, () => undefined));

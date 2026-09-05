@@ -16,7 +16,9 @@ const room = {
   archived: false,
   memberships,
   runs: [{
-    runId: 'run-lead', memberId: 'lead', sessionId: 'cx-session.room-one.lead',
+    runId: 'run-lead',
+    memberId: 'lead',
+    sessionId: 'cx-session.room-one.lead',
     presence: { state: 'ready' },
   }],
 };
@@ -61,7 +63,9 @@ test('discovers the Room from SessionId and delegates to another Room entity', a
     },
   };
   const owner = new ChatroomAgentSessionRoomSimulationOwner(
-    'owner-one', conversation, agentSession,
+    'owner-one',
+    conversation,
+    agentSession,
   );
 
   const resolved = await owner.resolveSession('cx-session.room-one.lead');
@@ -89,7 +93,11 @@ test('discovers the Room from SessionId and delegates to another Room entity', a
 test('fails closed when a Session is not bound to exactly one Room run', async () => {
   const owner = new ChatroomAgentSessionRoomSimulationOwner(
     'owner-one',
-    { inspectPlaygroundSource: () => { throw new Error('must not inspect an unbound Session'); } },
+    {
+      inspectPlaygroundSource: () => {
+        throw new Error('must not inspect an unbound Session');
+      },
+    },
     { rooms: { snapshot: () => [], subscribe: () => () => {} } },
   );
   assert.deepEqual(await owner.resolveSession('cx-session.unknown'), {
@@ -114,23 +122,36 @@ test('Agent Session scenario approval uses the exact structured Reviewer reason 
   let request;
   const agentSession = {
     rooms: { snapshot: () => [reviewerRoom], subscribe: () => () => {} },
-    subscribeProjection: listener => { listeners.add(listener); return () => listeners.delete(listener); },
+    subscribeProjection: listener => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
     projectionForRoom: () => ({ activeRuns: [], items: projected }),
     requestApproval: async (...args) => {
       request = args;
       projected = [{
-        kind: 'approval', itemId: 'approval-card', sequence: 9,
-        participantId: 'participant-reviewer', memberId: 'reviewer', runId: 'run-reviewer',
-        sessionId: 'session-reviewer', approvalId: 'approval-v2', approvalKind: 'command',
+        kind: 'approval',
+        itemId: 'approval-card',
+        sequence: 9,
+        participantId: 'participant-reviewer',
+        memberId: 'reviewer',
+        runId: 'run-reviewer',
+        sessionId: 'session-reviewer',
+        approvalId: 'approval-v2',
+        approvalKind: 'command',
         requester: { agentId: 'reviewer-agent', revision: 'reviewer-r1' },
         authority: {
-          participantId: 'participant-lead', memberId: 'lead',
+          participantId: 'participant-lead',
+          memberId: 'lead',
           identity: { agentId: 'lead-agent', revision: 'lead-r1' },
         },
         reason: { kind: 'plain-text', text: args[3] },
-        state: 'pending', agentGeneration: 2,
+        state: 'pending',
+        agentGeneration: 2,
         authorityBinding: {
-          agentId: 'session-lead', sessionId: 'session-lead', agentGeneration: 3,
+          agentId: 'session-lead',
+          sessionId: 'session-lead',
+          agentGeneration: 3,
           definition: { agentId: 'lead-agent', revision: 'lead-r1' },
         },
         actions: [
@@ -146,7 +167,10 @@ test('Agent Session scenario approval uses the exact structured Reviewer reason 
     'owner-one',
     {
       inspectPlaygroundSource: () => ({
-        status: 'available', room: reviewerRoom, run: reviewerRoom.runs[1], member: memberships[1],
+        status: 'available',
+        room: reviewerRoom,
+        run: reviewerRoom.runs[1],
+        member: memberships[1],
       }),
     },
     agentSession,
@@ -157,8 +181,11 @@ test('Agent Session scenario approval uses the exact structured Reviewer reason 
   });
 
   assert.deepEqual(request, [
-    'room-one', 'run-reviewer', 'playground.room-simulation.agent-approval',
-    'Reviewer needs approval to validate the protected release output.', 'scenario-code3',
+    'room-one',
+    'run-reviewer',
+    'playground.room-simulation.agent-approval',
+    'Reviewer needs approval to validate the protected release output.',
+    'scenario-code3',
   ]);
   assert.equal(result.status, 'available');
   assert.equal(result.value.phase, 'pending');

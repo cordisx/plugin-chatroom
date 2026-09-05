@@ -19,15 +19,12 @@ import {
   CHATROOM_COMMAND_ROOM_RENAME,
   CHATROOM_COMMAND_ROOM_RESTORE,
   CHATROOM_ROOM_TITLE_MAX_CODE_POINTS,
-  ChatroomRoomManagementError,
   type ChatroomRoomManagementCommand,
+  ChatroomRoomManagementError,
 } from './room-management.js';
 import { latestRoomMessage, roomMessageSummary } from './room-navigation.js';
 import type { Room } from './room.js';
-import {
-  ChatroomRoomStoreError,
-  type DurableChatroomRoomStore,
-} from './room-store.js';
+import { ChatroomRoomStoreError, type DurableChatroomRoomStore } from './room-store.js';
 
 const REGISTRATION_SCHEMA =
   'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/manager-collection-registration.v1.schema.json' as const;
@@ -78,45 +75,49 @@ const search = Object.freeze({
   ),
 });
 
-export const CHATROOM_MANAGER_ROOMS_REGISTRATION = Object.freeze({
-  $schema: REGISTRATION_SCHEMA,
-  contract: 'cordisx.manager-collection-registration/v1',
-  schemaVersion: 1,
-  id: CHATROOM_MANAGER_ROOMS_COLLECTION_ID,
-  label: localized('manager.collection.rooms.label', 'Rooms'),
-  description: localized('manager.collection.rooms.description', 'Manage active chats.'),
-  views: Object.freeze([Object.freeze({
-    id: 'active',
-    label: localized('manager.tab.rooms', 'Rooms'),
-    emptyTitle: localized('manager.collection.rooms.empty.title', 'No rooms yet'),
-    emptyDescription: localized(
-      'manager.collection.rooms.empty.description',
-      'Rooms appear here after they are created.',
-    ),
-  })]),
-  defaultView: 'active',
-  search,
-} as const satisfies ManagerCollectionRegistrationV1);
+export const CHATROOM_MANAGER_ROOMS_REGISTRATION = Object.freeze(
+  {
+    $schema: REGISTRATION_SCHEMA,
+    contract: 'cordisx.manager-collection-registration/v1',
+    schemaVersion: 1,
+    id: CHATROOM_MANAGER_ROOMS_COLLECTION_ID,
+    label: localized('manager.collection.rooms.label', 'Rooms'),
+    description: localized('manager.collection.rooms.description', 'Manage active chats.'),
+    views: Object.freeze([Object.freeze({
+      id: 'active',
+      label: localized('manager.tab.rooms', 'Rooms'),
+      emptyTitle: localized('manager.collection.rooms.empty.title', 'No rooms yet'),
+      emptyDescription: localized(
+        'manager.collection.rooms.empty.description',
+        'Rooms appear here after they are created.',
+      ),
+    })]),
+    defaultView: 'active',
+    search,
+  } as const satisfies ManagerCollectionRegistrationV1,
+);
 
-export const CHATROOM_MANAGER_ARCHIVED_REGISTRATION = Object.freeze({
-  $schema: REGISTRATION_SCHEMA,
-  contract: 'cordisx.manager-collection-registration/v1',
-  schemaVersion: 1,
-  id: CHATROOM_MANAGER_ARCHIVED_COLLECTION_ID,
-  label: localized('manager.collection.archived.label', 'Archived'),
-  description: localized('manager.collection.archived.description', 'Find and restore archived chats.'),
-  views: Object.freeze([Object.freeze({
-    id: 'archived',
-    label: localized('manager.tab.archived', 'Archived'),
-    emptyTitle: localized('manager.collection.archived.empty.title', 'No archived rooms'),
-    emptyDescription: localized(
-      'manager.collection.archived.empty.description',
-      'Rooms you archive appear here.',
-    ),
-  })]),
-  defaultView: 'archived',
-  search,
-} as const satisfies ManagerCollectionRegistrationV1);
+export const CHATROOM_MANAGER_ARCHIVED_REGISTRATION = Object.freeze(
+  {
+    $schema: REGISTRATION_SCHEMA,
+    contract: 'cordisx.manager-collection-registration/v1',
+    schemaVersion: 1,
+    id: CHATROOM_MANAGER_ARCHIVED_COLLECTION_ID,
+    label: localized('manager.collection.archived.label', 'Archived'),
+    description: localized('manager.collection.archived.description', 'Find and restore archived chats.'),
+    views: Object.freeze([Object.freeze({
+      id: 'archived',
+      label: localized('manager.tab.archived', 'Archived'),
+      emptyTitle: localized('manager.collection.archived.empty.title', 'No archived rooms'),
+      emptyDescription: localized(
+        'manager.collection.archived.empty.description',
+        'Rooms you archive appear here.',
+      ),
+    })]),
+    defaultView: 'archived',
+    search,
+  } as const satisfies ManagerCollectionRegistrationV1,
+);
 
 /** Shared product-lifetime identities and monotonic revision for page-scoped sources and commands. */
 export class ChatroomRoomManagerCoordinator {
@@ -131,7 +132,9 @@ export class ChatroomRoomManagerCoordinator {
     this.unsubscribeRooms = store.rooms.subscribe(() => this.refresh());
   }
 
-  currentRevision(): number { return this.revision; }
+  currentRevision(): number {
+    return this.revision;
+  }
 
   itemIdFor(roomId: string): string {
     let itemId = this.itemIds.get(roomId);
@@ -196,8 +199,10 @@ function renameAction(room: Room): ManagerCollectionAction {
       trim: 'both' as const,
     },
     feedback: feedback(
-      'manager.feedback.renamed', 'Chat renamed',
-      'manager.feedback.rename-failed', 'Could not rename chat',
+      'manager.feedback.renamed',
+      'Chat renamed',
+      'manager.feedback.rename-failed',
+      'Could not rename chat',
     ),
   });
 }
@@ -222,60 +227,75 @@ function deleteAction(room: Room): ManagerCollectionAction {
       confirmLabel: localized('manager.delete.confirm', 'Delete room'),
     },
     feedback: feedback(
-      'manager.feedback.deleted', 'Room deleted',
-      'manager.feedback.delete-failed', 'Could not delete room',
+      'manager.feedback.deleted',
+      'Room deleted',
+      'manager.feedback.delete-failed',
+      'Could not delete room',
     ),
   });
 }
 
 function roomActions(room: Room, mode: ChatroomManagerRoomMode): readonly ManagerCollectionAction[] {
   if (mode === 'archived') {
-    return Object.freeze([Object.freeze({
+    return Object.freeze([
+      Object.freeze({
+        kind: 'command',
+        id: 'restore',
+        label: localized('manager.action.restore', 'Restore'),
+        icon: 'host:restore',
+        placement: 'direct',
+        tone: 'neutral',
+        pressed: false,
+        disabled: { value: false },
+        command: { id: CHATROOM_COMMAND_ROOM_RESTORE, arguments: { roomId: room.id } },
+        feedback: feedback(
+          'manager.feedback.restored',
+          'Room restored',
+          'manager.feedback.restore-failed',
+          'Could not restore room',
+        ),
+      }),
+      deleteAction(room),
+    ]);
+  }
+  return Object.freeze([
+    Object.freeze({
       kind: 'command',
-      id: 'restore',
-      label: localized('manager.action.restore', 'Restore'),
-      icon: 'host:restore',
+      id: 'pin',
+      label: localized(room.pinned ? 'manager.action.unpin' : 'manager.action.pin', room.pinned ? 'Unpin' : 'Pin'),
+      icon: room.pinned ? 'host:pinned' : 'host:pin',
+      placement: 'direct',
+      tone: 'neutral',
+      pressed: room.pinned,
+      disabled: { value: false },
+      command: { id: CHATROOM_COMMAND_ROOM_PIN, arguments: { roomId: room.id } },
+      feedback: feedback(
+        room.pinned ? 'manager.feedback.unpinned' : 'manager.feedback.pinned',
+        room.pinned ? 'Room unpinned' : 'Room pinned',
+        'manager.feedback.pin-failed',
+        'Could not update pin',
+      ),
+    }),
+    Object.freeze({
+      kind: 'command',
+      id: 'archive',
+      label: localized('manager.action.archive', 'Archive'),
+      icon: 'host:archive',
       placement: 'direct',
       tone: 'neutral',
       pressed: false,
       disabled: { value: false },
-      command: { id: CHATROOM_COMMAND_ROOM_RESTORE, arguments: { roomId: room.id } },
+      command: { id: CHATROOM_COMMAND_ROOM_ARCHIVE, arguments: { roomId: room.id } },
       feedback: feedback(
-        'manager.feedback.restored', 'Room restored',
-        'manager.feedback.restore-failed', 'Could not restore room',
+        'manager.feedback.archived',
+        'Room archived',
+        'manager.feedback.archive-failed',
+        'Could not archive room',
       ),
-    }), deleteAction(room)]);
-  }
-  return Object.freeze([Object.freeze({
-    kind: 'command',
-    id: 'pin',
-    label: localized(room.pinned ? 'manager.action.unpin' : 'manager.action.pin', room.pinned ? 'Unpin' : 'Pin'),
-    icon: room.pinned ? 'host:pinned' : 'host:pin',
-    placement: 'direct',
-    tone: 'neutral',
-    pressed: room.pinned,
-    disabled: { value: false },
-    command: { id: CHATROOM_COMMAND_ROOM_PIN, arguments: { roomId: room.id } },
-    feedback: feedback(
-      room.pinned ? 'manager.feedback.unpinned' : 'manager.feedback.pinned',
-      room.pinned ? 'Room unpinned' : 'Room pinned',
-      'manager.feedback.pin-failed', 'Could not update pin',
-    ),
-  }), Object.freeze({
-    kind: 'command',
-    id: 'archive',
-    label: localized('manager.action.archive', 'Archive'),
-    icon: 'host:archive',
-    placement: 'direct',
-    tone: 'neutral',
-    pressed: false,
-    disabled: { value: false },
-    command: { id: CHATROOM_COMMAND_ROOM_ARCHIVE, arguments: { roomId: room.id } },
-    feedback: feedback(
-      'manager.feedback.archived', 'Room archived',
-      'manager.feedback.archive-failed', 'Could not archive room',
-    ),
-  }), renameAction(room), deleteAction(room)]);
+    }),
+    renameAction(room),
+    deleteAction(room),
+  ]);
 }
 
 /** Search deliberately returns the complete selected view; the Host owns the exact final filter. */
@@ -302,9 +322,11 @@ export class ChatroomRoomManagerCollectionSource implements ManagerCollectionSou
     }
     const rooms = this.coordinator.store.rooms.snapshot()
       .filter(room => room.archived === (this.mode === 'archived'))
-      .sort((left, right) => (this.mode === 'active' ? Number(right.pinned) - Number(left.pinned) : 0)
+      .sort((left, right) =>
+        (this.mode === 'active' ? Number(right.pinned) - Number(left.pinned) : 0)
         || (latestRoomMessage(right)?.sequence ?? -1) - (latestRoomMessage(left)?.sequence ?? -1)
-        || compareOpaqueIds(left.id, right.id));
+        || compareOpaqueIds(left.id, right.id)
+      );
     if (rooms.length > 1000) {
       throw new Error('Manager collection selected view exceeds the 1000-row snapshot bound.');
     }
@@ -354,22 +376,29 @@ export class ChatroomRoomManagerCollectionSource implements ManagerCollectionSou
   }
 }
 
-const actionIdFor = (command: ChatroomRoomManagementCommand): string => ({
-  [CHATROOM_COMMAND_ROOM_PIN]: 'pin',
-  [CHATROOM_COMMAND_ROOM_RENAME]: 'rename',
-  [CHATROOM_COMMAND_ROOM_ARCHIVE]: 'archive',
-  [CHATROOM_COMMAND_ROOM_RESTORE]: 'restore',
-  [CHATROOM_COMMAND_ROOM_DELETE]: 'delete',
-})[command];
+const actionIdFor = (command: ChatroomRoomManagementCommand): string =>
+  ({
+    [CHATROOM_COMMAND_ROOM_PIN]: 'pin',
+    [CHATROOM_COMMAND_ROOM_RENAME]: 'rename',
+    [CHATROOM_COMMAND_ROOM_ARCHIVE]: 'archive',
+    [CHATROOM_COMMAND_ROOM_RESTORE]: 'restore',
+    [CHATROOM_COMMAND_ROOM_DELETE]: 'delete',
+  })[command];
 
 function appliedCodeFor(command: ChatroomRoomManagementCommand, room: Room): string {
   switch (command) {
-    case CHATROOM_COMMAND_ROOM_PIN: return room.pinned ? 'room-unpinned' : 'room-pinned';
-    case CHATROOM_COMMAND_ROOM_RENAME: return 'room-renamed';
-    case CHATROOM_COMMAND_ROOM_ARCHIVE: return 'room-archived';
-    case CHATROOM_COMMAND_ROOM_RESTORE: return 'room-restored';
-    case CHATROOM_COMMAND_ROOM_DELETE: return 'room-deleted';
-    default: throw new Error(`Unknown Room management command ${command}.`);
+    case CHATROOM_COMMAND_ROOM_PIN:
+      return room.pinned ? 'room-unpinned' : 'room-pinned';
+    case CHATROOM_COMMAND_ROOM_RENAME:
+      return 'room-renamed';
+    case CHATROOM_COMMAND_ROOM_ARCHIVE:
+      return 'room-archived';
+    case CHATROOM_COMMAND_ROOM_RESTORE:
+      return 'room-restored';
+    case CHATROOM_COMMAND_ROOM_DELETE:
+      return 'room-deleted';
+    default:
+      throw new Error(`Unknown Room management command ${command}.`);
   }
 }
 
@@ -399,7 +428,10 @@ function result(
     $schema: ACTION_RESULT_SCHEMA,
     contract: 'cordisx.manager-collection-action-result/v1' as const,
     schemaVersion: 1 as const,
-    collectionId, itemId, actionId, code,
+    collectionId,
+    itemId,
+    actionId,
+    code,
   };
   return status === 'applied'
     ? Object.freeze({ ...base, status, revision: revision! })
@@ -429,9 +461,11 @@ export function createChatroomManagerCommandHandler(
     }
     if (command === CHATROOM_COMMAND_ROOM_RENAME) {
       const input = context.arguments as Readonly<Record<string, unknown>>;
-      if (Object.keys(input).length === 2
+      if (
+        Object.keys(input).length === 2
         && typeof input.title === 'string'
-        && room.title === input.title.trim()) {
+        && room.title === input.title.trim()
+      ) {
         return result(collectionId, itemId, actionId, 'rejected', 'title-unchanged');
       }
     }

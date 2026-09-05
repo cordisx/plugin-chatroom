@@ -1,9 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-  CHATROOM_COMMAND_SUBMIT,
-} from '../dist/conversation-model.js';
+import { CHATROOM_COMMAND_SUBMIT } from '../dist/conversation-model.js';
 import { ChatroomConversationController } from '../dist/conversation-source.js';
 import { CHATROOM_DEFAULT_AGENT_CONFIGURATION } from '../dist/agent-definition.js';
 import { addRoomRun, bindRoomRunSession, createRoom } from '../dist/room.js';
@@ -11,7 +9,9 @@ import { failRoomRunPresence } from '../dist/room-engagement.js';
 import { DurableChatroomRoomStore } from '../dist/room-store.js';
 
 const binding = Object.freeze({
-  bindingId: 'binding-1', shell: 'agent-desktop', ownerGeneration: 'owner-1',
+  bindingId: 'binding-1',
+  shell: 'agent-desktop',
+  ownerGeneration: 'owner-1',
   routeSelection: { scope: 'room-or-new' },
 });
 
@@ -75,14 +75,19 @@ test('maps a selected multi-participant Room into structured shell data', async 
     id: 'review',
     title: 'Review',
     participants: [{
-      id: 'agent-a', name: 'Architecture', kind: 'agent',
+      id: 'agent-a',
+      name: 'Architecture',
+      kind: 'agent',
       avatar: { kind: 'asset', ref: 'avatar-assets:architecture' },
     }],
     participantPresentation: { multiParticipant: true, participantPresentation: 'host-initials' },
     items: [{
-      kind: 'status', itemId: 'status-1', sequence: 1,
+      kind: 'status',
+      itemId: 'status-1',
+      sequence: 1,
       label: { namespace: 'chatroom', key: 'status.running', fallback: 'Working' },
-      state: 'working', ariaLive: 'off',
+      state: 'working',
+      ariaLive: 'off',
     }],
   });
   const controller = new ChatroomConversationController();
@@ -95,11 +100,14 @@ test('maps a selected multi-participant Room into structured shell data', async 
   const snapshot = await source.snapshot();
 
   assert.deepEqual(snapshot.selection, {
-    kind: 'room', roomId: 'review',
+    kind: 'room',
+    roomId: 'review',
     title: { namespace: 'chatroom', key: 'room.title', fallback: 'Review' },
-    multiParticipant: true, participantPresentation: 'host-initials',
+    multiParticipant: true,
+    participantPresentation: 'host-initials',
     participants: [{
-      participantId: 'agent-a', role: 'agent',
+      participantId: 'agent-a',
+      role: 'agent',
       displayName: { namespace: 'chatroom', key: 'participant.name', fallback: 'Architecture' },
       avatar: { kind: 'asset', ref: 'avatar-assets:architecture' },
     }],
@@ -112,11 +120,15 @@ test('maps a selected multi-participant Room into structured shell data', async 
 test('bounds and re-numbers Room history for the snapshot sequence fence', async () => {
   const controller = new ChatroomConversationController();
   controller.rooms.upsert(createRoom({
-    id: 'history', title: 'History',
+    id: 'history',
+    title: 'History',
     items: Array.from({ length: 501 }, (_, index) => ({
-      kind: 'status', itemId: `status-${index}`, sequence: index + 900,
+      kind: 'status',
+      itemId: `status-${index}`,
+      sequence: index + 900,
       label: { namespace: 'chatroom', key: `status.${index}`, fallback: `Status ${index}` },
-      state: 'info', ariaLive: 'off',
+      state: 'info',
+      ariaLive: 'off',
     })),
   }));
   const source = controller.createSource({
@@ -135,31 +147,46 @@ test('bounds and re-numbers Room history for the snapshot sequence fence', async
 test('projects a human author only when explicitly present in the Room participants', async () => {
   const controller = new ChatroomConversationController();
   controller.rooms.upsert(createRoom({
-    id: 'with-human', title: 'With human',
+    id: 'with-human',
+    title: 'With human',
     participants: [
       { id: 'user-1', name: 'You', kind: 'human' },
       { id: 'agent-1', name: 'Research', kind: 'agent' },
     ],
     items: [
       {
-        kind: 'message', itemId: 'message-user', messageId: 'message-user', sequence: 99,
+        kind: 'message',
+        itemId: 'message-user',
+        messageId: 'message-user',
+        sequence: 99,
         author: {
-          participantId: 'user-1', role: 'agent',
+          participantId: 'user-1',
+          role: 'agent',
           displayName: { namespace: 'ignored', key: 'ignored', fallback: 'Ignored' },
         },
         body: [{ kind: 'text', text: { namespace: 'chatroom', key: 'message.user', fallback: 'Hello' } }],
-        timestamp: '2026-08-29T00:00:00.000Z', deliveryState: 'delivered', runState: 'idle',
-        ariaLive: 'off', actions: [],
+        timestamp: '2026-08-29T00:00:00.000Z',
+        deliveryState: 'delivered',
+        runState: 'idle',
+        ariaLive: 'off',
+        actions: [],
       },
       {
-        kind: 'message', itemId: 'message-unknown', messageId: 'message-unknown', sequence: 100,
+        kind: 'message',
+        itemId: 'message-unknown',
+        messageId: 'message-unknown',
+        sequence: 100,
         author: {
-          participantId: 'unknown', role: 'agent',
+          participantId: 'unknown',
+          role: 'agent',
           displayName: { namespace: 'ignored', key: 'ignored', fallback: 'Ignored' },
         },
         body: [{ kind: 'text', text: { namespace: 'chatroom', key: 'message.unknown', fallback: 'Skip' } }],
-        timestamp: '2026-08-29T00:00:01.000Z', deliveryState: 'delivered', runState: 'idle',
-        ariaLive: 'off', actions: [],
+        timestamp: '2026-08-29T00:00:01.000Z',
+        deliveryState: 'delivered',
+        runState: 'idle',
+        ariaLive: 'off',
+        actions: [],
       },
     ],
   }));
@@ -175,7 +202,8 @@ test('projects a human author only when explicitly present in the Room participa
   assert.equal(snapshot.items[0].kind, 'message');
   if (snapshot.items[0].kind === 'message') {
     assert.deepEqual(snapshot.items[0].author, {
-      participantId: 'user-1', role: 'human',
+      participantId: 'user-1',
+      role: 'human',
       displayName: { namespace: 'chatroom', key: 'participant.name', fallback: 'You' },
     });
   }
@@ -209,7 +237,10 @@ test('replaces an active selected Room snapshot after registry state changes', a
 test('publishes one stable member presence lifecycle as item-updated', async () => {
   let room = createRoom({ id: 'presence-room', title: 'Presence' });
   room = addRoomRun(room, {
-    runId: 'presence-run', memberId: 'leader', title: 'Lead', status: 'creating',
+    runId: 'presence-run',
+    memberId: 'leader',
+    title: 'Lead',
+    status: 'creating',
   });
   const controller = new ChatroomConversationController([room]);
   const source = controller.createSource({
@@ -225,7 +256,8 @@ test('publishes one stable member presence lifecycle as item-updated', async () 
   const iterator = subscribed.handle.pages[Symbol.asyncIterator]();
 
   controller.rooms.upsert(failRoomRunPresence(room, 'presence-run', {
-    code: 'provider-unavailable', retryable: true,
+    code: 'provider-unavailable',
+    retryable: true,
   }));
   const page = await iterator.next();
   const update = page.value.updates[0];
@@ -240,20 +272,33 @@ test('publishes one stable member presence lifecycle as item-updated', async () 
 test('projects a delegated task as an explicit source-authored Room announcement', async () => {
   let room = createRoom({ id: 'delegation-room', title: 'Delegation' });
   room = addRoomRun(room, {
-    runId: 'lead-run', memberId: 'leader', title: 'Lead', status: 'creating',
+    runId: 'lead-run',
+    memberId: 'leader',
+    title: 'Lead',
+    status: 'creating',
   });
   room = bindRoomRunSession(room, 'lead-run', 'cx-session.delegation.lead');
   const controller = new ChatroomConversationController([room]);
 
-  const result = await controller.projectAgentSessionDelegation({
-    sessionId: 'cx-session.delegation.lead', roomId: room.id,
-    runId: 'lead-run', memberId: 'leader', bindingId: 'binding',
-    ownerGeneration: 'owner', generation: 'generation',
-  }, 'delegation-operation', 'reviewer', '最终链路验证');
+  const result = await controller.projectAgentSessionDelegation(
+    {
+      sessionId: 'cx-session.delegation.lead',
+      roomId: room.id,
+      runId: 'lead-run',
+      memberId: 'leader',
+      bindingId: 'binding',
+      ownerGeneration: 'owner',
+      generation: 'generation',
+    },
+    'delegation-operation',
+    'reviewer',
+    '最终链路验证',
+  );
 
   assert.equal(result.status, 'accepted');
   const announcement = controller.rooms.get(room.id).items.find(item =>
-    item.kind === 'message' && item.itemId === result.itemId);
+    item.kind === 'message' && item.itemId === result.itemId
+  );
   assert.equal(announcement.kind, 'message');
   assert.equal(announcement.author.displayName.fallback, 'Lead');
   assert.equal(announcement.body[0].text.fallback, '已向 @Reviewer 下发任务：最终链路验证。');
@@ -263,14 +308,21 @@ test('creates and projects a Room only from the first Host-generated composer su
   const controller = new ChatroomConversationController();
   const source = controller.createSource(binding);
   const intent = controller.handle({
-    binding: { bindingId: 'binding-1', ownerGeneration: 'owner-1' }, generation: 'owner-1',
-    scope: 'composer-submit', command: { id: CHATROOM_COMMAND_SUBMIT }, submitPayload: 'bounded host text',
+    binding: { bindingId: 'binding-1', ownerGeneration: 'owner-1' },
+    generation: 'owner-1',
+    scope: 'composer-submit',
+    command: { id: CHATROOM_COMMAND_SUBMIT },
+    submitPayload: 'bounded host text',
   });
   assert.deepEqual(intent, {
-    kind: 'send-message', roomId: 'room-1', roomCreated: true,
+    kind: 'send-message',
+    roomId: 'room-1',
+    roomCreated: true,
     deliveries: [{ memberId: 'leader', runId: 'run-1', runCreated: true, reason: 'ambient' }],
     userItemId: 'message-1',
-    bindingId: 'binding-1', generation: 'owner-1', dispatchText: 'bounded host text',
+    bindingId: 'binding-1',
+    generation: 'owner-1',
+    dispatchText: 'bounded host text',
   });
   assert.deepEqual(controller.takePendingIntents(), [
     intent,
@@ -280,7 +332,8 @@ test('creates and projects a Room only from the first Host-generated composer su
   if (snapshot.selection.kind === 'room') {
     const lead = snapshot.selection.participants.find(participant => participant.participantId === 'leader');
     assert.deepEqual(lead?.avatar, {
-      kind: 'asset', ref: 'oneworks-avatar:asset.red-fox.v1',
+      kind: 'asset',
+      ref: 'oneworks-avatar:asset.red-fox.v1',
       revision: 'oneworks-avatar:editor-red-fox-2b30c25a3fcd29bf349fed927df85f1ba4b0a6096a9dfc1d2d1088e05654d8aa',
     });
   }
@@ -293,7 +346,9 @@ test('creates and projects a Room only from the first Host-generated composer su
     assert.equal(userMessage.source, 'agent-loop');
     assert.equal(userMessage.author.role, 'human');
     assert.deepEqual(userMessage.author.displayName, {
-      namespace: 'chatroom', key: 'participant.name', fallback: 'You',
+      namespace: 'chatroom',
+      key: 'participant.name',
+      fallback: 'You',
     });
     assert.equal(userMessage.body[0].text.fallback, 'bounded host text');
     assert.equal(userMessage.deliveryState, 'pending');
@@ -310,12 +365,17 @@ test('persists the first Room before route replacement and resolves a later ambi
   const firstController = new ChatroomConversationController(
     store.rooms,
     CHATROOM_DEFAULT_AGENT_CONFIGURATION,
-    async room => { await store.upsert(room); },
+    async room => {
+      await store.upsert(room);
+    },
   );
   firstController.createSource(binding);
   const first = firstController.handle({
-    binding: { bindingId: 'binding-1', ownerGeneration: 'owner-1' }, generation: 'owner-1',
-    scope: 'composer-submit', command: { id: CHATROOM_COMMAND_SUBMIT }, submitPayload: '3',
+    binding: { bindingId: 'binding-1', ownerGeneration: 'owner-1' },
+    generation: 'owner-1',
+    scope: 'composer-submit',
+    command: { id: CHATROOM_COMMAND_SUBMIT },
+    submitPayload: '3',
   });
   assert.equal(first?.kind, 'send-message');
   if (first?.kind !== 'send-message') return;
@@ -325,7 +385,9 @@ test('persists the first Room before route replacement and resolves a later ambi
   const secondController = new ChatroomConversationController(
     store.rooms,
     CHATROOM_DEFAULT_AGENT_CONFIGURATION,
-    async room => { await store.upsert(room); },
+    async room => {
+      await store.upsert(room);
+    },
   );
   secondController.createSource({
     ...binding,
@@ -333,8 +395,11 @@ test('persists the first Room before route replacement and resolves a later ambi
     routeSelection: { scope: 'room-or-new', selectedRoomParam: first.roomId },
   });
   const second = secondController.handle({
-    binding: { bindingId: 'binding-reloaded-room', ownerGeneration: 'owner-1' }, generation: 'owner-1',
-    scope: 'composer-submit', command: { id: CHATROOM_COMMAND_SUBMIT }, submitPayload: '3',
+    binding: { bindingId: 'binding-reloaded-room', ownerGeneration: 'owner-1' },
+    generation: 'owner-1',
+    scope: 'composer-submit',
+    command: { id: CHATROOM_COMMAND_SUBMIT },
+    submitPayload: '3',
   });
   assert.deepEqual(second?.kind, 'send-message');
   if (second?.kind === 'send-message') {
@@ -349,8 +414,10 @@ test('a mismatched composer binding or generation writes no Room item or deliver
   const before = await source.snapshot();
   const intent = controller.handle({
     binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration },
-    generation: 'stale-generation', scope: 'composer-submit',
-    command: { id: CHATROOM_COMMAND_SUBMIT }, submitPayload: 'Must retain draft',
+    generation: 'stale-generation',
+    scope: 'composer-submit',
+    command: { id: CHATROOM_COMMAND_SUBMIT },
+    submitPayload: 'Must retain draft',
   });
   assert.equal(intent, undefined);
   assert.equal(controller.rooms.snapshot().length, 0);
@@ -362,61 +429,106 @@ test('a mismatched composer binding or generation writes no Room item or deliver
 test('marks the exact v8/v9 source binding as requiring its composer admission origin', () => {
   const controller = new ChatroomConversationController();
   controller.createSource(binding, { admissionMode: 'v8' });
-  assert.equal(controller.requiresAdmissionOrigin({
-    binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration }, generation: 'owner-1',
-  }), true);
-  assert.equal(controller.composerAdmissionMode({
-    binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration }, generation: 'owner-1',
-  }), 'v8');
-  assert.equal(controller.requiresAdmissionOrigin({
-    binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration }, generation: 'stale',
-  }), false);
+  assert.equal(
+    controller.requiresAdmissionOrigin({
+      binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration },
+      generation: 'owner-1',
+    }),
+    true,
+  );
+  assert.equal(
+    controller.composerAdmissionMode({
+      binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration },
+      generation: 'owner-1',
+    }),
+    'v8',
+  );
+  assert.equal(
+    controller.requiresAdmissionOrigin({
+      binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration },
+      generation: 'stale',
+    }),
+    false,
+  );
   const legacy = new ChatroomConversationController();
   legacy.createSource(binding);
-  assert.equal(legacy.requiresAdmissionOrigin({
-    binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration }, generation: 'owner-1',
-  }), false);
-  assert.equal(legacy.composerAdmissionMode({
-    binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration }, generation: 'owner-1',
-  }), undefined);
+  assert.equal(
+    legacy.requiresAdmissionOrigin({
+      binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration },
+      generation: 'owner-1',
+    }),
+    false,
+  );
+  assert.equal(
+    legacy.composerAdmissionMode({
+      binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration },
+      generation: 'owner-1',
+    }),
+    undefined,
+  );
 
   const v9 = new ChatroomConversationController();
   v9.createSource(binding, { admissionMode: 'v9' });
-  assert.equal(v9.requiresAdmissionOrigin({
-    binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration }, generation: 'owner-1',
-  }), true);
-  assert.equal(v9.composerAdmissionMode({
-    binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration }, generation: 'owner-1',
-  }), 'v9');
+  assert.equal(
+    v9.requiresAdmissionOrigin({
+      binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration },
+      generation: 'owner-1',
+    }),
+    true,
+  );
+  assert.equal(
+    v9.composerAdmissionMode({
+      binding: { bindingId: binding.bindingId, ownerGeneration: binding.ownerGeneration },
+      generation: 'owner-1',
+    }),
+    'v9',
+  );
 });
 
 test('restores Room, run, and message id watermarks from the hydrated registry', () => {
   let hydrated = createRoom({
-    id: 'room-9', title: 'Hydrated',
+    id: 'room-9',
+    title: 'Hydrated',
     participants: [{ id: 'user', name: 'You', kind: 'human' }],
     items: [{
-      kind: 'message', itemId: 'message-20', messageId: 'message-21', sequence: 1,
+      kind: 'message',
+      itemId: 'message-20',
+      messageId: 'message-21',
+      sequence: 1,
       source: 'agent-loop',
       author: {
-        participantId: 'user', role: 'human',
+        participantId: 'user',
+        role: 'human',
         displayName: { namespace: 'chatroom', key: 'participant.user.name', fallback: 'You' },
       },
       body: [{ kind: 'text', text: { namespace: 'chatroom', key: 'message.user', fallback: 'Old' } }],
-      reactions: [], timestamp: '2026-08-31T00:00:00.000Z',
-      deliveryState: 'delivered', runState: 'idle', ariaLive: 'off', actions: [],
+      reactions: [],
+      timestamp: '2026-08-31T00:00:00.000Z',
+      deliveryState: 'delivered',
+      runState: 'idle',
+      ariaLive: 'off',
+      actions: [],
     }],
     timelineSequence: 1,
   });
   hydrated = addRoomRun(hydrated, {
-    runId: 'run-12', memberId: 'leader', title: 'Lead', status: 'creating',
+    runId: 'run-12',
+    memberId: 'leader',
+    title: 'Lead',
+    status: 'creating',
   });
   const controller = new ChatroomConversationController([hydrated]);
   controller.createSource({
-    ...binding, bindingId: 'binding-hydrated-ids', routeSelection: { scope: 'room-or-new' },
+    ...binding,
+    bindingId: 'binding-hydrated-ids',
+    routeSelection: { scope: 'room-or-new' },
   });
   const intent = controller.handle({
-    binding: { bindingId: 'binding-hydrated-ids', ownerGeneration: 'owner-1' }, generation: 'owner-1',
-    scope: 'composer-submit', command: { id: CHATROOM_COMMAND_SUBMIT }, submitPayload: 'New',
+    binding: { bindingId: 'binding-hydrated-ids', ownerGeneration: 'owner-1' },
+    generation: 'owner-1',
+    scope: 'composer-submit',
+    command: { id: CHATROOM_COMMAND_SUBMIT },
+    submitPayload: 'New',
   });
   assert.equal(intent.roomId, 'room-10');
   assert.equal(intent.userItemId, 'message-22');
@@ -431,14 +543,20 @@ test('atomically creates one run per ambient leader on the first message', () =>
     ...CHATROOM_DEFAULT_AGENT_CONFIGURATION,
     seedLeaderIds: ['leader', 'reviewer'],
     members: CHATROOM_DEFAULT_AGENT_CONFIGURATION.members.map(member => ({
-      ...member, role: 'leader', attentionPolicy: 'ambient', reportsToMemberId: undefined,
+      ...member,
+      role: 'leader',
+      attentionPolicy: 'ambient',
+      reportsToMemberId: undefined,
     })),
   };
   const controller = new ChatroomConversationController([], configuration);
   controller.createSource({ ...binding, bindingId: 'binding-multi-leader' });
   const intent = controller.handle({
-    binding: { bindingId: 'binding-multi-leader', ownerGeneration: 'owner-1' }, generation: 'owner-1',
-    scope: 'composer-submit', command: { id: CHATROOM_COMMAND_SUBMIT }, submitPayload: 'Hello leaders',
+    binding: { bindingId: 'binding-multi-leader', ownerGeneration: 'owner-1' },
+    generation: 'owner-1',
+    scope: 'composer-submit',
+    command: { id: CHATROOM_COMMAND_SUBMIT },
+    submitPayload: 'Hello leaders',
   });
 
   assert.deepEqual(intent.deliveries.map(delivery => delivery.memberId), ['leader', 'reviewer']);
@@ -451,7 +569,8 @@ test('atomically creates one run per ambient leader on the first message', () =>
 test('appends a later Host-generated submit to the selected Room without creating another Room', async () => {
   const controller = new ChatroomConversationController();
   controller.rooms.upsert(createRoom({
-    id: 'review', title: 'Review',
+    id: 'review',
+    title: 'Review',
     participants: [{ id: 'user', name: 'You', kind: 'human' }],
   }));
   const source = controller.createSource({
@@ -460,15 +579,22 @@ test('appends a later Host-generated submit to the selected Room without creatin
     routeSelection: { scope: 'room-or-new', selectedRoomParam: 'review' },
   });
   const intent = controller.handle({
-    binding: { bindingId: 'binding-existing', ownerGeneration: 'owner-1' }, generation: 'owner-1',
-    scope: 'composer-submit', command: { id: CHATROOM_COMMAND_SUBMIT }, submitPayload: 'Continue',
+    binding: { bindingId: 'binding-existing', ownerGeneration: 'owner-1' },
+    generation: 'owner-1',
+    scope: 'composer-submit',
+    command: { id: CHATROOM_COMMAND_SUBMIT },
+    submitPayload: 'Continue',
   });
 
   assert.deepEqual(intent, {
-    kind: 'send-message', roomId: 'review', roomCreated: false,
+    kind: 'send-message',
+    roomId: 'review',
+    roomCreated: false,
     deliveries: [{ memberId: 'leader', runId: 'run-1', runCreated: true, reason: 'ambient' }],
     userItemId: 'message-1',
-    bindingId: 'binding-existing', generation: 'owner-1', dispatchText: 'Continue',
+    bindingId: 'binding-existing',
+    generation: 'owner-1',
+    dispatchText: 'Continue',
   });
   assert.equal(controller.rooms.snapshot().length, 1);
   const snapshot = await source.snapshot();
@@ -491,26 +617,36 @@ test('routes @member to a reusable or lazy-created member run and @member/run ex
     bindingId: 'binding-targets',
     routeSelection: { scope: 'room-or-new', selectedRoomParam: 'team' },
   });
-  const command = submitPayload => controller.handle({
-    binding: { bindingId: 'binding-targets', ownerGeneration: 'owner-1' }, generation: 'owner-1',
-    scope: 'composer-submit', command: { id: CHATROOM_COMMAND_SUBMIT }, submitPayload,
-  });
+  const command = submitPayload =>
+    controller.handle({
+      binding: { bindingId: 'binding-targets', ownerGeneration: 'owner-1' },
+      generation: 'owner-1',
+      scope: 'composer-submit',
+      command: { id: CHATROOM_COMMAND_SUBMIT },
+      submitPayload,
+    });
 
   const member = command('@reviewer Inspect this');
   assert.deepEqual({
-    kind: member.kind, deliveries: member.deliveries, dispatchText: member.dispatchText,
+    kind: member.kind,
+    deliveries: member.deliveries,
+    dispatchText: member.dispatchText,
   }, {
-    kind: 'send-message', deliveries: [
+    kind: 'send-message',
+    deliveries: [
       { memberId: 'reviewer', runId: 'run-1', runCreated: true, reason: 'mention' },
-    ], dispatchText: 'Inspect this',
+    ],
+    dispatchText: 'Inspect this',
   });
   const exact = command('@reviewer/run-1 Continue exactly');
   assert.deepEqual({
-    deliveries: exact.deliveries, dispatchText: exact.dispatchText,
+    deliveries: exact.deliveries,
+    dispatchText: exact.dispatchText,
   }, {
     deliveries: [
       { memberId: 'reviewer', runId: 'run-1', runCreated: false, reason: 'mention' },
-    ], dispatchText: 'Continue exactly',
+    ],
+    dispatchText: 'Continue exactly',
   });
   assert.equal(controller.rooms.get('team').runs.length, 1);
 });
@@ -524,8 +660,11 @@ test('returns explicit target errors without creating a run or public message', 
     routeSelection: { scope: 'room-or-new', selectedRoomParam: 'team' },
   });
   const intent = controller.handle({
-    binding: { bindingId: 'binding-errors', ownerGeneration: 'owner-1' }, generation: 'owner-1',
-    scope: 'composer-submit', command: { id: CHATROOM_COMMAND_SUBMIT }, submitPayload: '@missing Hello',
+    binding: { bindingId: 'binding-errors', ownerGeneration: 'owner-1' },
+    generation: 'owner-1',
+    scope: 'composer-submit',
+    command: { id: CHATROOM_COMMAND_SUBMIT },
+    submitPayload: '@missing Hello',
   });
 
   assert.deepEqual(intent, { kind: 'target-error', roomId: 'team', code: 'missing', mention: '@missing' });
@@ -545,19 +684,40 @@ test('classifies every invalid composer target before any public message is appe
   const cases = [
     { name: 'empty', configuration: CHATROOM_DEFAULT_AGENT_CONFIGURATION, payload: '', code: 'empty' },
     { name: 'no-recipients', configuration: noRecipientsConfiguration, payload: '3', code: 'no-recipients' },
-    { name: 'missing', configuration: CHATROOM_DEFAULT_AGENT_CONFIGURATION, payload: '@missing 3', code: 'missing', mention: '@missing' },
-    { name: 'ambiguous', configuration: {
-      ...CHATROOM_DEFAULT_AGENT_CONFIGURATION,
-      members: CHATROOM_DEFAULT_AGENT_CONFIGURATION.members.map(member => ({ ...member, label: 'Same' })),
-    }, payload: '@same 3', code: 'ambiguous', mention: '@same' },
-    { name: 'empty-targeted-message', configuration: CHATROOM_DEFAULT_AGENT_CONFIGURATION, payload: '@leader', code: 'empty-targeted-message', mention: '@leader' },
+    {
+      name: 'missing',
+      configuration: CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+      payload: '@missing 3',
+      code: 'missing',
+      mention: '@missing',
+    },
+    {
+      name: 'ambiguous',
+      configuration: {
+        ...CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+        members: CHATROOM_DEFAULT_AGENT_CONFIGURATION.members.map(member => ({ ...member, label: 'Same' })),
+      },
+      payload: '@same 3',
+      code: 'ambiguous',
+      mention: '@same',
+    },
+    {
+      name: 'empty-targeted-message',
+      configuration: CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+      payload: '@leader',
+      code: 'empty-targeted-message',
+      mention: '@leader',
+    },
   ];
   for (const scenario of cases) {
     const controller = new ChatroomConversationController([], scenario.configuration);
     controller.createSource({ ...binding, bindingId: `binding-${scenario.name}` });
     const intent = controller.handle({
-      binding: { bindingId: `binding-${scenario.name}`, ownerGeneration: 'owner-1' }, generation: 'owner-1',
-      scope: 'composer-submit', command: { id: CHATROOM_COMMAND_SUBMIT }, submitPayload: scenario.payload,
+      binding: { bindingId: `binding-${scenario.name}`, ownerGeneration: 'owner-1' },
+      generation: 'owner-1',
+      scope: 'composer-submit',
+      command: { id: CHATROOM_COMMAND_SUBMIT },
+      submitPayload: scenario.payload,
     });
     assert.equal(intent?.kind, 'target-error', scenario.name);
     if (intent?.kind !== 'target-error') continue;

@@ -31,7 +31,14 @@ const MAX_BASE64_LENGTH = 349_528;
 const MAX_DECODED_BYTES = 262_144;
 const MAX_DIMENSION = 256;
 const SNAPSHOT_KEYS = [
-  '$schema', 'contract', 'schemaVersion', 'mediaType', 'encoding', 'data', 'width', 'height',
+  '$schema',
+  'contract',
+  'schemaVersion',
+  'mediaType',
+  'encoding',
+  'data',
+  'width',
+  'height',
 ] as const;
 
 function hasExactKeys(value: object): boolean {
@@ -142,7 +149,8 @@ function assertPng(bytes: Uint8Array, width: number, height: number): void {
 }
 
 function cloneSnapshot(image: RasterImageSnapshotV1): RasterImageSnapshotV1 {
-  if (image === null || typeof image !== 'object' || Array.isArray(image) || !hasExactKeys(image)
+  if (
+    image === null || typeof image !== 'object' || Array.isArray(image) || !hasExactKeys(image)
     || image.$schema !== CHATROOM_SIDEBAR_IMAGE_SCHEMA
     || image.contract !== CHATROOM_SIDEBAR_IMAGE_CONTRACT
     || image.schemaVersion !== 1
@@ -153,7 +161,8 @@ function cloneSnapshot(image: RasterImageSnapshotV1): RasterImageSnapshotV1 {
     || image.width < 1 || image.height < 1
     || image.width > MAX_DIMENSION || image.height > MAX_DIMENSION
     || image.width * image.height > MAX_DIMENSION * MAX_DIMENSION
-    || typeof image.data !== 'string') {
+    || typeof image.data !== 'string'
+  ) {
     throw new Error('Sidebar image snapshot is invalid.');
   }
   assertPng(decodeCanonicalBase64(image.data), image.width, image.height);
@@ -237,10 +246,14 @@ export class ChatroomSidebarImageCache {
   subscribe(listener: (roomId: string) => void): () => void {
     if (this.disposed) return () => {};
     this.listeners.add(listener);
-    return () => { this.listeners.delete(listener); };
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
-  get size(): number { return this.entries.size; }
+  get size(): number {
+    return this.entries.size;
+  }
 
   dispose(): void {
     if (this.disposed) return;
@@ -253,8 +266,10 @@ export class ChatroomSidebarImageCache {
   }
 
   private assertKey(roomId: string, fingerprint: string): void {
-    if (roomId.trim() === '' || fingerprint.trim() === ''
-      || roomId.length > 512 || fingerprint.length > 16_384) {
+    if (
+      roomId.trim() === '' || fingerprint.trim() === ''
+      || roomId.length > 512 || fingerprint.length > 16_384
+    ) {
       throw new Error('Sidebar image cache key is invalid.');
     }
   }
@@ -314,10 +329,10 @@ export async function composeChatroomSidebarSnapshots(
     const placements = total === 1
       ? [{ x: 4, y: 4, size: 120 }]
       : total === 2
-        ? [{ x: 2, y: 25, size: 78 }, { x: 48, y: 25, size: 78 }]
-        : total === 3
-          ? [{ x: 25, y: 2, size: 78 }, { x: 2, y: 48, size: 78 }, { x: 48, y: 48, size: 78 }]
-          : [{ x: 2, y: 2, size: 78 }, { x: 48, y: 2, size: 78 }, { x: 2, y: 48, size: 78 }];
+      ? [{ x: 2, y: 25, size: 78 }, { x: 48, y: 25, size: 78 }]
+      : total === 3
+      ? [{ x: 25, y: 2, size: 78 }, { x: 2, y: 48, size: 78 }, { x: 48, y: 48, size: 78 }]
+      : [{ x: 2, y: 2, size: 78 }, { x: 48, y: 2, size: 78 }, { x: 2, y: 48, size: 78 }];
     images.forEach((image, index) => {
       const placement = placements[index]!;
       context.save();
@@ -358,10 +373,12 @@ export async function composeChatroomSidebarSnapshots(
       context.textBaseline = 'middle';
       context.fillText(`+${total - 3}`, 87, 88, 64);
     }
-    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => {
-      if (value === null) reject(new Error('Canvas PNG encoding failed.'));
-      else resolve(value);
-    }, 'image/png'));
+    const blob = await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob(value => {
+        if (value === null) reject(new Error('Canvas PNG encoding failed.'));
+        else resolve(value);
+      }, 'image/png')
+    );
     return await pngBlobSnapshot(blob, 128, 128);
   } finally {
     for (const image of images) image.close();

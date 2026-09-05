@@ -21,9 +21,12 @@ async function importCurrentNavigation() {
       });
       await writeFile(join(directory, `${name}.js`), output.outputText);
     }));
-    await writeFile(join(directory, 'team-architecture-page.js'), [
-      "export const createTeamArchitecturePage = () => { throw new Error('page rendering is not used by this test'); };",
-    ].join('\n'));
+    await writeFile(
+      join(directory, 'team-architecture-page.js'),
+      [
+        "export const createTeamArchitecturePage = () => { throw new Error('page rendering is not used by this test'); };",
+      ].join('\n'),
+    );
     return {
       directory,
       agentDefinition: await import(pathToFileURL(join(directory, 'agent-definition.js')).href),
@@ -36,9 +39,11 @@ async function importCurrentNavigation() {
 }
 
 function resolveExactOverview(declarations, identity) {
-  return declarations.find(declaration => declaration.subject?.kind === 'agent-definition'
+  return declarations.find(declaration =>
+    declaration.subject?.kind === 'agent-definition'
     && declaration.subject.identity.agentId === identity.agentId
-    && declaration.subject.identity.revision === identity.revision);
+    && declaration.subject.identity.revision === identity.revision
+  );
 }
 
 test('declares exact Agent identities and one stable Host record summary across all five tabs', async () => {
@@ -58,8 +63,10 @@ test('declares exact Agent identities and one stable Host record summary across 
     assert.equal(details.length, 25);
     for (const member of configuration.members) {
       const memberDetails = details.filter(declaration => declaration.route.params.memberId === member.memberId);
-      const definition = configuration.definitions.find(candidate => candidate.identity.agentId === member.definition.agentId
-        && candidate.identity.revision === member.definition.revision);
+      const definition = configuration.definitions.find(candidate =>
+        candidate.identity.agentId === member.definition.agentId
+        && candidate.identity.revision === member.definition.revision
+      );
       assert.ok(definition);
       assert.equal(memberDetails.length, 5);
       assert.deepEqual(memberDetails.map(declaration => declaration.schemaVersion), [3, 3, 3, 3, 3]);
@@ -91,14 +98,20 @@ test('declares exact Agent identities and one stable Host record summary across 
       assert.deepEqual(resolveExactOverview(declarations, member.definition), overview);
     }
 
-    assert.equal(resolveExactOverview(declarations, {
-      agentId: configuration.members[0].definition.agentId,
-      revision: 'stale-revision',
-    }), undefined);
-    assert.equal(resolveExactOverview(declarations, {
-      agentId: 'chatroom.missing',
-      revision: configuration.members[0].definition.revision,
-    }), undefined);
+    assert.equal(
+      resolveExactOverview(declarations, {
+        agentId: configuration.members[0].definition.agentId,
+        revision: 'stale-revision',
+      }),
+      undefined,
+    );
+    assert.equal(
+      resolveExactOverview(declarations, {
+        agentId: 'chatroom.missing',
+        revision: configuration.members[0].definition.revision,
+      }),
+      undefined,
+    );
   } finally {
     await rm(modules.directory, { recursive: true, force: true });
   }
@@ -119,7 +132,9 @@ test('fails the Manager subject and summary closed when a member identity is sta
       members: Object.freeze([current.members[0], staleMember, ...current.members.slice(2)]),
     });
     const declarations = modules.navigation.teamArchitectureManagerContentDeclarations({ configuration });
-    const staleDetails = declarations.filter(declaration => declaration.route.params?.memberId === staleMember.memberId);
+    const staleDetails = declarations.filter(declaration =>
+      declaration.route.params?.memberId === staleMember.memberId
+    );
 
     assert.equal(staleDetails.length, 5);
     assert.equal(staleDetails.every(declaration => declaration.schemaVersion === 2), true);
@@ -147,7 +162,13 @@ test('uses only public Host selection and sanitized Markdown primitives in a car
 
   const sectionRule = css.match(/\.cx-team-architecture__section \{([^}]*)\}/u)?.[1] ?? '';
   assert.doesNotMatch(sectionRule, /(?:border|background|border-radius|padding)\s*:/u);
-  assert.match(css, /\.cx-team-architecture__prompt-workspace \{[\s\S]*?grid-template-columns: minmax\(180px, 240px\) minmax\(0, 1fr\);/u);
-  assert.match(css, /@media \(max-width: 620px\) \{[\s\S]*?\.cx-team-architecture__prompt-workspace \{\s*grid-template-columns: 1fr;/u);
+  assert.match(
+    css,
+    /\.cx-team-architecture__prompt-workspace \{[\s\S]*?grid-template-columns: minmax\(180px, 240px\) minmax\(0, 1fr\);/u,
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 620px\) \{[\s\S]*?\.cx-team-architecture__prompt-workspace \{\s*grid-template-columns: 1fr;/u,
+  );
   assert.doesNotMatch(css, /cx-team-architecture__prompt-section/u);
 });

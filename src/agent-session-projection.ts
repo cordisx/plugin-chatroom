@@ -25,15 +25,12 @@ import {
 } from './conversation-model.js';
 import {
   createChatroomOpaqueId,
-  roomAdmissionMessageLinkFor,
-  type RoomAdmissionMessageLink,
   type Room,
+  type RoomAdmissionMessageLink,
+  roomAdmissionMessageLinkFor,
   type RoomRun,
 } from './room.js';
-import {
-  projectChatroomApprovalBubble,
-  type ChatroomApprovalBubbleEvent,
-} from './approval-bubble.js';
+import { type ChatroomApprovalBubbleEvent, projectChatroomApprovalBubble } from './approval-bubble.js';
 
 export interface ChatroomSessionProjectionChange {
   readonly kind: 'item-appended' | 'item-updated';
@@ -56,10 +53,11 @@ export interface ChatroomSessionAgentFacts {
   readonly details?: AgentDetailReference;
 }
 
-export type ProjectedItem = AgentConversationMessageItem
+export type ProjectedItem =
+  | AgentConversationMessageItem
   | AgentConversationApprovalItemV6
-  | Extract<AgentConversationItem, { readonly kind: 'approval' }>;
-type PendingApprovalItem = Extract<AgentConversationApprovalItemV6, { readonly state: 'pending' }>;
+  | Extract<AgentConversationItem, { readonly kind: 'approval'; }>;
+type PendingApprovalItem = Extract<AgentConversationApprovalItemV6, { readonly state: 'pending'; }>;
 type ApprovalAskedFact = {
   readonly eventSeq: number;
   readonly sequence: number;
@@ -85,7 +83,8 @@ const bodyFor = (content: UserMessage['content']): AgentConversationMessageItem[
   return blocks.length === 0 ? undefined : [blocks[0], ...blocks.slice(1)];
 };
 
-const DELEGATION_CONTEXT_ENVELOPE = /^(?<prefix>Playground Agent\/Session fixture reply:[ \t]*)?\[Chatroom delegation context\]\r?\n(?<context>\{[^\r\n]*\})\r?\n\r?\n(?<task>[\s\S]+)$/u;
+const DELEGATION_CONTEXT_ENVELOPE =
+  /^(?<prefix>Playground Agent\/Session fixture reply:[ \t]*)?\[Chatroom delegation context\]\r?\n(?<context>\{[^\r\n]*\})\r?\n\r?\n(?<task>[\s\S]+)$/u;
 const DELEGATION_COMMUNICATION_RULE =
   'Prefix an ordinary Room message with @<memberId-or-label> to deliver it only to that entity. Without @, the message is Room-visible only.';
 const DELEGATION_APPROVAL_RULE =
@@ -100,28 +99,42 @@ const hasExactKeys = (value: Readonly<Record<string, unknown>>, keys: readonly s
   return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
 };
 
-const hasStrings = (value: unknown, keys: readonly string[]): boolean => isRecord(value)
+const hasStrings = (value: unknown, keys: readonly string[]): boolean =>
+  isRecord(value)
   && hasExactKeys(value, keys)
   && keys.every(key => typeof value[key] === 'string' && value[key] !== '');
 
 function isDelegationContext(value: unknown): boolean {
-  if (!isRecord(value) || !hasExactKeys(value, [
-    'self', 'delegatedBy', 'reportsTo', 'availableTargets', 'communication', 'approvals',
-  ])) return false;
-  if (!hasStrings(value.self, ['memberId', 'label', 'runId'])
+  if (
+    !isRecord(value) || !hasExactKeys(value, [
+      'self',
+      'delegatedBy',
+      'reportsTo',
+      'availableTargets',
+      'communication',
+      'approvals',
+    ])
+  ) return false;
+  if (
+    !hasStrings(value.self, ['memberId', 'label', 'runId'])
     || !hasStrings(value.delegatedBy, ['memberId', 'label', 'runId'])
     || (value.reportsTo !== null && !hasStrings(value.reportsTo, ['memberId', 'label']))
     || !Array.isArray(value.availableTargets)
-    || !value.availableTargets.every(target => hasStrings(target, ['memberId', 'label']))) return false;
-  if (!isRecord(value.communication)
+    || !value.availableTargets.every(target => hasStrings(target, ['memberId', 'label']))
+  ) return false;
+  if (
+    !isRecord(value.communication)
     || !hasExactKeys(value.communication, ['mode', 'rule'])
     || value.communication.mode !== 'explicit-mention-required'
-    || value.communication.rule !== DELEGATION_COMMUNICATION_RULE) return false;
-  if (!isRecord(value.approvals)
+    || value.communication.rule !== DELEGATION_COMMUNICATION_RULE
+  ) return false;
+  if (
+    !isRecord(value.approvals)
     || !hasExactKeys(value.approvals, ['mode', 'next', 'rule'])
     || value.approvals.mode !== 'reports-to-hierarchy'
     || value.approvals.rule !== DELEGATION_APPROVAL_RULE
-    || JSON.stringify(value.approvals.next) !== JSON.stringify(value.reportsTo)) return false;
+    || JSON.stringify(value.approvals.next) !== JSON.stringify(value.reportsTo)
+  ) return false;
   return true;
 }
 
@@ -140,9 +153,11 @@ function visibleAssistantText(textValue: string): string {
 }
 
 const visibleAssistantContent = (content: UserMessage['content']): UserMessage['content'] => (
-  content.map(block => block.type === 'text'
-    ? { ...block, text: visibleAssistantText(block.text) }
-    : block)
+  content.map(block =>
+    block.type === 'text'
+      ? { ...block, text: visibleAssistantText(block.text) }
+      : block
+  )
 );
 
 const approvalState = (outcome: ApprovalOutcome): 'approved' | 'denied' | 'cancelled' | 'failed' => {
@@ -203,10 +218,12 @@ export class ChatroomAgentSessionProjector {
     this.updateDomain(room, run);
     const changes: ChatroomSessionProjectionChange[] = [];
     for (const [eventSeq, event] of [...this.events.entries()].sort(([left], [right]) => left - right)) {
-      if (event.type !== 'user/message'
+      if (
+        event.type !== 'user/message'
         || eventSeq < 1
         || this.surfaceReplacedEventSeqs.has(eventSeq)
-        || this.itemsByEventSeq.has(eventSeq)) continue;
+        || this.itemsByEventSeq.has(eventSeq)
+      ) continue;
       const change = this.projectUserMessage(event);
       if (change !== undefined) changes.push(change);
     }
@@ -214,29 +231,37 @@ export class ChatroomAgentSessionProjector {
   }
 
   updateAgentFacts(agentFacts: ChatroomSessionAgentFacts): void {
-    if (this.agentFacts.generation !== undefined && agentFacts.generation !== undefined
-      && this.agentFacts.generation !== agentFacts.generation) {
+    if (
+      this.agentFacts.generation !== undefined && agentFacts.generation !== undefined
+      && this.agentFacts.generation !== agentFacts.generation
+    ) {
       throw new Error('Session projector Agent generation changed without replacement.');
     }
     this.agentFacts = { ...this.agentFacts, ...agentFacts };
   }
 
-  get agentGeneration(): number | undefined { return this.agentFacts.generation; }
+  get agentGeneration(): number | undefined {
+    return this.agentFacts.generation;
+  }
 
   /**
    * The controller may retain a completed SessionEvent projection briefly while
    * an externally replaced permission lease is replayed.  It must never reuse
    * that display cache for a different durable Session.
    */
-  get projectedSessionId(): SessionId { return this.sessionId; }
-
-  snapshotItems(): readonly ProjectedItem[] {
-    return Object.freeze([...this.itemsByEventSeq.entries()]
-      .sort(([left], [right]) => left - right)
-      .map(([, item]) => item));
+  get projectedSessionId(): SessionId {
+    return this.sessionId;
   }
 
-  approvalItem(itemId: string): Extract<ProjectedItem, { readonly kind: 'approval' }> | undefined {
+  snapshotItems(): readonly ProjectedItem[] {
+    return Object.freeze(
+      [...this.itemsByEventSeq.entries()]
+        .sort(([left], [right]) => left - right)
+        .map(([, item]) => item),
+    );
+  }
+
+  approvalItem(itemId: string): Extract<ProjectedItem, { readonly kind: 'approval'; }> | undefined {
     const item = this.snapshotItems().find(candidate => candidate.itemId === itemId);
     return item?.kind === 'approval' ? item : undefined;
   }
@@ -330,7 +355,7 @@ export class ChatroomAgentSessionProjector {
   }
 
   private projectUserMessage(
-    event: Extract<SessionEvent, { readonly type: 'user/message' }>,
+    event: Extract<SessionEvent, { readonly type: 'user/message'; }>,
   ): ChatroomSessionProjectionChange | undefined {
     const message = event.data;
     const correlation = message.source.kind === 'plugin' ? message.source.correlation : undefined;
@@ -338,15 +363,19 @@ export class ChatroomAgentSessionProjector {
       ? correlation
       : undefined;
     const admissionLink = this.admissionMessageLinkFor(message);
-    if (message.source.kind === 'plugin'
-      && roomMessageCorrelation === undefined && admissionLink === undefined) return undefined;
+    if (
+      message.source.kind === 'plugin'
+      && roomMessageCorrelation === undefined && admissionLink === undefined
+    ) return undefined;
     const durableDisplayId = roomMessageCorrelation?.id ?? admissionLink?.itemId;
     const durableDisplay = durableDisplayId === undefined
       ? undefined
-      : this.room.items.find(item => item.kind === 'message'
+      : this.room.items.find(item =>
+        item.kind === 'message'
         && item.itemId === durableDisplayId
         && item.author.role === 'human'
-        && item.semantic.purpose === 'conversation');
+        && item.semantic.purpose === 'conversation'
+      );
     if (admissionLink !== undefined && durableDisplay?.kind !== 'message') return undefined;
     // The Session fact retains the parsed Agent payload. Chatroom's durable
     // Room message owns only its display association. In the admitted identity
@@ -387,7 +416,8 @@ export class ChatroomAgentSessionProjector {
     if (message.source.kind !== 'plugin') return undefined;
     const member = this.member();
     const candidate = roomAdmissionMessageLinkFor(this.room, this.sessionId, message.id);
-    if (candidate === undefined
+    if (
+      candidate === undefined
       || candidate.roomId !== this.room.id
       || candidate.participantId !== member.participantId
       || candidate.memberId !== this.run.memberId
@@ -395,12 +425,13 @@ export class ChatroomAgentSessionProjector {
       || candidate.sessionId !== this.sessionId
       || candidate.messageId !== message.id
       || candidate.owner.pluginId !== message.source.pluginId
-      || candidate.owner.generation !== message.source.generation) return undefined;
+      || candidate.owner.generation !== message.source.generation
+    ) return undefined;
     return candidate;
   }
 
   private projectAssistantMessage(
-    event: Extract<SessionEvent, { readonly type: 'assistant/message' }>,
+    event: Extract<SessionEvent, { readonly type: 'assistant/message'; }>,
   ): ChatroomSessionProjectionChange | undefined {
     const requests = this.sourceUserMessages(event);
     const body = bodyFor(visibleAssistantContent(event.data.message.content));
@@ -409,9 +440,11 @@ export class ChatroomAgentSessionProjector {
     const introduction = this.run.sessionSelfIntroduction;
     const introductionRequest = introduction === undefined
       ? undefined
-      : requests.find(request => request.id === introduction.requestMessageId
+      : requests.find(request =>
+        request.id === introduction.requestMessageId
         && request.source.kind === 'plugin'
-        && request.source.correlation?.namespace === 'chatroom.member-self-introduction');
+        && request.source.correlation?.namespace === 'chatroom.member-self-introduction'
+      );
     const semantic: AgentConversationMessageItem['semantic'] = introductionRequest === undefined
       ? {
         purpose: 'conversation',
@@ -443,11 +476,13 @@ export class ChatroomAgentSessionProjector {
   }
 
   private projectApprovalAsked(
-    event: Extract<SessionEvent, { readonly type: 'approval/asked' }>,
+    event: Extract<SessionEvent, { readonly type: 'approval/asked'; }>,
   ): ChatroomSessionProjectionChange | undefined {
-    if (this.invalidApprovals.has(event.data.id)
+    if (
+      this.invalidApprovals.has(event.data.id)
       || this.approvalAsked.has(event.data.id)
-      || this.approvalDecided.has(event.data.id)) {
+      || this.approvalDecided.has(event.data.id)
+    ) {
       this.invalidateApproval(event.data.id);
       return undefined;
     }
@@ -494,13 +529,15 @@ export class ChatroomAgentSessionProjector {
   }
 
   private projectApprovalDecided(
-    event: Extract<SessionEvent, { readonly type: 'approval/decided' }>,
+    event: Extract<SessionEvent, { readonly type: 'approval/decided'; }>,
   ): ChatroomSessionProjectionChange | undefined {
     const asked = this.approvalAsked.get(event.data.id);
-    if (this.invalidApprovals.has(event.data.id)
+    if (
+      this.invalidApprovals.has(event.data.id)
       || asked === undefined
       || this.approvalDecided.has(event.data.id)
-      || event.seq <= asked.eventSeq) {
+      || event.seq <= asked.eventSeq
+    ) {
       this.invalidateApproval(event.data.id);
       return undefined;
     }
@@ -545,7 +582,8 @@ export class ChatroomAgentSessionProjector {
     const events = [...this.events.values()].filter((event): event is ChatroomApprovalBubbleEvent =>
       event.type === 'approval/authority-bound'
       || event.type === 'approval/asked'
-      || event.type === 'approval/decided');
+      || event.type === 'approval/decided'
+    );
     const projection = projectChatroomApprovalBubble({
       room: this.room,
       sessionId: this.sessionId,
@@ -608,8 +646,10 @@ export class ChatroomAgentSessionProjector {
     return member;
   }
 
-  private agentParticipant(): Extract<AgentConversationParticipant, { readonly role: 'agent' }> & {
-    readonly agentIdentity: NonNullable<Extract<AgentConversationParticipant, { readonly role: 'agent' }>['agentIdentity']>;
+  private agentParticipant(): Extract<AgentConversationParticipant, { readonly role: 'agent'; }> & {
+    readonly agentIdentity: NonNullable<
+      Extract<AgentConversationParticipant, { readonly role: 'agent'; }>['agentIdentity']
+    >;
   } {
     const member = this.member();
     const participant = this.room.participants.find(candidate => candidate.id === member.participantId);

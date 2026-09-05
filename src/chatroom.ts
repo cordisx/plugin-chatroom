@@ -1,40 +1,32 @@
 import type { Context } from '@deepseek-ai/cordis';
-import { Config, ChatroomComposerSettings, configApplies } from './composer-settings.js';
-import {
-  CORDISX_PAGE_SCHEMA_V3,
-  CORDISX_ROUTE_SCHEMA_V2,
-} from 'cordisx/contracts';
+import { ChatroomComposerSettings, Config, configApplies } from './composer-settings.js';
+import { CORDISX_PAGE_SCHEMA_V3, CORDISX_ROUTE_SCHEMA_V2 } from 'cordisx/contracts';
 import type { PluginRuntimeManifestV8 } from '@cordisx/protocol/plugin-manifest/v8';
 
 // Keep product-owned avatar packages visible to Vite's initial dependency
 // scan without evaluating React-bound modules before the Host publishes its
 // shared runtime. NodeNext's `.js` edge resolves to `avatar.tsx` only later.
-const avatarDevelopmentDependencies = () => Promise.all([
-  import('@oneworks/avatar'),
-  import('@oneworks/avatar-react'),
-]);
+const avatarDevelopmentDependencies = () =>
+  Promise.all([
+    import('@oneworks/avatar'),
+    import('@oneworks/avatar-react'),
+  ]);
 void avatarDevelopmentDependencies;
 
 import {
   CHATROOM_DEFAULT_AGENT_CONFIGURATION,
-  parseChatroomAgentConfiguration,
   type ChatroomAgentConfiguration,
+  parseChatroomAgentConfiguration,
 } from './agent-definition.js';
 import { ChatroomAgentSessionController } from './agent-session-controller.js';
 import { ChatroomConversationController } from './conversation-source.js';
 import { createChatroomPage } from './chatroom-page.js';
 import { ChatroomPageSource } from './chatroom-page-source.js';
-import {
-  CHATROOM_MANAGER_CONTENT_DECLARATIONS,
-  registerChatroomManager,
-} from './manager-chat.js';
+import { CHATROOM_MANAGER_CONTENT_DECLARATIONS, registerChatroomManager } from './manager-chat.js';
 import { ChatroomProductBase } from './product-base.js';
 import { configurationFromEntitySnapshot } from './entity-registry-configuration.js';
 import { DurableChatroomRoomStore } from './room-store.js';
-import {
-  registerTalentMarket,
-  TALENT_MARKET_MANAGER_CONTENT_DECLARATIONS,
-} from './talent-market-page.js';
+import { registerTalentMarket, TALENT_MARKET_MANAGER_CONTENT_DECLARATIONS } from './talent-market-page.js';
 import {
   registerTeamArchitectureManagerContributions,
   teamArchitectureManagerContentDeclarations,
@@ -42,8 +34,8 @@ import {
 } from './team-architecture-navigation.js';
 import { createTeamArchitectureDataSource } from './team-entity-view-model.js';
 import {
-  registerChatroomAgentSessionRoomSimulationOwner,
   type PlaygroundRoomSimulationBridgeService,
+  registerChatroomAgentSessionRoomSimulationOwner,
 } from './playground-room-simulation-bridge.js';
 
 export type ChatroomMessages = {
@@ -52,7 +44,7 @@ export type ChatroomMessages = {
   'navigation.rooms': undefined;
   'navigation.archived': undefined;
   'navigation.room.empty': undefined;
-  'navigation.room.summary': { readonly summary: string };
+  'navigation.room.summary': { readonly summary: string; };
   'action.pin': undefined;
   'action.unpin': undefined;
   'action.archive': undefined;
@@ -86,13 +78,13 @@ export type ChatroomMessages = {
   'timeline.empty.description': undefined;
   'timeline.delivery.failed': undefined;
   'timeline.run.running': undefined;
-  'timeline.member.presence': { readonly state: string };
+  'timeline.member.presence': { readonly state: string; };
   'composer.placeholder': undefined;
   'composer.unavailable': undefined;
   'composer.send': undefined;
   'composer.sending': undefined;
   'composer.send-failed': undefined;
-  'composer.target-error': { readonly code: string };
+  'composer.target-error': { readonly code: string; };
   'composer.shortcut.enter': undefined;
   'composer.shortcut.mod-enter': undefined;
   'approval.title': undefined;
@@ -107,7 +99,7 @@ export type ChatroomMessages = {
   'approval.state.cancelled': undefined;
   'approval.state.failed': undefined;
   'members.title': undefined;
-  'members.count': { readonly count: number };
+  'members.count': { readonly count: number; };
   'members.status.idle': undefined;
   'members.status.active': undefined;
   'members.status.running': undefined;
@@ -124,7 +116,9 @@ export type ChatroomMessages = {
 export { Config, configApplies };
 
 const message = (key: keyof ChatroomMessages, fallback: string) => ({
-  namespace: 'chatroom', key, fallback,
+  namespace: 'chatroom',
+  key,
+  fallback,
 } as const);
 
 export const manifest = {
@@ -160,8 +154,17 @@ export const manifest = {
 } as const satisfies PluginRuntimeManifestV8;
 
 export const inject = [
-  'i18n', 'commands', 'pages', 'routes', 'slots', 'managerContent',
-  'agents', 'sessions', 'approvals', 'entities', 'documents',
+  'i18n',
+  'commands',
+  'pages',
+  'routes',
+  'slots',
+  'managerContent',
+  'agents',
+  'sessions',
+  'approvals',
+  'entities',
+  'documents',
   'settings',
 ];
 
@@ -203,8 +206,8 @@ function agentConfiguration(config: unknown): ChatroomAgentConfiguration {
   if (config === null || typeof config !== 'object' || Array.isArray(config)) {
     return CHATROOM_DEFAULT_AGENT_CONFIGURATION;
   }
-  const team = (config as { readonly team?: unknown; readonly agent?: unknown }).team
-    ?? (config as { readonly agent?: unknown }).agent;
+  const team = (config as { readonly team?: unknown; readonly agent?: unknown; }).team
+    ?? (config as { readonly agent?: unknown; }).agent;
   return team === undefined ? CHATROOM_DEFAULT_AGENT_CONFIGURATION : parseChatroomAgentConfiguration(team);
 }
 
@@ -385,19 +388,24 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   const controller = new ChatroomConversationController(
     roomStore.rooms,
     agent,
-    async room => { await roomStore.upsert(room); },
+    async room => {
+      await roomStore.upsert(room);
+    },
     (roomId, runId) => agentSession.isRunLocallyUnavailable(roomId, runId),
   );
   const composerSettings = new ChatroomComposerSettings(ctx.settings);
   const product = ChatroomProductBase.attach(roomStore);
   const pageSource = new ChatroomPageSource(controller, agentSession, composerSettings);
   const playgroundBridge = ctx.reflect.get(
-    'playgroundRoomSimulationBridge', false,
+    'playgroundRoomSimulationBridge',
+    false,
   ) as PlaygroundRoomSimulationBridgeService | undefined;
   const disposePlaygroundBridge = playgroundBridge === undefined
     ? undefined
     : registerChatroomAgentSessionRoomSimulationOwner(
-      playgroundBridge, controller, agentSession,
+      playgroundBridge,
+      controller,
+      agentSession,
     );
   ctx.pages.register(page, createChatroomPage(pageSource, product.sidebarImages));
   ctx.routes.register(newRoomRoute);

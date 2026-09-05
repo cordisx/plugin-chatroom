@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -57,7 +57,8 @@ const validate = (name, value) => {
 const entityTreeDigest = files => {
   const chunks = [Buffer.from('cordisx.entity-tree/v1\0', 'utf8')];
   const ordered = [...files].sort((left, right) =>
-    Buffer.from(left.path, 'utf8').compare(Buffer.from(right.path, 'utf8')));
+    Buffer.from(left.path, 'utf8').compare(Buffer.from(right.path, 'utf8'))
+  );
   for (const file of ordered) {
     const pathBytes = Buffer.from(file.path, 'utf8');
     const contentBytes = Buffer.from(file.content, 'utf8');
@@ -96,16 +97,19 @@ const materializeTemplate = declaration => {
     .filter(name => name.endsWith('.md'))
     .sort()
     .map(name => `prompts/${name}`);
-  assert.deepEqual([...new Set(promptFiles.map(file => file.path))].sort(), actualPromptFiles,
-    `${entity.agentId} must declare every and only its packaged prompt files`);
+  assert.deepEqual(
+    [...new Set(promptFiles.map(file => file.path))].sort(),
+    actualPromptFiles,
+    `${entity.agentId} must declare every and only its packaged prompt files`,
+  );
   const digest = entityTreeDigest([{ path: 'entity.json', content: entityText }, ...promptFiles]);
-  const { $schema: _schema, contract: _contract, schemaVersion: _version,
-    agentId, promptSections, ...fields } = entity;
+  const { $schema: _schema, contract: _contract, schemaVersion: _version, agentId, promptSections, ...fields } = entity;
   return {
     entity,
     digest,
     definition: {
-      $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-definition.v1.schema.json',
+      $schema:
+        'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-definition.v1.schema.json',
       contract: 'cordisx.agent-definition/v1',
       schemaVersion: 1,
       identity: { agentId, revision: digest },
@@ -124,7 +128,8 @@ const materializeTemplate = declaration => {
 test('package v8 declares five schema-valid entity templates with exact framed digests', () => {
   validate('plugin-package.v8.schema.json', packageManifest);
   const runtimeManifest = JSON.parse(readFileSync(
-    path.join(repositoryRoot, packageManifest.runtimeManifest.path), 'utf8',
+    path.join(repositoryRoot, packageManifest.runtimeManifest.path),
+    'utf8',
   ));
   validate('plugin-manifest.v8.schema.json', runtimeManifest);
   assert.equal(packageManifest.entityTemplates.length, 5);
@@ -149,8 +154,9 @@ test('package v8 declares five schema-valid entity templates with exact framed d
 });
 
 test('templates preserve every accepted definition field while revision becomes the content digest', () => {
-  const digestByAgentId = new Map(packageManifest.entityTemplates.map(declaration =>
-    [declaration.agentId, declaration.digest]));
+  const digestByAgentId = new Map(
+    packageManifest.entityTemplates.map(declaration => [declaration.agentId, declaration.digest]),
+  );
   for (const declaration of packageManifest.entityTemplates) {
     const { definition } = materializeTemplate(declaration);
     const legacy = legacyDefinitions.get(declaration.agentId);
@@ -174,15 +180,24 @@ test('templates preserve every accepted definition field while revision becomes 
 
 test('package pins the exact Protocol bootstrap-route and Host runtime releases with exact manifest bytes', () => {
   const packageJson = JSON.parse(readFileSync(path.join(repositoryRoot, 'package.json'), 'utf8'));
-  assert.equal(packageJson.devDependencies['@cordisx/protocol'],
-    'github:cordisx/cordisx-protocol#6fa9bbbad0501114bece820d574d5e79a4cb3cdb');
-  assert.equal(packageJson.devDependencies.cordisx,
-    'github:cordisx/cordisx#88b98996d70c0ceccaeb423e5329df9abf49d785');
+  assert.equal(
+    packageJson.devDependencies['@cordisx/protocol'],
+    'github:cordisx/cordisx-protocol#6fa9bbbad0501114bece820d574d5e79a4cb3cdb',
+  );
+  assert.equal(packageJson.devDependencies.cordisx, 'github:cordisx/cordisx#88b98996d70c0ceccaeb423e5329df9abf49d785');
   assert.equal(packageManifest.entry, './dist/chatroom.js');
-  assert.equal(packageManifest.compatibility.protocolSchemas.includes(
-    'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-file.v1.schema.json'), true);
-  assert.equal(packageManifest.compatibility.protocolSchemas.includes(
-    'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v8.schema.json'), true);
+  assert.equal(
+    packageManifest.compatibility.protocolSchemas.includes(
+      'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-file.v1.schema.json',
+    ),
+    true,
+  );
+  assert.equal(
+    packageManifest.compatibility.protocolSchemas.includes(
+      'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v8.schema.json',
+    ),
+    true,
+  );
   const runtimeManifest = readFileSync(path.join(repositoryRoot, packageManifest.runtimeManifest.path), 'utf8');
   const digest = `sha256:${createHash('sha256').update(runtimeManifest).digest('hex')}`;
   assert.equal(digest, packageManifest.runtimeManifest.digest);

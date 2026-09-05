@@ -1,7 +1,4 @@
-import type {
-  AgentAdmission,
-  AgentHandle,
-} from '@cordisx/protocol/agents/v1';
+import type { AgentAdmission, AgentHandle } from '@cordisx/protocol/agents/v1';
 import type { AgentAdmissionTarget } from '@cordisx/protocol/agent-admission/v3';
 import type {
   AgentAdmissionBootstrapReservationService,
@@ -17,13 +14,20 @@ export interface ChatroomAdmissionMessage {
 export type ChatroomAgentAdmissionV4Result =
   | {
     readonly status: 'accepted';
-    readonly admission: AgentAdmission & { readonly status: 'accepted' };
+    readonly admission: AgentAdmission & { readonly status: 'accepted'; };
   }
   | {
     readonly status: 'denied';
     readonly stage: 'issue' | 'reserve';
-    readonly code: 'not-owner' | 'origin-denied' | 'target-denied' | 'target-mismatch'
-      | 'stale' | 'command-complete' | 'duplicate-target' | 'reused';
+    readonly code:
+      | 'not-owner'
+      | 'origin-denied'
+      | 'target-denied'
+      | 'target-mismatch'
+      | 'stale'
+      | 'command-complete'
+      | 'duplicate-target'
+      | 'reused';
   };
 
 /**
@@ -35,8 +39,8 @@ export async function issueChatroomAgentAdmissionBootstrapTarget(
   origin: AgentBootstrapCommandOrigin,
   target: AgentAdmissionTarget,
 ): Promise<
-  | { readonly status: 'issued'; readonly origin: AgentAdmissionBootstrapTargetOrigin }
-  | Extract<ChatroomAgentAdmissionV4Result, { readonly status: 'denied' }>
+  | { readonly status: 'issued'; readonly origin: AgentAdmissionBootstrapTargetOrigin; }
+  | Extract<ChatroomAgentAdmissionV4Result, { readonly status: 'denied'; }>
 > {
   const issued = await targets.issue({ origin, target });
   return issued.status === 'issued'

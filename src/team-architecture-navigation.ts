@@ -12,8 +12,8 @@ import {
   type CordisXManagerContentRecordTitleV1,
   type CordisXPageMetadataV3,
   type CordisXPages,
-  type CordisXRoutes,
   type CordisXRouteDefinitionV2,
+  type CordisXRoutes,
   type CordisXSlots,
 } from 'cordisx/contracts';
 import { agentAvatarForDefinition } from './agent-definition.js';
@@ -23,10 +23,7 @@ import {
   type TeamArchitectureMessages,
   type TeamEntityDetailTab,
 } from './team-architecture-page.js';
-import type {
-  TeamArchitectureDataSnapshot,
-  TeamArchitectureDataSource,
-} from './team-entity-view-model.js';
+import type { TeamArchitectureDataSnapshot, TeamArchitectureDataSource } from './team-entity-view-model.js';
 
 export const TEAM_ARCHITECTURE_LOCALE_NAMESPACE = 'org.cordisx.chatroom.team-architecture' as const;
 export const TEAM_ARCHITECTURE_PAGE_ID = 'org.cordisx.chatroom.manager.team-architecture' as const;
@@ -49,11 +46,12 @@ export const TEAM_ARCHITECTURE_DETAIL_ROUTE_IDS: TeamArchitectureDetailRouteIds 
   sessions: TEAM_ARCHITECTURE_DETAIL_SESSIONS_ROUTE_ID,
 });
 
-const message = (key: keyof TeamArchitectureMessages, fallback: string) => Object.freeze({
-  namespace: TEAM_ARCHITECTURE_LOCALE_NAMESPACE,
-  key,
-  fallback,
-});
+const message = (key: keyof TeamArchitectureMessages, fallback: string) =>
+  Object.freeze({
+    namespace: TEAM_ARCHITECTURE_LOCALE_NAMESPACE,
+    key,
+    fallback,
+  });
 
 export const TEAM_ARCHITECTURE_PAGE: CordisXPageMetadataV3 = Object.freeze({
   $schema: CORDISX_PAGE_SCHEMA_V3,
@@ -132,16 +130,16 @@ export const TEAM_ARCHITECTURE_ROUTES: readonly CordisXRouteDefinitionV2<'manage
  * Projection fragment owned by Team Architecture. The Chatroom integrator must
  * combine this with sibling Manager features and call replaceProjection once.
  */
-export const TEAM_ARCHITECTURE_MANAGER_CONTENT_DECLARATIONS:
-readonly CordisXManagerContentNavigationDeclarationV1[] = Object.freeze([
-  Object.freeze({
-    $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V1,
-    schemaVersion: 1,
-    id: 'team-architecture-root',
-    route: Object.freeze({ id: TEAM_ARCHITECTURE_ROUTE_ID }),
-    header: Object.freeze({ title: Object.freeze({ kind: 'route' as const }) }),
-  }),
-]);
+export const TEAM_ARCHITECTURE_MANAGER_CONTENT_DECLARATIONS: readonly CordisXManagerContentNavigationDeclarationV1[] =
+  Object.freeze([
+    Object.freeze({
+      $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V1,
+      schemaVersion: 1,
+      id: 'team-architecture-root',
+      route: Object.freeze({ id: TEAM_ARCHITECTURE_ROUTE_ID }),
+      header: Object.freeze({ title: Object.freeze({ kind: 'route' as const }) }),
+    }),
+  ]);
 
 type TeamArchitectureManagerContentNavigationDeclaration =
   | CordisXManagerContentNavigationDeclarationV1
@@ -213,58 +211,63 @@ export function teamArchitectureManagerContentDeclarations(
       && candidate.identity.revision === member.definition.revision
     ));
     const definitionDisplayName = definition?.name ?? member.label;
-    return detailRoutes.map(({ tab, routeId }):
-    CordisXManagerContentNavigationDeclarationV2 | CordisXManagerContentNavigationDeclarationV3 => Object.freeze({
-      ...(definition === undefined ? {
-        $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V2,
-        schemaVersion: 2 as const,
-      } : {
-        $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V3,
-        schemaVersion: 3 as const,
-      }),
-      id: `team-architecture-detail-${index + 1}-${tab}`,
-      route: Object.freeze({
-        id: routeId,
-        params: Object.freeze({ memberId: member.memberId }),
-      }),
-      parentRoute: Object.freeze({ id: TEAM_ARCHITECTURE_ROUTE_ID }),
-      header: Object.freeze({
-        title: Object.freeze({
-          kind: 'record',
-          recordIdParam: 'memberId',
-          fallback: message('detail.identity', '成员详情'),
-        }),
-      }),
-      tabs,
-      ...(definition === undefined ? {} : {
-        ...(tab !== 'overview' ? {} : {
-          subject: Object.freeze({
-            kind: 'agent-definition' as const,
-            identity: Object.freeze({ ...member.definition }),
+    return detailRoutes.map((
+      { tab, routeId },
+    ): CordisXManagerContentNavigationDeclarationV2 | CordisXManagerContentNavigationDeclarationV3 =>
+      Object.freeze({
+        ...(definition === undefined
+          ? {
+            $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V2,
+            schemaVersion: 2 as const,
+          }
+          : {
+            $schema: CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V3,
+            schemaVersion: 3 as const,
           }),
+        id: `team-architecture-detail-${index + 1}-${tab}`,
+        route: Object.freeze({
+          id: routeId,
+          params: Object.freeze({ memberId: member.memberId }),
         }),
-        recordSummary: Object.freeze({
-          leadingVisual: Object.freeze({
-            kind: 'agent-avatar' as const,
-            avatar: agentAvatarForDefinition(member.definition, snapshot.configuration.definitions),
-          }),
+        parentRoute: Object.freeze({ id: TEAM_ARCHITECTURE_ROUTE_ID }),
+        header: Object.freeze({
           title: Object.freeze({
-            namespace: TEAM_ARCHITECTURE_LOCALE_NAMESPACE,
-            key: 'detail.record-title',
-            params: Object.freeze({ label: definitionDisplayName }),
-            fallback: definitionDisplayName,
+            kind: 'record',
+            recordIdParam: 'memberId',
+            fallback: message('detail.identity', '成员详情'),
           }),
-          ...(definition.description === undefined ? {} : {
-            description: Object.freeze({
+        }),
+        tabs,
+        ...(definition === undefined ? {} : {
+          ...(tab !== 'overview' ? {} : {
+            subject: Object.freeze({
+              kind: 'agent-definition' as const,
+              identity: Object.freeze({ ...member.definition }),
+            }),
+          }),
+          recordSummary: Object.freeze({
+            leadingVisual: Object.freeze({
+              kind: 'agent-avatar' as const,
+              avatar: agentAvatarForDefinition(member.definition, snapshot.configuration.definitions),
+            }),
+            title: Object.freeze({
               namespace: TEAM_ARCHITECTURE_LOCALE_NAMESPACE,
-              key: 'detail.record-description',
-              params: Object.freeze({ description: definition.description }),
-              fallback: definition.description,
+              key: 'detail.record-title',
+              params: Object.freeze({ label: definitionDisplayName }),
+              fallback: definitionDisplayName,
+            }),
+            ...(definition.description === undefined ? {} : {
+              description: Object.freeze({
+                namespace: TEAM_ARCHITECTURE_LOCALE_NAMESPACE,
+                key: 'detail.record-description',
+                params: Object.freeze({ description: definition.description }),
+                fallback: definition.description,
+              }),
             }),
           }),
         }),
-      }),
-    }));
+      })
+    );
   });
   return Object.freeze([...TEAM_ARCHITECTURE_MANAGER_CONTENT_DECLARATIONS, ...details]);
 }
@@ -272,20 +275,24 @@ export function teamArchitectureManagerContentDeclarations(
 export function teamArchitectureManagerContentRecordTitles(
   snapshot: Pick<TeamArchitectureDataSnapshot, 'configuration'>,
 ): readonly CordisXManagerContentRecordTitleV1[] {
-  return Object.freeze(snapshot.configuration.members.map(member => Object.freeze({
-    id: member.memberId,
-    title: Object.freeze({
-      namespace: TEAM_ARCHITECTURE_LOCALE_NAMESPACE,
-      key: 'detail.record-title',
-      params: Object.freeze({ label: member.label }),
-      fallback: member.label,
-    }),
-  })));
+  return Object.freeze(snapshot.configuration.members.map(member =>
+    Object.freeze({
+      id: member.memberId,
+      title: Object.freeze({
+        namespace: TEAM_ARCHITECTURE_LOCALE_NAMESPACE,
+        key: 'detail.record-title',
+        params: Object.freeze({ label: member.label }),
+        fallback: member.label,
+      }),
+    })
+  ));
 }
 
-type TeamArchitectureMessageCatalog = Readonly<{
-  [Key in keyof TeamArchitectureMessages]: string;
-}>;
+type TeamArchitectureMessageCatalog = Readonly<
+  {
+    [Key in keyof TeamArchitectureMessages]: string;
+  }
+>;
 
 const zhCNMessages: TeamArchitectureMessageCatalog = Object.freeze({
   'body.introduction': '以配置中的稳定成员身份展示真实组织关系；定义继承与关联关系不会被当作上下级。',
@@ -349,7 +356,8 @@ const zhCNMessages: TeamArchitectureMessageCatalog = Object.freeze({
   'detail.none': '无',
   'detail.unestablished': '未建立关系',
   'detail.prompts': '提示词配置',
-  'detail.prompts.note': '按 AgentDefinition 中的来源顺序展示直接声明；当前没有权威 effective resolver 或逐项继承来源，因此不会推导或暗示继承后的有效提示词。',
+  'detail.prompts.note':
+    '按 AgentDefinition 中的来源顺序展示直接声明；当前没有权威 effective resolver 或逐项继承来源，因此不会推导或暗示继承后的有效提示词。',
   'detail.prompt-inherit': '提示词继承模式',
   'detail.prompt-upstream': '上游定义',
   'detail.prompt-section.id': '分区 ID',
@@ -388,7 +396,8 @@ const zhCNMessages: TeamArchitectureMessageCatalog = Object.freeze({
 });
 
 const enMessages: TeamArchitectureMessageCatalog = Object.freeze({
-  'body.introduction': 'Shows real reporting lines from stable configured member identities. Definition inheritance and related-member links never become hierarchy.',
+  'body.introduction':
+    'Shows real reporting lines from stable configured member identities. Definition inheritance and related-member links never become hierarchy.',
   'search.label': 'Search team members',
   'search.placeholder': 'Name, member ID, Agent ID, revision, or declared capability',
   'filter.role': 'Role',
@@ -407,7 +416,8 @@ const enMessages: TeamArchitectureMessageCatalog = Object.freeze({
   'summary.count': 'Showing {matched} of {total} members',
   'tree.heading': 'Team architecture',
   'tree.unestablished': 'Relationship not established',
-  'tree.unestablished.description': 'These members have no real reportsToMemberId and are not attached to a guessed manager.',
+  'tree.unestablished.description':
+    'These members have no real reportsToMemberId and are not attached to a guessed manager.',
   'tree.empty.title': 'No team members match',
   'tree.empty.description': 'Adjust the search or filters and try again.',
   'entity.open': 'View details for {label}',
@@ -449,7 +459,8 @@ const enMessages: TeamArchitectureMessageCatalog = Object.freeze({
   'detail.none': 'None',
   'detail.unestablished': 'Relationship not established',
   'detail.prompts': 'Prompt configuration',
-  'detail.prompts.note': 'Direct declarations are shown in AgentDefinition source order. No authoritative effective resolver or per-item inheritance provenance is available, so effective inherited prompts are neither inferred nor implied.',
+  'detail.prompts.note':
+    'Direct declarations are shown in AgentDefinition source order. No authoritative effective resolver or per-item inheritance provenance is available, so effective inherited prompts are neither inferred nor implied.',
   'detail.prompt-inherit': 'Prompt inheritance mode',
   'detail.prompt-upstream': 'Upstream definitions',
   'detail.prompt-section.id': 'Section ID',
@@ -465,7 +476,8 @@ const enMessages: TeamArchitectureMessageCatalog = Object.freeze({
   'detail.prompt.kind.memory': 'Memory',
   'detail.prompt.kind.other': 'Other',
   'detail.capabilities': 'Declared capabilities',
-  'detail.capabilities.note': 'Only declarations on the current AgentDefinition are shown. Effective inherited capabilities are not inferred.',
+  'detail.capabilities.note':
+    'Only declarations on the current AgentDefinition are shown. Effective inherited capabilities are not inferred.',
   'detail.rules': 'Rules',
   'detail.skills': 'Skills',
   'detail.tools.include': 'Included tools',
@@ -529,13 +541,14 @@ export function registerTeamArchitectureManagerContributions(
     );
     disposers.push(context.pages.register(TEAM_ARCHITECTURE_PAGE, pageMount));
     disposers.push(...TEAM_ARCHITECTURE_ROUTES.map(route => context.routes.register(route)));
-    disposers.push(context.slots.inject('manager.settings.navigation-items', () => context.slots.register({
-      name: 'manager.settings.navigation-items',
-      id: 'team-architecture',
-      group: 'after-settings',
-      order: 200,
-      disabled: Object.freeze({ value: false }),
-    }, Object.freeze({ route: Object.freeze({ id: TEAM_ARCHITECTURE_ROUTE_ID }) }))));
+    disposers.push(context.slots.inject('manager.settings.navigation-items', () =>
+      context.slots.register({
+        name: 'manager.settings.navigation-items',
+        id: 'team-architecture',
+        group: 'after-settings',
+        order: 200,
+        disabled: Object.freeze({ value: false }),
+      }, Object.freeze({ route: Object.freeze({ id: TEAM_ARCHITECTURE_ROUTE_ID }) }))));
   } catch (error) {
     for (const dispose of disposers.reverse()) void dispose();
     throw error;

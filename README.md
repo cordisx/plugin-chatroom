@@ -99,13 +99,28 @@ sidebar image contract.
           "definitionVersion": 1
         },
         "promptSections": [
-          { "sectionId": "intro", "kind": "introduction", "text": "You lead the current Room." },
-          { "sectionId": "personality", "kind": "personality", "text": "Be concise and direct." },
-          { "sectionId": "memory", "kind": "memory", "text": "Use only this Room TaskBinding context." }
+          {
+            "sectionId": "intro",
+            "kind": "introduction",
+            "text": "You lead the current Room."
+          },
+          {
+            "sectionId": "personality",
+            "kind": "personality",
+            "text": "Be concise and direct."
+          },
+          {
+            "sectionId": "memory",
+            "kind": "memory",
+            "text": "Use only this Room TaskBinding context."
+          }
         ],
         "rules": ["chatroom.room-isolation", "chatroom.no-fabricated-replies"],
         "skills": ["review"],
-        "tools": { "include": ["read", "search"], "exclude": ["external-channel"] },
+        "tools": {
+          "include": ["read", "search"],
+          "exclude": ["external-channel"]
+        },
         "mcpServers": { "exclude": ["external-channel"] },
         "runtimeDefaults": { "adapterId": "codex", "effort": "medium" }
       },
@@ -116,12 +131,20 @@ sidebar image contract.
         "identity": { "agentId": "chatroom.reviewer", "revision": "v1" },
         "extends": [{ "agentId": "chatroom.lead", "revision": "v1" }],
         "inherit": {
-          "promptSections": "append", "rules": "append", "skills": "append",
-          "tools": "merge", "mcpServers": "merge", "runtimeDefaults": "merge",
+          "promptSections": "append",
+          "rules": "append",
+          "skills": "append",
+          "tools": "merge",
+          "mcpServers": "merge",
+          "runtimeDefaults": "merge",
           "avatar": "inherit"
         },
         "promptSections": [
-          { "sectionId": "reviewer-role", "kind": "role", "text": "Review work delegated to this member." }
+          {
+            "sectionId": "reviewer-role",
+            "kind": "role",
+            "text": "Review work delegated to this member."
+          }
         ]
       }
     ]

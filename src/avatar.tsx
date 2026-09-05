@@ -1,8 +1,8 @@
-import { cloneAgentAvatarRef, type AgentAvatarRef } from '@cordisx/protocol/agent-avatar/v1';
-import { createSeededAvatarDefinition, parseAvatarDefinition, type AvatarDefinition } from '@oneworks/avatar';
+import { type AgentAvatarRef, cloneAgentAvatarRef } from '@cordisx/protocol/agent-avatar/v1';
+import { type AvatarDefinition, createSeededAvatarDefinition, parseAvatarDefinition } from '@oneworks/avatar';
 import { Avatar as OneWorksAvatar, type AvatarHandle } from '@oneworks/avatar-react';
 import avatarVendorCss from '@oneworks/avatar-react/style.css';
-import React, { useEffect, useMemo, useRef, useState, type ReactNode } from 'cordisx/react';
+import React, { type ReactNode, useEffect, useMemo, useRef, useState } from 'cordisx/react';
 
 import { resolveOfficialOneWorksAvatarAsset } from './avatar-assets.js';
 import { chatroomAvatarFingerprint } from './avatar-fingerprint.js';
@@ -16,9 +16,17 @@ export interface ChatroomAvatarParticipant {
 }
 
 export type ChatroomAvatarResolution =
-  | Readonly<{ status: 'resolved'; avatar: Extract<AgentAvatarRef, { kind: 'generated' | 'asset' }>; definition: AvatarDefinition }>
-  | Readonly<{ status: 'unsupported'; avatar: AgentAvatarRef; code: 'unsupported-provider' | 'reference-unavailable' }>;
-type ResolvedAvatar = Extract<ChatroomAvatarResolution, { status: 'resolved' }>;
+  | Readonly<
+    {
+      status: 'resolved';
+      avatar: Extract<AgentAvatarRef, { kind: 'generated' | 'asset'; }>;
+      definition: AvatarDefinition;
+    }
+  >
+  | Readonly<
+    { status: 'unsupported'; avatar: AgentAvatarRef; code: 'unsupported-provider' | 'reference-unavailable'; }
+  >;
+type ResolvedAvatar = Extract<ChatroomAvatarResolution, { status: 'resolved'; }>;
 
 function deepFreeze<Value>(value: Value): Value {
   if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
@@ -72,8 +80,12 @@ export class ChatroomAvatarResolver {
     return result;
   }
 
-  get size(): number { return this.cache.size; }
-  clear(): void { this.cache.clear(); }
+  get size(): number {
+    return this.cache.size;
+  }
+  clear(): void {
+    this.cache.clear();
+  }
 }
 
 export const defaultChatroomAvatarResolver = new ChatroomAvatarResolver();
@@ -89,12 +101,16 @@ export function participantInitials(label: string): string {
 
 const vendorAvatarRules = (avatarVendorCss.match(/\.oneworks-avatar[^{}]*\{[^{}]*\}/gu) ?? [])
   .slice(0, 6)
-  .map(rule => rule
-    .replace(/^\.oneworks-avatar/u, '.cx-chatroom-avatar .oneworks-avatar')
-    .replace(/,\.oneworks-avatar-editor(?: \*)?/gu, ''))
+  .map(rule =>
+    rule
+      .replace(/^\.oneworks-avatar/u, '.cx-chatroom-avatar .oneworks-avatar')
+      .replace(/,\.oneworks-avatar-editor(?: \*)?/gu, '')
+  )
   .join('\n');
-if (avatarVendorCss !== ''
-  && !vendorAvatarRules.includes('.cx-chatroom-avatar .oneworks-avatar>.interactive-avatar')) {
+if (
+  avatarVendorCss !== ''
+  && !vendorAvatarRules.includes('.cx-chatroom-avatar .oneworks-avatar>.interactive-avatar')
+) {
   throw new Error('OneWorks Avatar RC.8 style export is incompatible with Chatroom.');
 }
 
@@ -107,14 +123,20 @@ interface FailureBoundaryProps {
   readonly onFailure: () => void;
 }
 
-class AvatarFailureBoundary extends React.Component<FailureBoundaryProps, { failed: boolean }> {
+class AvatarFailureBoundary extends React.Component<FailureBoundaryProps, { failed: boolean; }> {
   state = { failed: false };
-  static getDerivedStateFromError(): { failed: boolean } { return { failed: true }; }
-  componentDidCatch(): void { this.props.onFailure(); }
+  static getDerivedStateFromError(): { failed: boolean; } {
+    return { failed: true };
+  }
+  componentDidCatch(): void {
+    this.props.onFailure();
+  }
   componentDidUpdate(previous: FailureBoundaryProps): void {
     if (this.state.failed && previous.resetKey !== this.props.resetKey) this.setState({ failed: false });
   }
-  render(): ReactNode { return this.state.failed ? this.props.fallback : this.props.children; }
+  render(): ReactNode {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
 }
 
 export interface ChatroomAvatarProps {
@@ -139,10 +161,16 @@ export function ChatroomAvatar({
   const [renderFailed, setRenderFailed] = useState(false);
   const resolution = useMemo(() => {
     if (participant.avatar === undefined) return undefined;
-    try { return resolver.resolve(participant.avatar); } catch { return undefined; }
+    try {
+      return resolver.resolve(participant.avatar);
+    } catch {
+      return undefined;
+    }
   }, [participant.avatar, resolver]);
   const key = chatroomAvatarFingerprint(participant.avatar);
-  useEffect(() => { setRenderFailed(false); }, [key]);
+  useEffect(() => {
+    setRenderFailed(false);
+  }, [key]);
   const resolved = resolution?.status === 'resolved' && !renderFailed;
 
   useEffect(() => {
@@ -153,37 +181,46 @@ export function ChatroomAvatar({
       if (handle === null) return;
       void handle.capture({ format: 'png', size: 128, frame: 'square', background: 'transparent' })
         .then(blob => pngBlobSnapshot(blob, 128, 128))
-        .then(image => { if (current) callbackRef.current?.(image); })
+        .then(image => {
+          if (current) callbackRef.current?.(image);
+        })
         // Snapshot failure affects only the optional sidebar image. The direct
         // page avatar remains valid and must not be replaced by a fallback.
         .catch(() => {});
     });
-    return () => { current = false; globalThis.cancelAnimationFrame(frame); };
+    return () => {
+      current = false;
+      globalThis.cancelAnimationFrame(frame);
+    };
   }, [capture, key, resolved]);
 
   const fallbackNode = fallback === 'neutral'
     ? <span className="cx-chatroom-avatar__neutral" />
     : <span className="cx-chatroom-avatar__initials">{participantInitials(participant.name)}</span>;
-  return <span
-    className="cx-chatroom-avatar"
-    aria-hidden="true"
-    data-avatar-state={resolved ? 'resolved' : 'fallback'}
-    {...(resolution?.status === 'unsupported' ? { 'data-avatar-code': resolution.code } : {})}
-  >
-    {resolved
-      ? <AvatarFailureBoundary resetKey={key} fallback={fallbackNode} onFailure={() => setRenderFailed(true)}>
-          <OneWorksAvatar
-            ref={handleRef}
-            className="cx-chatroom-avatar__renderer"
-            definition={resolution.definition}
-            theme="system"
-            interactive={false}
-            autoplay={false}
-            animation={null}
-            timeline={null}
-            onError={() => setRenderFailed(true)}
-          />
-        </AvatarFailureBoundary>
-      : fallbackNode}
-  </span>;
+  return (
+    <span
+      className="cx-chatroom-avatar"
+      aria-hidden="true"
+      data-avatar-state={resolved ? 'resolved' : 'fallback'}
+      {...(resolution?.status === 'unsupported' ? { 'data-avatar-code': resolution.code } : {})}
+    >
+      {resolved
+        ? (
+          <AvatarFailureBoundary resetKey={key} fallback={fallbackNode} onFailure={() => setRenderFailed(true)}>
+            <OneWorksAvatar
+              ref={handleRef}
+              className="cx-chatroom-avatar__renderer"
+              definition={resolution.definition}
+              theme="system"
+              interactive={false}
+              autoplay={false}
+              animation={null}
+              timeline={null}
+              onError={() => setRenderFailed(true)}
+            />
+          </AvatarFailureBoundary>
+        )
+        : fallbackNode}
+    </span>
+  );
 }

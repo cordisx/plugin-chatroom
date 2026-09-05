@@ -1,7 +1,4 @@
-import type {
-  AgentAdmission,
-  AgentHandle,
-} from '@cordisx/protocol/agents/v1';
+import type { AgentAdmission, AgentHandle } from '@cordisx/protocol/agents/v1';
 import type { AgentBootstrapCommandOrigin } from '@cordisx/protocol/agent-admission/v4';
 import type {
   AgentAdmissionBootstrapRoomReservationResult,
@@ -17,17 +14,17 @@ import type { ChatroomAdmissionMessage } from './agent-admission-v4.js';
 export type ChatroomAgentAdmissionV5Result =
   | {
     readonly status: 'accepted';
-    readonly admission: AgentAdmission & { readonly status: 'accepted' };
+    readonly admission: AgentAdmission & { readonly status: 'accepted'; };
   }
   | {
     readonly status: 'denied';
     readonly stage: 'issue';
-    readonly code: Extract<AgentAdmissionBootstrapRoomTargetResult, { readonly status: 'denied' }>['code'];
+    readonly code: Extract<AgentAdmissionBootstrapRoomTargetResult, { readonly status: 'denied'; }>['code'];
   }
   | {
     readonly status: 'denied';
     readonly stage: 'reserve';
-    readonly code: Extract<AgentAdmissionBootstrapRoomReservationResult, { readonly status: 'denied' }>['code'];
+    readonly code: Extract<AgentAdmissionBootstrapRoomReservationResult, { readonly status: 'denied'; }>['code'];
   };
 
 /**
@@ -40,8 +37,8 @@ export async function issueChatroomAgentAdmissionBootstrapRoomTarget(
   origin: AgentBootstrapCommandOrigin,
   target: AgentAdmissionBootstrapRoomTarget,
 ): Promise<
-  | { readonly status: 'issued'; readonly origin: AgentAdmissionBootstrapRoomTargetOrigin }
-  | Extract<ChatroomAgentAdmissionV5Result, { readonly stage: 'issue' }>
+  | { readonly status: 'issued'; readonly origin: AgentAdmissionBootstrapRoomTargetOrigin; }
+  | Extract<ChatroomAgentAdmissionV5Result, { readonly stage: 'issue'; }>
 > {
   const issued = await targets.issue({ origin, target });
   return issued.status === 'issued'
