@@ -175,9 +175,9 @@ test('templates preserve every accepted definition field while revision becomes 
 test('package pins the exact Protocol bootstrap-route and Host runtime releases with exact manifest bytes', () => {
   const packageJson = JSON.parse(readFileSync(path.join(repositoryRoot, 'package.json'), 'utf8'));
   assert.equal(packageJson.devDependencies['@cordisx/protocol'],
-    'github:cordisx/cordisx-protocol#be4905a7471e9829d2b834d9c3f17ac2404951f3');
+    'github:cordisx/cordisx-protocol#6fa9bbbad0501114bece820d574d5e79a4cb3cdb');
   assert.equal(packageJson.devDependencies.cordisx,
-    'github:cordisx/cordisx#a02943e1959a1398c8bdefed48cf0cfc36776a9b');
+    'github:cordisx/cordisx#43ec178a8ed4995ac1eaec538450fb88156173d9');
   assert.equal(packageManifest.entry, './dist/chatroom.js');
   assert.equal(packageManifest.compatibility.protocolSchemas.includes(
     'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-file.v1.schema.json'), true);
