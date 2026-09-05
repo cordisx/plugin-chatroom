@@ -316,7 +316,7 @@ function Composer({ roomId, source, shortcutPolicy, navigation, signal, t }: {
   };
   return (
     <form className="cx-chatroom-composer" onSubmit={onSubmit}>
-      <AttachmentPlaceholder className="cx-chatroom-composer__attachment" />
+      <AttachmentPlaceholder className="cx-chatroom-composer__attachment" size={32} />
       <textarea
         value={draft}
         rows={1}
