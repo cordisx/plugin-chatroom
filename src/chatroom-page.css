@@ -143,10 +143,15 @@
 
 .cx-chatroom-composer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
   gap: 7px;
   padding: 12px max(18px, calc((100% - 780px) / 2)) 16px;
   border-top: 1px solid var(--cx-chatroom-border);
+}
+.cx-chatroom-composer__attachment {
+  align-self: end;
+  width: 32px;
+  height: 32px;
 }
 .cx-chatroom-composer textarea {
   width: 100%;
