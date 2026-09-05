@@ -20,7 +20,9 @@
     "test": "node --test test/*.mjs",
     "check": "npm run typecheck && npm run build && npm test",
     "dev": "cordisx dev ./src/chatroom.ts",
-    "dev:dry-run": "cordisx dev ./src/chatroom.ts --dry-run"
+    "dev:dry-run": "cordisx dev ./src/chatroom.ts --dry-run",
+    "format": "dprint fmt",
+    "format:check": "dprint check"
   },
   "engines": {
     "node": ">=22.19"
@@ -37,6 +39,7 @@
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "cordisx": "github:cordisx/cordisx#88b98996d70c0ceccaeb423e5329df9abf49d785",
+    "dprint": "0.57.1",
     "esbuild": "^0.28.2",
     "react": "19.2.8",
     "react-dom": "19.2.8",
