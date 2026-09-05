@@ -587,9 +587,29 @@ export class ChatroomConversationController {
     if (context.scope !== 'composer-submit' || context.command.id !== CHATROOM_COMMAND_SUBMIT) return undefined;
 
     const selectedRoomId = active.binding.routeSelection.selectedRoomParam;
+    const intent = this.submitMessage(
+      selectedRoomId,
+      context.submitPayload,
+      context.binding.bindingId,
+      context.generation,
+    );
+    if (intent.kind === 'send-message' && selectedRoomId === undefined) {
+      active.roomId = intent.roomId;
+      active.source.replace(createRoomConversationModel(this.rooms.get(intent.roomId)!));
+    }
+    return intent;
+  }
+
+  /** Direct-page submit seam. It owns Room mutation, never a Host Shell binding. */
+  submitMessage(
+    selectedRoomId: string | undefined,
+    submitPayload: string,
+    correlationId = 'chatroom-page',
+    generation = 'chatroom-page',
+  ): ChatroomCommandIntent {
     const prepared = selectedRoomId === undefined
-      ? this.createRoomWithFirstMessage(context.submitPayload)
-      : this.appendPendingMessage(selectedRoomId, context.submitPayload);
+      ? this.createRoomWithFirstMessage(submitPayload)
+      : this.appendPendingMessage(selectedRoomId, submitPayload);
     if ('error' in prepared) {
       if (selectedRoomId !== undefined) this.appendTargetError(selectedRoomId, prepared.error, 'mention' in prepared ? prepared.mention : undefined);
       return {
@@ -601,14 +621,10 @@ export class ChatroomConversationController {
     }
     const { room, deliveries, dispatchText, userItemId } = prepared;
     this.rooms.upsert(room);
-    if (selectedRoomId === undefined) {
-      active.roomId = room.id;
-      active.source.replace(createRoomConversationModel(room));
-    }
     const intent: ChatroomCommandIntent = {
       kind: 'send-message', roomId: room.id, roomCreated: selectedRoomId === undefined,
       deliveries, userItemId,
-      bindingId: context.binding.bindingId, generation: context.generation, dispatchText,
+      bindingId: correlationId, generation, dispatchText,
     };
     this.pending.push(intent);
     return intent;
@@ -1426,9 +1442,13 @@ export class ChatroomConversationController {
     if (item?.kind !== 'approval') {
       throw new Error('Playground Agent approval card is unavailable.');
     }
-    const nextItem: Extract<AgentConversationItem, { kind: 'approval' }> = approval.state === 'pending'
-      ? { ...item, state: decision, actions: [] }
-      : item;
+    let nextItem: Extract<AgentConversationItem, { kind: 'approval' }> = item;
+    if (approval.state === 'pending') {
+      if (item.state !== 'pending') {
+        throw new Error('Playground Agent approval state is inconsistent.');
+      }
+      nextItem = { ...item, state: decision, actions: [] };
+    }
     await this.commitDirectRoom(createRoom({
       ...room,
       items: room.items.map(candidate => candidate.itemId === approval.itemId ? nextItem : candidate),

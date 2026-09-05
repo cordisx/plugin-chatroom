@@ -3,42 +3,27 @@ import { Config, ChatroomComposerSettings, configApplies } from './composer-sett
 import {
   CORDISX_PAGE_SCHEMA_V3,
   CORDISX_ROUTE_SCHEMA_V2,
-  type CordisXCommandContext,
 } from 'cordisx/contracts';
-import type {
-  AgentConversationShellBinding,
-} from '@cordisx/protocol/agent-conversation-shell/v7';
-import type { AgentConversationShellBinding as AgentConversationShellBindingV8 } from '@cordisx/protocol/agent-conversation-shell/v8';
-import type {
-  AgentConversationShellBinding as AgentConversationShellBindingV9,
-  AgentConversationShellCommandContext,
-} from '@cordisx/protocol/agent-conversation-shell/v9';
-import type { AgentCommandOrigin } from '@cordisx/protocol/agent-admission/v1';
-import type { AgentBootstrapCommandOrigin } from '@cordisx/protocol/agent-admission/v4';
 import type { PluginRuntimeManifestV8 } from '@cordisx/protocol/plugin-manifest/v8';
 
-import {
-  CHATROOM_COMMAND_APPROVAL_APPROVE,
-  CHATROOM_COMMAND_APPROVAL_CANCEL,
-  CHATROOM_COMMAND_APPROVAL_DENY,
-  CHATROOM_COMMAND_SUBMIT,
-  text,
-} from './conversation-model.js';
+// Keep product-owned avatar packages visible to Vite's initial dependency
+// scan without evaluating React-bound modules before the Host publishes its
+// shared runtime. NodeNext's `.js` edge resolves to `avatar.tsx` only later.
+const avatarDevelopmentDependencies = () => Promise.all([
+  import('@oneworks/avatar'),
+  import('@oneworks/avatar-react'),
+]);
+void avatarDevelopmentDependencies;
+
 import {
   CHATROOM_DEFAULT_AGENT_CONFIGURATION,
   parseChatroomAgentConfiguration,
   type ChatroomAgentConfiguration,
 } from './agent-definition.js';
-import {
-  assertChatroomAdmissionDeliveriesAccepted,
-  ChatroomAgentSessionController,
-} from './agent-session-controller.js';
-import {
-  ChatroomAgentSessionConversationSource,
-  v3BindingFor,
-} from './agent-session-conversation-source.js';
-import { ChatroomAgentSessionConversationSourceV7 } from './agent-session-conversation-source-v7.js';
+import { ChatroomAgentSessionController } from './agent-session-controller.js';
 import { ChatroomConversationController } from './conversation-source.js';
+import { createChatroomPage } from './chatroom-page.js';
+import { ChatroomPageSource } from './chatroom-page-source.js';
 import {
   CHATROOM_MANAGER_CONTENT_DECLARATIONS,
   registerChatroomManager,
@@ -94,10 +79,40 @@ export type ChatroomMessages = {
   'route.description': undefined;
   'page.title': undefined;
   'page.description': undefined;
+  'page.missing.title': undefined;
+  'page.missing.description': undefined;
+  'timeline.label': undefined;
+  'timeline.empty.title': undefined;
+  'timeline.empty.description': undefined;
+  'timeline.delivery.failed': undefined;
+  'timeline.run.running': undefined;
+  'timeline.member.presence': { readonly state: string };
   'composer.placeholder': undefined;
   'composer.unavailable': undefined;
+  'composer.send': undefined;
+  'composer.sending': undefined;
+  'composer.send-failed': undefined;
+  'composer.target-error': { readonly code: string };
   'composer.shortcut.enter': undefined;
   'composer.shortcut.mod-enter': undefined;
+  'approval.title': undefined;
+  'approval.approve': undefined;
+  'approval.deny': undefined;
+  'approval.cancel': undefined;
+  'approval.reason.unavailable': undefined;
+  'approval.decision.failed': undefined;
+  'approval.state.pending': undefined;
+  'approval.state.approved': undefined;
+  'approval.state.denied': undefined;
+  'approval.state.cancelled': undefined;
+  'approval.state.failed': undefined;
+  'members.title': undefined;
+  'members.count': { readonly count: number };
+  'members.status.idle': undefined;
+  'members.status.active': undefined;
+  'members.status.running': undefined;
+  'members.status.waiting': undefined;
+  'members.status.attention': undefined;
   'agent.approval.unavailable': undefined;
   'permission.tasks.create': undefined;
   'permission.tasks.content.read': undefined;
@@ -146,11 +161,7 @@ export const manifest = {
 
 export const inject = [
   'i18n', 'commands', 'pages', 'routes', 'slots', 'managerContent',
-  'agentConversationShell', 'agents', 'sessions', 'approvals', 'agentAdmissionOrigins',
-  'agentAdmissionReservations', 'agentAdmissionBootstrapTargets', 'agentAdmissionBootstrapReservations',
-  'agentAdmissionBootstrapRoomTargets', 'agentAdmissionBootstrapRoomReservations',
-  'agentAdmissionBootstrapRouteDeclarations', 'agentAdmissionBootstrapRouteReservations',
-  'entities', 'documents',
+  'agents', 'sessions', 'approvals', 'entities', 'documents',
   'settings',
 ];
 
@@ -159,7 +170,7 @@ const page = {
   schemaVersion: 3,
   id: 'room',
   title: message('page.title', 'New room'),
-  description: message('page.description', 'Open a Room in the Agent Desktop conversation shell.'),
+  description: message('page.description', 'Collaborate with your Agent team in one Room.'),
   icon: 'host:layers',
   chrome: 'body-only',
 } as const;
@@ -187,67 +198,6 @@ export const roomSessionDetailRoute = {
   id: 'room-session-detail',
   path: '/main/chatroom/:roomId/session/:sessionId',
 } as const;
-
-function conversationContext(context: CordisXCommandContext): AgentConversationShellCommandContext | undefined {
-  const hostContext = context.hostContext;
-  return hostContext !== undefined && 'scope' in hostContext
-    ? hostContext as unknown as AgentConversationShellCommandContext
-    : undefined;
-}
-
-const record = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  value !== null && typeof value === 'object';
-
-/**
- * A v7 command has no origin. A v8 or v9 composer command may carry an
- * existing target origin; v9 may instead carry a bootstrap origin before its
- * exact Room target exists. Older source registrations remain untouched.
- */
-function isAgentCommandOrigin(value: unknown): value is AgentCommandOrigin {
-  if (!record(value) || value.$schema !== 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-command-origin.v1.schema.json'
-    || value.contract !== 'cordisx.agent-command-origin/v1'
-    || value.schemaVersion !== 1
-    || typeof value.originId !== 'string'
-    || typeof value.generation !== 'string'
-    || typeof value.executionId !== 'string'
-    || typeof value.commandId !== 'string'
-    || value.scope !== 'composer-submit'
-    || !record(value.binding)
-    || typeof value.binding.bindingId !== 'string'
-    || typeof value.binding.ownerGeneration !== 'string'
-    || !record(value.room)
-    || typeof value.room.roomId !== 'string'
-    || typeof value.room.participantId !== 'string'
-    || typeof value.room.memberId !== 'string'
-    || typeof value.room.runId !== 'string') return false;
-  return true;
-}
-
-function isAgentBootstrapCommandOrigin(value: unknown): value is AgentBootstrapCommandOrigin {
-  return record(value)
-    && value.$schema === 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-bootstrap-command-origin.v1.schema.json'
-    && value.contract === 'cordisx.agent-bootstrap-command-origin/v1'
-    && value.schemaVersion === 1
-    && typeof value.originId === 'string'
-    && typeof value.generation === 'string'
-    && typeof value.executionId === 'string'
-    && typeof value.commandId === 'string'
-    && value.scope === 'composer-submit'
-    && record(value.binding)
-    && typeof value.binding.bindingId === 'string'
-    && typeof value.binding.ownerGeneration === 'string';
-}
-
-function composerSubmissionOrigin(context: AgentConversationShellCommandContext):
-  | { readonly status: 'legacy' }
-  | { readonly status: 'target'; readonly origin: AgentCommandOrigin }
-  | { readonly status: 'bootstrap'; readonly origin: AgentBootstrapCommandOrigin }
-  | { readonly status: 'invalid' } {
-  if (context.scope !== 'composer-submit' || !('origin' in context)) return { status: 'legacy' };
-  if (isAgentCommandOrigin(context.origin)) return { status: 'target', origin: context.origin };
-  if (isAgentBootstrapCommandOrigin(context.origin)) return { status: 'bootstrap', origin: context.origin };
-  return { status: 'invalid' };
-}
 
 function agentConfiguration(config: unknown): ChatroomAgentConfiguration {
   if (config === null || typeof config !== 'object' || Array.isArray(config)) {
@@ -310,11 +260,41 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       'route.title': 'New room',
       'route.description': 'Create or open a collaboration Room.',
       'page.title': 'New room',
-      'page.description': 'Open a Room in the Agent Desktop conversation shell.',
+      'page.description': 'Collaborate with your Agent team in one Room.',
+      'page.missing.title': 'Room unavailable',
+      'page.missing.description': 'This Room was deleted or is no longer available.',
+      'timeline.label': 'Room timeline',
+      'timeline.empty.title': 'Start the conversation',
+      'timeline.empty.description': 'Send a message to invite your Agent team into this Room.',
+      'timeline.delivery.failed': 'Delivery failed',
+      'timeline.run.running': 'Working',
+      'timeline.member.presence': 'Member is {state}',
       'composer.placeholder': 'Write a message',
       'composer.unavailable': 'Messaging is not available yet.',
+      'composer.send': 'Send',
+      'composer.sending': 'Sending…',
+      'composer.send-failed': 'Message could not be sent.',
+      'composer.target-error': 'Message target is unavailable ({code}).',
       'composer.shortcut.enter': 'Enter sends',
       'composer.shortcut.mod-enter': 'Command/Ctrl+Enter sends',
+      'approval.title': 'Approval requested',
+      'approval.approve': 'Approve',
+      'approval.deny': 'Deny',
+      'approval.cancel': 'Cancel',
+      'approval.reason.unavailable': 'No reason was provided.',
+      'approval.decision.failed': 'This approval is no longer actionable.',
+      'approval.state.pending': 'Pending',
+      'approval.state.approved': 'Approved',
+      'approval.state.denied': 'Denied',
+      'approval.state.cancelled': 'Cancelled',
+      'approval.state.failed': 'Failed',
+      'members.title': 'Members',
+      'members.count': '{count} members',
+      'members.status.idle': 'Idle',
+      'members.status.active': 'Active',
+      'members.status.running': 'Working',
+      'members.status.waiting': 'Waiting',
+      'members.status.attention': 'Needs attention',
       'agent.approval.unavailable': 'Approval unavailable',
       'permission.tasks.create': 'Create a task for a new Room.',
       'permission.tasks.content.read': 'Read replies and task status for a Room.',
@@ -358,11 +338,41 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       'route.title': '新建房间',
       'route.description': '创建或打开一个协作房间。',
       'page.title': '新建房间',
-      'page.description': '在 Agent Desktop 会话壳中打开一个房间。',
+      'page.description': '在一个房间中与 Agent 团队协作。',
+      'page.missing.title': '房间不可用',
+      'page.missing.description': '该房间已被删除或不再可用。',
+      'timeline.label': '房间时间线',
+      'timeline.empty.title': '开始对话',
+      'timeline.empty.description': '发送消息，邀请 Agent 团队加入该房间。',
+      'timeline.delivery.failed': '发送失败',
+      'timeline.run.running': '工作中',
+      'timeline.member.presence': '成员状态：{state}',
       'composer.placeholder': '输入消息',
       'composer.unavailable': '消息功能暂不可用。',
+      'composer.send': '发送',
+      'composer.sending': '发送中…',
+      'composer.send-failed': '消息发送失败。',
+      'composer.target-error': '消息目标不可用（{code}）。',
       'composer.shortcut.enter': 'Enter 发送',
       'composer.shortcut.mod-enter': 'Command/Ctrl+Enter 发送',
+      'approval.title': '审批请求',
+      'approval.approve': '批准',
+      'approval.deny': '拒绝',
+      'approval.cancel': '取消',
+      'approval.reason.unavailable': '未提供原因。',
+      'approval.decision.failed': '此审批已不可操作。',
+      'approval.state.pending': '等待中',
+      'approval.state.approved': '已批准',
+      'approval.state.denied': '已拒绝',
+      'approval.state.cancelled': '已取消',
+      'approval.state.failed': '失败',
+      'members.title': '成员',
+      'members.count': '{count} 位成员',
+      'members.status.idle': '空闲',
+      'members.status.active': '活跃',
+      'members.status.running': '工作中',
+      'members.status.waiting': '等待中',
+      'members.status.attention': '需要关注',
       'agent.approval.unavailable': '审批不可用',
       'permission.tasks.create': '为新房间创建任务。',
       'permission.tasks.content.read': '读取房间回复和任务状态。',
@@ -380,159 +390,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   );
   const composerSettings = new ChatroomComposerSettings(ctx.settings);
   const product = ChatroomProductBase.attach(roomStore);
-  const handleConversationCommand = async (context: CordisXCommandContext) => {
-    const hostContext = conversationContext(context);
-    if (hostContext === undefined) {
-      throw new Error('Chatroom conversation command context is unavailable.');
-    }
-    const intent = controller.handle(hostContext);
-    if (intent === undefined && hostContext.scope === 'approval') {
-      const roomId = controller.selectedRoomId(hostContext);
-      if (roomId !== undefined
-        && (hostContext.command.id === CHATROOM_COMMAND_APPROVAL_APPROVE
-          || hostContext.command.id === CHATROOM_COMMAND_APPROVAL_DENY)) {
-        agentSession.answerApprovalCommand(roomId, hostContext);
-      } else if (roomId !== undefined && hostContext.command.id === CHATROOM_COMMAND_APPROVAL_CANCEL) {
-        // Frozen v6 compatibility only; v7 never publishes a cancel action.
-        agentSession.answerApprovalItem(roomId, hostContext.itemId, 'cancelled');
-      }
-      return;
-    }
-    if (intent === undefined) {
-      if (hostContext.scope === 'composer-submit') {
-        throw new Error('Chatroom composer submit is unavailable for the current Shell binding or generation.');
-      }
-      return;
-    }
-    if (intent.kind === 'target-error') {
-      const mention = intent.mention === undefined ? '' : ` ${intent.mention}`;
-      throw new Error(`Chatroom composer target error: ${intent.code}${mention}.`);
-    }
-    if (intent.kind === 'approval-decision') {
-      return;
-    }
-    if (intent.kind === 'playground-approval-decision') {
-      await controller.decidePlaygroundAgentApprovalFromRoom(
-        intent.roomId, intent.itemId, intent.operationId, intent.decision,
-      );
-      return;
-    }
-    await controller.persistComposerRoom(intent.roomId);
-    let deliveryFailure: unknown;
-    try {
-      if (intent.deliveries.length === 0) {
-        throw new Error('Chatroom composer submit resolved no deliveries.');
-      }
-      const admissionOrigin = composerSubmissionOrigin(hostContext);
-      const admissionMode = controller.composerAdmissionMode(hostContext);
-      if (admissionOrigin.status === 'legacy' && controller.requiresAdmissionOrigin(hostContext)) {
-        if (admissionMode === 'v9') {
-          throw new Error('Shell v9 composer admission origin is required.');
-        }
-        throw new Error('Shell v8 composer admission origin is required.');
-      }
-      if (admissionOrigin.status === 'invalid') {
-        if (admissionMode === 'v9') {
-          throw new Error('Shell v9 composer admission origin is invalid.');
-        }
-        throw new Error('Shell v8 composer admission origin is invalid.');
-      }
-      if (admissionOrigin.status === 'legacy') {
-        await Promise.all(intent.deliveries.map(delivery => agentSession.sendToRoom(
-          intent.roomId,
-          delivery.runId,
-          intent.userItemId,
-          intent.dispatchText,
-        )));
-      } else if (admissionOrigin.status === 'target') {
-        const outcomes = await agentSession.submitDeliveriesViaAdmissionV3(
-          intent.roomId,
-          intent.deliveries,
-          intent.userItemId,
-          admissionOrigin.origin,
-          intent.dispatchText,
-          ctx.agentAdmissionOrigins,
-          ctx.agentAdmissionReservations,
-        );
-        assertChatroomAdmissionDeliveriesAccepted(outcomes);
-      } else if (admissionMode === 'v9' && !intent.roomCreated) {
-        const outcomes = await agentSession.submitDeliveriesViaAdmissionV5(
-          intent.roomId,
-          intent.deliveries,
-          intent.userItemId,
-          admissionOrigin.origin,
-          intent.dispatchText,
-          ctx.agentAdmissionBootstrapRoomTargets,
-          ctx.agentAdmissionBootstrapRoomReservations,
-        );
-        assertChatroomAdmissionDeliveriesAccepted(outcomes);
-      } else if (admissionMode === 'v9') {
-        const outcomes = await agentSession.submitDeliveriesViaAdmissionV6(
-          intent.roomId,
-          intent.deliveries,
-          intent.userItemId,
-          admissionOrigin.origin,
-          intent.dispatchText,
-          ctx.agentAdmissionBootstrapRouteDeclarations,
-          ctx.agentAdmissionBootstrapRouteReservations,
-        );
-        assertChatroomAdmissionDeliveriesAccepted(outcomes);
-      } else {
-        throw new Error('Shell v8 composer admission origin is invalid.');
-      }
-    } catch (error) {
-      deliveryFailure = error;
-    }
-    // Navigating a first-message Room replaces the mounted plugin owner. The
-    // old owner must finish its AgentLoop call before yielding route authority.
-    if (intent.roomCreated) await ctx.routes.navigate({ id: 'room', params: { roomId: intent.roomId } });
-    if (deliveryFailure !== undefined) throw deliveryFailure;
-  };
-  ctx.commands.register({ id: CHATROOM_COMMAND_SUBMIT, title: text('composer.placeholder', 'Write a message') }, handleConversationCommand);
-  ctx.commands.register({ id: CHATROOM_COMMAND_APPROVAL_APPROVE, title: text('approval.approve', 'Approve') }, handleConversationCommand);
-  ctx.commands.register({ id: CHATROOM_COMMAND_APPROVAL_DENY, title: text('approval.deny', 'Deny') }, handleConversationCommand);
-  ctx.commands.register({ id: CHATROOM_COMMAND_APPROVAL_CANCEL, title: text('approval.cancel', 'Cancel') }, handleConversationCommand);
-
-  // Retain the frozen v6 source for old authority-less Session ledgers. The
-  // Room page mounts v7; old consumers can continue binding the versioned v6
-  // registration without Chatroom inventing a Lead identity.
-  ctx.agentConversationShell.registerSourceV6((binding: import('@cordisx/protocol/agent-conversation-shell/v6').AgentConversationShellBinding) => {
-    const domain = controller.createSource(v3BindingFor(binding));
-    let unsubscribeSettings = () => {};
-    const source = new ChatroomAgentSessionConversationSource(
-      binding,
-      domain,
-      agentSession,
-      composerSettings.current,
-      () => unsubscribeSettings(),
-    );
-    unsubscribeSettings = composerSettings.subscribe(policy => source.setComposerShortcutPolicy(policy));
-    return source;
-  });
-  const createV7ConversationSource = (
-    binding: AgentConversationShellBinding,
-    admissionMode?: 'v8' | 'v9',
-  ) => {
-    const domain = controller.createSource(v3BindingFor(binding), { admissionMode });
-    let unsubscribeSettings = () => {};
-    const source = new ChatroomAgentSessionConversationSourceV7(
-      binding,
-      domain,
-      agentSession,
-      composerSettings.current,
-      () => unsubscribeSettings(),
-    );
-    unsubscribeSettings = composerSettings.subscribe(policy => source.setComposerShortcutPolicy(policy));
-    return source;
-  };
-  // Frozen v7/v8 sources stay registered for legacy consumers. The primary
-  // page mounts v9 so a fresh Room can bind each persisted target beneath a
-  // Host-issued bootstrap origin without changing their behavior.
-  ctx.agentConversationShell.registerSourceV7(createV7ConversationSource);
-  ctx.agentConversationShell.registerSourceV8((binding: AgentConversationShellBindingV8) =>
-    createV7ConversationSource(binding, 'v8'));
-  const conversation = ctx.agentConversationShell.registerSourceV9((binding: AgentConversationShellBindingV9) =>
-    createV7ConversationSource(binding, 'v9'));
+  const pageSource = new ChatroomPageSource(controller, agentSession, composerSettings);
   const playgroundBridge = ctx.reflect.get(
     'playgroundRoomSimulationBridge', false,
   ) as PlaygroundRoomSimulationBridgeService | undefined;
@@ -541,7 +399,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     : registerChatroomAgentSessionRoomSimulationOwner(
       playgroundBridge, controller, agentSession,
     );
-  ctx.pages.register(page, conversation.mount);
+  ctx.pages.register(page, createChatroomPage(pageSource, product.sidebarImages));
   ctx.routes.register(newRoomRoute);
   ctx.routes.register(roomRoute);
   ctx.routes.register(roomSessionDetailRoute);
@@ -555,7 +413,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     route: { id: 'new-room' },
   });
   ctx.slots.registerCollection({
-    contract: 'cordisx.navigation-collection/v2',
+    contract: 'cordisx.navigation-collection/v3',
     name: 'sidebar.navigation.items',
     id: 'rooms',
     group: { id: 'rooms', label: message('navigation.rooms', 'Rooms'), order: 20 },
@@ -584,7 +442,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     for (const dispose of managerDisposers.reverse()) void dispose();
     teamSource.dispose();
     manager?.dispose();
-    conversation.dispose();
+    pageSource.dispose();
     composerSettings.dispose();
     disposePlaygroundBridge?.();
     void agentSession.dispose();
@@ -593,7 +451,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     throw error;
   }
   ctx.effect(() => () => {
-    conversation.dispose();
+    pageSource.dispose();
     composerSettings.dispose();
     void disposeManagerProjection?.();
     for (const dispose of managerDisposers.reverse()) void dispose();

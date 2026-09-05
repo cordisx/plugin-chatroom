@@ -1,12 +1,9 @@
 import type { NavigationCollectionActions } from '@cordisx/protocol/navigation-collection-actions/v1';
-import { cloneAgentAvatarRef } from '@cordisx/protocol/agent-avatar/v1';
 import type {
   CordisXLocalizedText,
-  CordisXNavigationCollectionLeadingVisual,
-  CordisXNavigationCollectionSnapshotV2,
-  CordisXNavigationCollectionSourceV2,
+  CordisXNavigationCollectionSnapshotV3,
+  CordisXNavigationCollectionSourceV3,
 } from 'cordisx/contracts';
-import { CORDISX_ROOM_COMPOSITE_AVATAR_MAX_PARTICIPANTS } from 'cordisx/contracts';
 
 import { text } from './conversation-model.js';
 import {
@@ -17,23 +14,10 @@ import {
 } from './room-management.js';
 import type { Room } from './room.js';
 import { ChatroomRoomRegistry } from './room.js';
+import { roomAvatarFingerprint } from './avatar-fingerprint.js';
+import type { ChatroomSidebarImageCache } from './sidebar-image-cache.js';
 
 export type ChatroomRoomNavigationMode = 'active' | 'archived';
-
-function roomLeadingVisual(room: Room): CordisXNavigationCollectionLeadingVisual {
-  const seenParticipantIds = new Set<string>();
-  const participants = [];
-  for (const participant of room.participants) {
-    if (seenParticipantIds.has(participant.id)) continue;
-    seenParticipantIds.add(participant.id);
-    participants.push(Object.freeze({
-      participantId: participant.id,
-      ...(participant.avatar === undefined ? {} : { avatar: cloneAgentAvatarRef(participant.avatar) }),
-    }));
-    if (participants.length === CORDISX_ROOM_COMPOSITE_AVATAR_MAX_PARTICIPANTS) break;
-  }
-  return Object.freeze({ kind: 'room-composite-avatar', participants: Object.freeze(participants) });
-}
 
 function localized(key: string, fallback: string): CordisXLocalizedText {
   return { namespace: 'chatroom', key, fallback };
@@ -115,11 +99,12 @@ function roomActions(room: Room, mode: ChatroomRoomNavigationMode): NavigationCo
   ]);
 }
 
-/** Data-only v2 Room projection. Host owns every row, action, menu and feedback node. */
-export class ChatroomRoomNavigationCollection implements CordisXNavigationCollectionSourceV2 {
+/** Data-only v3 Room projection. CordisX owns every row, action, menu and feedback node. */
+export class ChatroomRoomNavigationCollection implements CordisXNavigationCollectionSourceV3 {
   private readonly listeners = new Set<() => void>();
   private readonly itemIds = new Map<string, string>();
   private readonly unsubscribeRegistry: () => void;
+  private readonly unsubscribeImages?: () => void;
   private revision = 0;
   private nextItemId = 1;
   private disposed = false;
@@ -127,11 +112,13 @@ export class ChatroomRoomNavigationCollection implements CordisXNavigationCollec
   constructor(
     private readonly rooms: ChatroomRoomRegistry,
     private readonly mode: ChatroomRoomNavigationMode = 'active',
+    private readonly images?: ChatroomSidebarImageCache,
   ) {
     this.unsubscribeRegistry = rooms.subscribe(() => this.refresh());
+    this.unsubscribeImages = images?.subscribe(() => this.refresh());
   }
 
-  snapshot(): CordisXNavigationCollectionSnapshotV2 {
+  snapshot(): CordisXNavigationCollectionSnapshotV3 {
     const rooms = this.rooms.snapshot()
       .filter(room => room.archived === (this.mode === 'archived'))
       .sort((left, right) => Number(right.pinned) - Number(left.pinned)
@@ -140,15 +127,28 @@ export class ChatroomRoomNavigationCollection implements CordisXNavigationCollec
       .slice(0, 500);
     return {
       revision: this.revision,
-      items: rooms.map((room, order) => ({
-        id: this.itemIdFor(room.id),
-        label: text('navigation.room.title', room.title),
-        description: roomMessageSummary(room),
-        leadingVisual: roomLeadingVisual(room),
-        route: { id: 'room', params: { roomId: room.id } },
-        actions: roomActions(room, this.mode),
-        order,
-      })),
+      items: rooms.map((room, order) => {
+        const participants = room.participants.map(participant => ({
+          id: participant.id,
+          name: participant.name,
+          ...(participant.avatar === undefined ? {} : { avatar: participant.avatar }),
+        }));
+        const fingerprint = roomAvatarFingerprint(participants);
+        const image = this.images?.get(room.id, fingerprint);
+        const leadingVisual = image === undefined ? undefined : Object.freeze({
+          kind: 'image' as const,
+          image,
+        });
+        return {
+          id: this.itemIdFor(room.id),
+          label: text('navigation.room.title', room.title),
+          description: roomMessageSummary(room),
+          ...(leadingVisual === undefined ? { icon: 'host:layers' as const } : { leadingVisual }),
+          route: { id: 'room', params: { roomId: room.id } },
+          actions: roomActions(room, this.mode),
+          order,
+        };
+      }),
     };
   }
 
@@ -161,6 +161,7 @@ export class ChatroomRoomNavigationCollection implements CordisXNavigationCollec
     if (this.disposed) return;
     this.disposed = true;
     this.unsubscribeRegistry();
+    this.unsubscribeImages?.();
     this.listeners.clear();
   }
 

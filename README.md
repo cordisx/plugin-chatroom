@@ -4,29 +4,28 @@ Chatroom is a CordisX plugin for internal Room relationships, Agent identity,
 message routing, and collaboration timelines. External channels are not part
 of this version.
 
-It does not own Agent execution. The fiber-bound Host `agentLoop` service
-creates or binds a task, sends content, and exposes proactive events. Chatroom
-retains each returned opaque TaskBinding under exactly one Room member run; it
-never parses, constructs, or emulates task and binding handles.
+It does not own Agent execution. Public Agent and Session services create or
+resume each member runtime, send content, and expose replayable events.
+Chatroom persists only the returned opaque Session identity under one Room
+member run; it never parses, constructs, or emulates a Connector handle.
 
 ## Status
 
-The plugin contributes a structured Room source to the Host-owned Agent Desktop
-conversation shell. Chatroom supplies Room, participant, item, status, action,
-command, and immutable Agent Avatar reference data; the Host owns all page
-chrome, timeline/composer/Avatar rendering,
-draft lifetime, scrolling, focus, accessibility, and participant fallback.
-Chatroom never fabricates a reply or projects opaque task handles.
+The plugin contributes a body-only React page through the public CordisX page
+API. Chatroom owns its title, timeline, member panel, composer, approval cards,
+and direct OneWorks Avatar rendering. CordisX still owns the page seat, route,
+shared React runtime, lifecycle, and application chrome. Chatroom never
+fabricates a reply or projects opaque runtime handles.
 
 Each Room freezes a cycle-free membership forest with any number of leaders.
 Role and attention policy are independent: ordinary messages fan out to every
 ambient member, while mention-only members start receiving only when mentioned
-or delegated to. Every member may own several independently fenced AgentLoop
+or delegated to. Every member may own several independently fenced Agent
 runs; identity never causes implicit cross-Room or cross-run reuse. Assistant
 messages, approval state, failures, and lifecycle events from all runs are
-merged into structured Shell data using a Room-owned public sequence. Image content remains an
-`image-ref`; the current text-only shell reports it as unsupported and never
-receives a path or base64 payload.
+merged into one Room timeline. Page-mounted avatars may capture a completed PNG
+for a bounded Chatroom cache; sidebar navigation receives only the generic
+`{ kind: "image", image }` value, or a semantic icon while no capture exists.
 
 ## Scope
 
@@ -34,23 +33,27 @@ receives a path or base64 payload.
   roots, leader-to-leader reporting, and cycle rejection.
 - Route ambient, `@member`, `@member/run`, and leader-delegated messages to
   deduplicated member/run recipients.
-- Keep one generation-fenced AgentLoop TaskBinding and event cursor isolated to
+- Keep one generation-fenced Agent owner and Session event cursor isolated to
   each run.
-- Present real AgentLoop messages, approvals, failures, and lifecycle events in
-  a chronological Host-owned timeline.
+- Present real Session messages, approvals, failures, and lifecycle events in
+  a chronological plugin-owned timeline.
+- Resolve and render the exact five OneWorks RC.8 animal assets directly in the
+  page, with deterministic initials for unsupported or absent references.
 
 Out of scope: host adapters, credentials, external channels, automation,
-plugin-owned DOM or CSS, themes, rich-media rendering, and task execution.
+application chrome, arbitrary Host DOM access, rich-media messages, and Agent
+execution.
 
 ## Agent configuration
 
 The optional `team` configuration supplies seed leaders, a team graph, and the
-complete inheritance catalog consumed by the Host. Definitions support ordered
+complete inheritance catalog consumed by the public Agent service. Definitions support ordered
 `extends`, explicit inheritance modes, prompt sections, rules, skills, tool and
 MCP filters, runtime defaults, and formal Avatar references. Chatroom resolves
 Avatar inheritance once while creating a Room and freezes the result with its
-member and participant snapshot; raw URLs, paths, base64, and renderer assets
-are never accepted.
+member and participant snapshot. Avatar references are never interpreted as
+URLs or paths. Only plugin-generated, completed PNG snapshots cross the generic
+sidebar image contract.
 
 ```json
 {
@@ -141,8 +144,9 @@ npm run dev:dry-run
 ```
 
 `cordisx-package.json` is the CordisX package descriptor. `src/chatroom.ts`
-registers the formal Agent Conversation Shell source, its Host-owned mount,
-route, commands, and sidebar contribution. Local experimental Host and Protocol
+registers the React page, routes, Room management commands, Manager content,
+and the v3 generic-image sidebar collection. OneWorks license and provenance
+details are in `THIRD_PARTY_NOTICES.md`. Local experimental Host and Protocol
 checkpoints may be used for combination validation; that does not make them a
 merged or released dependency.
 

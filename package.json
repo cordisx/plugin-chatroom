@@ -11,7 +11,8 @@
     "dist",
     "entities",
     "cordisx-package.json",
-    "runtime-manifest.json"
+    "runtime-manifest.json",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/build-runtime-bundle.mjs && node scripts/copy-build-assets.mjs",
@@ -28,10 +29,18 @@
     "@cordisx/protocol": "github:cordisx/cordisx-protocol#6fa9bbbad0501114bece820d574d5e79a4cb3cdb",
     "@deepseek-ai/cordis": "4.0.1",
     "@deepseek-ai/schemastery": "3.18.1",
+    "@oneworks/avatar": "1.0.0-rc.8",
+    "@oneworks/avatar-react": "1.0.0-rc.8",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "@vitejs/plugin-react": "6.1.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
-    "cordisx": "github:cordisx/cordisx#43ec178a8ed4995ac1eaec538450fb88156173d9",
+    "cordisx": "github:cordisx/cordisx#88b98996d70c0ceccaeb423e5329df9abf49d785",
     "esbuild": "^0.28.2",
-    "typescript": "^5.9.2"
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "typescript": "^5.9.2",
+    "vite": "8.2.2"
   }
 }

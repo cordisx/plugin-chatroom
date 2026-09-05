@@ -217,8 +217,11 @@ function deliveryForOperation(room: Room, operationId: string) {
 
 function acknowledgementForDelivery(room: Room, operationId: string) {
   const delivery = deliveryForOperation(room, operationId);
-  return delivery?.operation.kind === 'send'
-    ? room.acknowledgements.find(item => item.acknowledgementKey === delivery.operation.acknowledgementKey)
+  const acknowledgementKey = delivery?.operation.kind === 'send'
+    ? delivery.operation.acknowledgementKey
+    : undefined;
+  return acknowledgementKey !== undefined
+    ? room.acknowledgements.find(item => item.acknowledgementKey === acknowledgementKey)
     : undefined;
 }
 
@@ -860,6 +863,13 @@ export class ChatroomPlaygroundRoomSimulationOwner implements PlaygroundRoomSimu
         operationId, phase: 'rejected' as const, binding, runId: binding.runId,
         detail: Object.freeze({ code: projection.code, direction: 'agent-to-room' }),
       }));
+    }
+    if (projection.status === 'missing') {
+      return unavailable(
+        this.ownerGeneration,
+        'projection-missing',
+        'The Agent approval projection is unavailable.',
+      );
     }
     const room = this.agentLoop.rooms.get(binding.roomId);
     const approval = room?.playgroundAgentApprovals

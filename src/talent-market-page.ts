@@ -11,7 +11,7 @@ import {
   type CordisXRoutes,
   type CordisXSlots,
 } from 'cordisx/contracts';
-import { createElement, defineReactPage } from 'cordisx/react';
+import { createElement, defineReactPage, type ComponentProps } from 'cordisx/react';
 import { Button, EmptyState } from 'cordisx/ui';
 
 import {
@@ -79,8 +79,8 @@ export function registerTalentMarket(
       variant: 'secondary',
       'data-chatroom-talent-market-back': 'true',
       onClick: () => void navigation.back('manager.content'),
-    }, localization.t('action.back')),
-  });
+    } as ComponentProps<typeof Button> & { 'data-chatroom-talent-market-back': string }, localization.t('action.back')),
+  } as ComponentProps<typeof EmptyState> & { 'data-chatroom-talent-market-empty': string });
 
   try {
     disposers.push(

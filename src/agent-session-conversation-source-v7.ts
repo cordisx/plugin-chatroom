@@ -146,8 +146,10 @@ const stableItemOrder = (left: AgentConversationItem, right: AgentConversationIt
   return left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0;
 };
 
-const isV7ProjectionItem = (item: ProjectedItem): item is AgentConversationItem =>
-  item.kind !== 'approval' || 'requester' in item;
+const v7ProjectionItem = (item: ProjectedItem): AgentConversationItem | undefined =>
+  item.kind !== 'approval' || 'requester' in item
+    ? item as AgentConversationItem
+    : undefined;
 
 const itemTime = (item: AgentConversationItem): number | undefined => {
   if (item.kind !== 'message') return undefined;
@@ -378,7 +380,10 @@ export class ChatroomAgentSessionConversationSourceV7 implements AgentConversati
         const mapped = domainItem(item, sessionByRun);
         return mapped === undefined ? [] : [mapped];
       }),
-      ...projection.items.filter(isV7ProjectionItem),
+      ...projection.items.flatMap(item => {
+        const mapped = v7ProjectionItem(item);
+        return mapped === undefined ? [] : [mapped];
+      }),
     ];
     // Domain and SessionEvent source coordinates are intentionally unrelated.
     // Once their deterministic chronology is known, assign one Room-local
