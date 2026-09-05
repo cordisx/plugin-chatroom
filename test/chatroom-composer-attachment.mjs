@@ -7,7 +7,7 @@ const css = await readFile(new URL('../src/chatroom-page.css', import.meta.url),
 
 test('uses the public disabled attachment placeholder without a Chatroom attachment action', () => {
   assert.match(page, /import \{ AttachmentPlaceholder, Button, EmptyState, MarkdownViewer \} from 'cordisx\/ui';/u);
-  assert.match(page, /<AttachmentPlaceholder className="cx-chatroom-composer__attachment" \/>/u);
+  assert.match(page, /<AttachmentPlaceholder className="cx-chatroom-composer__attachment" size=\{32\} \/>/u);
   assert.doesNotMatch(page, /AttachmentPlaceholder[^\n]*(onClick|command|capability)/u);
 });
 
