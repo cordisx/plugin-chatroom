@@ -148,6 +148,7 @@ export const inject = [
   'i18n', 'commands', 'pages', 'routes', 'slots', 'managerContent',
   'agentConversationShell', 'agents', 'sessions', 'approvals', 'agentAdmissionOrigins',
   'agentAdmissionReservations', 'agentAdmissionBootstrapTargets', 'agentAdmissionBootstrapReservations',
+  'agentAdmissionBootstrapRoomTargets', 'agentAdmissionBootstrapRoomReservations',
   'agentAdmissionBootstrapRouteDeclarations', 'agentAdmissionBootstrapRouteReservations',
   'entities', 'documents',
   'settings',
@@ -452,6 +453,17 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
           intent.dispatchText,
           ctx.agentAdmissionOrigins,
           ctx.agentAdmissionReservations,
+        );
+        assertChatroomAdmissionDeliveriesAccepted(outcomes);
+      } else if (admissionMode === 'v9' && !intent.roomCreated) {
+        const outcomes = await agentSession.submitDeliveriesViaAdmissionV5(
+          intent.roomId,
+          intent.deliveries,
+          intent.userItemId,
+          admissionOrigin.origin,
+          intent.dispatchText,
+          ctx.agentAdmissionBootstrapRoomTargets,
+          ctx.agentAdmissionBootstrapRoomReservations,
         );
         assertChatroomAdmissionDeliveriesAccepted(outcomes);
       } else if (admissionMode === 'v9') {
