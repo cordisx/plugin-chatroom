@@ -135,6 +135,8 @@ export const inject = [
   'managerContent',
   'agents',
   'sessions',
+  'agentSessionDetailReferences',
+  'agentDetailNavigation',
   'approvals',
   'agentPageAdmissionTargets',
   'agentPageAdmissionReservations',
