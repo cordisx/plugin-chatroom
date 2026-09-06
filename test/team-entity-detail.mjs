@@ -182,6 +182,8 @@ test('keeps active Session detail navigation unavailable until a public Host act
   assert.match(viewModel, /readonly detail\?: AgentDetailReference;/u);
   assert.match(viewModel, /services\.references\.get\(\{ sessionId \}\)/u);
   assert.match(viewModel, /services\.navigation\.open\(\{ target \}\)/u);
+  assert.match(viewModel, /const epoch = \+\+detailEpoch;/u);
+  assert.match(viewModel, /epoch !== detailEpoch/u);
   assert.match(viewModel, /Never infer it from[\s\S]*?URL, current Agent, or mutable entity record/u);
   assert.match(page, /<SessionDetailTarget session=\{session\} source=\{source\} t=\{t\} \/>/u);
   assert.match(page, /session\.detail === undefined \|\| unavailable/u);

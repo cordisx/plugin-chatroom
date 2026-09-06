@@ -389,6 +389,7 @@ export function createTeamArchitectureDataSource(
 ): TeamArchitectureDataSource {
   let revision = 0;
   let disposed = false;
+  let detailEpoch = 0;
   let sessionDetails = new Map<string, AgentDetailReference>();
   let snapshot: TeamArchitectureDataSnapshot = Object.freeze({
     revision,
@@ -410,6 +411,7 @@ export function createTeamArchitectureDataSource(
   };
   const refreshDetails = async () => {
     if (services === undefined || disposed) return;
+    const epoch = ++detailEpoch;
     const candidates = [...registry.snapshot()].flatMap(room =>
       room.runs.flatMap(run =>
         run.sessionId === undefined || (run.presence.state !== 'joined' && run.presence.state !== 'ready')
@@ -422,11 +424,12 @@ export function createTeamArchitectureDataSource(
       const result = await services.references.get({ sessionId });
       if (result.status === 'accepted' && result.sessionId === sessionId) next.set(sessionId, result.target);
     }));
-    if (disposed) return;
+    if (disposed || epoch !== detailEpoch) return;
     sessionDetails = next;
     refresh();
   };
   const unsubscribeRegistry = registry.subscribe(() => {
+    detailEpoch += 1;
     refresh();
     void refreshDetails();
   });
