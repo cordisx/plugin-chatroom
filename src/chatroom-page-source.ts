@@ -4,6 +4,15 @@ import type {
   AgentConversationParticipant,
 } from '@cordisx/protocol/agent-conversation-shell/v7';
 import type { AgentConversationItem as AgentConversationItemV3 } from '@cordisx/protocol/agent-conversation-shell/v3';
+import type {
+  AgentPageAdmissionReservationService,
+  AgentPageAdmissionRouteDeclarationService,
+  AgentPageAdmissionRouteReservationService,
+  AgentPageAdmissionTargetService,
+  AgentPageComposerCommandContext,
+  AgentPageComposerCommandResult,
+  AgentPageFreshRoomNavigationService,
+} from '@cordisx/protocol/agent-page-admission/v2';
 
 import {
   assertChatroomAdmissionDeliveriesAccepted,
@@ -11,7 +20,7 @@ import {
 } from './agent-session-controller.js';
 import type { ProjectedItem } from './agent-session-projection.js';
 import type { ChatroomComposerSettings, ChatroomComposerShortcutPolicy } from './composer-settings.js';
-import { createRoomConversationModel } from './conversation-model.js';
+import { CHATROOM_COMMAND_SUBMIT, createRoomConversationModel } from './conversation-model.js';
 import type { ChatroomCommandIntent, ChatroomConversationController } from './conversation-source.js';
 import { approvalDecisionOperationId } from './room-agent-operations.js';
 import type { Room } from './room.js';
@@ -36,6 +45,15 @@ export type ChatroomPageSubmitResult =
     readonly code: Extract<ChatroomCommandIntent, { readonly kind: 'target-error'; }>['code'];
     readonly mention?: string;
   };
+
+/** Public Host services consumed only from a typed page-composer command. */
+export interface ChatroomPageAdmissionV2Services {
+  readonly targets: AgentPageAdmissionTargetService;
+  readonly reservations: AgentPageAdmissionReservationService;
+  readonly routeDeclarations: AgentPageAdmissionRouteDeclarationService;
+  readonly routeReservations: AgentPageAdmissionRouteReservationService;
+  readonly freshNavigation: AgentPageFreshRoomNavigationService;
+}
 
 function itemTime(item: ChatroomPageItem): number | undefined {
   if (item.kind !== 'message') return undefined;
@@ -69,7 +87,6 @@ export class ChatroomPageSource {
   private readonly unsubscribeSettings: () => void;
   private revision = 0;
   private disposed = false;
-  private readonly correlationGeneration = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
 
   constructor(
     private readonly conversation: ChatroomConversationController,
@@ -136,13 +153,41 @@ export class ChatroomPageSource {
     };
   }
 
-  async submit(roomId: string | undefined, value: string): Promise<ChatroomPageSubmitResult> {
+  /**
+   * Draft v2 handler-side fixture. The future Host page adapter alone creates
+   * this context; page React code never supplies an origin or local binding.
+   * It intentionally has no direct Agent send fallback.
+   */
+  async handlePageComposerCommand(
+    context: AgentPageComposerCommandContext,
+    services: ChatroomPageAdmissionV2Services,
+  ): Promise<ChatroomPageSubmitResult> {
     if (this.disposed) throw new Error('Chatroom page source is disposed.');
+    if (
+      context.scope !== 'page-composer-submit'
+      || context.command.id !== CHATROOM_COMMAND_SUBMIT
+      || context.origin.scope !== 'page-composer-submit'
+      || context.origin.commandId !== context.command.id
+      || context.origin.binding.bindingId !== context.binding.bindingId
+      || context.origin.binding.ownerGeneration !== context.binding.ownerGeneration
+      || context.origin.generation !== context.generation
+    ) {
+      throw new Error('Chatroom page composer command context is invalid.');
+    }
+    const selectedRoomId = context.origin.page.roomId;
+    const fresh = selectedRoomId === undefined;
+    if (
+      context.origin.page.outlet !== 'main'
+      || (fresh && context.origin.page.routeDefinitionId !== 'new-room')
+      || (!fresh && context.origin.page.routeDefinitionId !== 'room')
+    ) {
+      throw new Error('Chatroom page composer command route is invalid.');
+    }
     const intent = this.conversation.submitMessage(
-      roomId,
-      value,
-      'chatroom-page',
-      this.correlationGeneration,
+      selectedRoomId,
+      context.submitPayload,
+      context.binding.bindingId,
+      context.generation,
     );
     if (intent.kind === 'target-error') {
       return {
@@ -151,31 +196,74 @@ export class ChatroomPageSource {
         ...(intent.mention === undefined ? {} : { mention: intent.mention }),
       };
     }
-    if (intent.kind !== 'send-message') throw new Error('Direct page submit produced a non-message intent.');
+    if (intent.kind !== 'send-message') {
+      throw new Error('Page composer command produced a non-message intent.');
+    }
     await this.conversation.persistComposerRoom(intent.roomId);
-    if (intent.deliveries.length === 0) {
-      throw new Error('Chatroom page submit resolved no deliveries.');
+    const outcomes = fresh
+      ? await this.sessions.submitDeliveriesViaPageAdmissionV2Fresh(
+        intent.roomId,
+        intent.deliveries,
+        intent.userItemId,
+        context.origin,
+        {
+          outlet: 'main',
+          routeDefinitionId: 'room',
+          param: 'roomId',
+          roomId: intent.roomId,
+        },
+        intent.dispatchText,
+        services.routeDeclarations,
+        services.routeReservations,
+      )
+      : await this.sessions.submitDeliveriesViaPageAdmissionV2Existing(
+        intent.roomId,
+        intent.deliveries,
+        intent.userItemId,
+        context.origin,
+        intent.dispatchText,
+        services.targets,
+        services.reservations,
+      );
+    assertChatroomAdmissionDeliveriesAccepted(outcomes);
+    if (fresh) {
+      const navigation = context.freshRoomNavigation;
+      if (navigation === undefined) {
+        throw new Error('Chatroom fresh page command is missing its Host navigation permit.');
+      }
+      const navigated = await services.freshNavigation.navigate({
+        navigation,
+        route: {
+          outlet: 'main',
+          routeDefinitionId: 'room',
+          param: 'roomId',
+          roomId: intent.roomId,
+        },
+      });
+      if (navigated.status !== 'accepted' || navigated.roomId !== intent.roomId) {
+        throw new Error(`Chatroom fresh page navigation did not claim Room ${intent.roomId}.`);
+      }
     }
-    let failure: unknown;
-    try {
-      const outcomes = await Promise.all(intent.deliveries.map(async delivery =>
-        Object.freeze({
-          memberId: delivery.memberId,
-          runId: delivery.runId,
-          outcome: await this.sessions.sendToRoom(
-            intent.roomId,
-            delivery.runId,
-            intent.userItemId,
-            intent.dispatchText,
-          ),
-        })
-      ));
-      assertChatroomAdmissionDeliveriesAccepted(outcomes);
-    } catch (error) {
-      failure = error;
+    return { status: 'accepted', roomId: intent.roomId, roomCreated: fresh };
+  }
+
+  /**
+   * Consumes only the Host-derived v2 command completion. UI callers clear a
+   * draft only through this all-accepted branch; durable Room state is never
+   * inspected to infer an outcome after page-command dispatch.
+   */
+  pageComposerCompletion(result: AgentPageComposerCommandResult): ChatroomPageSubmitResult {
+    if (result.status === 'accepted') {
+      return {
+        status: 'accepted',
+        roomId: result.roomId,
+        roomCreated: result.disposition === 'fresh-room',
+      };
     }
-    if (failure !== undefined) throw failure;
-    return { status: 'accepted', roomId: intent.roomId, roomCreated: intent.roomCreated };
+    if (result.status === 'failed') {
+      throw new Error(`Chatroom page admission completion failed: ${result.code}.`);
+    }
+    throw new Error(`Chatroom page command is not available: ${result.code}.`);
   }
 
   async decideApproval(

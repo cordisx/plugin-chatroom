@@ -4,16 +4,6 @@ import test from 'node:test';
 import { ChatroomPageSource } from '../dist/chatroom-page-source.js';
 import { ChatroomRoomRegistry, createRoom } from '../dist/room.js';
 
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((accept, deny) => {
-    resolve = accept;
-    reject = deny;
-  });
-  return { promise, resolve, reject };
-}
-
 function harness({ rooms = [], projection = { activeRuns: [], items: [] }, intent } = {}) {
   const registry = new ChatroomRoomRegistry(rooms);
   const projectionListeners = new Set();
@@ -55,17 +45,6 @@ function harness({ rooms = [], projection = { activeRuns: [], items: [] }, inten
     },
     async hydrateRoom(roomId) {
       calls.push(['hydrate', roomId]);
-    },
-    async sendToRoom(...args) {
-      calls.push(['send', ...args]);
-      return {
-        status: 'accepted',
-        roomId: args[0],
-        runId: args[1],
-        messageId: `message-${args[1]}`,
-        sessionId: `session-${args[1]}`,
-        disposition: 'created',
-      };
     },
     answerApprovalItem(...args) {
       calls.push(['session-approval', ...args]);
@@ -122,89 +101,6 @@ test('merges replayed Session items, exposes participants, hydrates and invalida
   run.source.dispose();
 });
 
-test('awaits every Agent Session delivery and keeps the first-Room navigation result explicit', async () => {
-  const left = deferred();
-  const right = deferred();
-  const intent = {
-    kind: 'send-message',
-    roomId: 'created-room',
-    roomCreated: true,
-    deliveries: [
-      { memberId: 'member-a', runId: 'run-a' },
-      { memberId: 'member-b', runId: 'run-b' },
-    ],
-    userItemId: 'user-item',
-    bindingId: 'page',
-    generation: 'page',
-    dispatchText: 'Hello',
-  };
-  const run = harness({ intent });
-  let sendIndex = 0;
-  run.sessions.sendToRoom = (...args) => {
-    run.calls.push(['send', ...args]);
-    return sendIndex++ === 0 ? left.promise : right.promise;
-  };
-  let settled = false;
-  const resultPromise = run.source.submit(undefined, 'Hello').then(result => {
-    settled = true;
-    return result;
-  });
-  await Promise.resolve();
-  assert.equal(settled, false);
-  left.resolve({
-    status: 'accepted',
-    roomId: 'created-room',
-    runId: 'run-a',
-    messageId: 'message-a',
-    sessionId: 'session-a',
-    disposition: 'created',
-  });
-  await Promise.resolve();
-  assert.equal(settled, false);
-  right.resolve({
-    status: 'accepted',
-    roomId: 'created-room',
-    runId: 'run-b',
-    messageId: 'message-b',
-    sessionId: 'session-b',
-    disposition: 'created',
-  });
-  assert.deepEqual(await resultPromise, {
-    status: 'accepted',
-    roomId: 'created-room',
-    roomCreated: true,
-  });
-  assert.deepEqual(run.calls.filter(call => call[0] === 'send'), [
-    ['send', 'created-room', 'run-a', 'user-item', 'Hello'],
-    ['send', 'created-room', 'run-b', 'user-item', 'Hello'],
-  ]);
-  assert.ok(
-    run.calls.findIndex(call => call[0] === 'persist')
-      < run.calls.findIndex(call => call[0] === 'send'),
-  );
-  run.source.dispose();
-});
-
-test('keeps the owned-page draft failed when any exact delivery is not accepted', async () => {
-  const intent = {
-    kind: 'send-message',
-    roomId: 'room-a',
-    roomCreated: false,
-    deliveries: [{ memberId: 'member-a', runId: 'run-a' }],
-    userItemId: 'user-item',
-    bindingId: 'page',
-    generation: 'page',
-    dispatchText: 'Hello',
-  };
-  const run = harness({ intent });
-  run.sessions.sendToRoom = (...args) => {
-    run.calls.push(['send', ...args]);
-    return Promise.resolve({ status: 'denied', roomId: 'room-a', runId: 'run-a', code: 'denied' });
-  };
-  await assert.rejects(run.source.submit('room-a', 'Hello'), /member-a\/run-a: denied:denied/u);
-  run.source.dispose();
-});
-
 test('routes current and legacy approval decisions to exact Session or playground owners', async () => {
   const regular = harness({ rooms: [createRoom({ id: 'room-a', title: 'Room A' })] });
   assert.equal(await regular.source.decideApproval('room-a', 'approval-a', 'approved'), true);
@@ -243,5 +139,5 @@ test('detaches Room, Session, and settings listeners on disposal', async () => {
   run.source.dispose();
   assert.equal(run.projectionListeners.size, 0);
   assert.equal(run.settingsListeners.size, 0);
-  await assert.rejects(run.source.submit(undefined, 'late'), /disposed/u);
+  assert.equal('submit' in run.source, false, 'page source exposes no direct Agent dispatch fallback');
 });

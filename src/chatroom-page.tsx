@@ -10,10 +10,12 @@ import {
 } from 'cordisx/react';
 import { AttachmentPlaceholder, Button, EmptyState, MarkdownViewer } from 'cordisx/ui';
 import type { CordisXReactPageProps } from 'cordisx/contracts';
+import type { AgentPageComposerCommandAdapter } from '@cordisx/protocol/agent-page-admission/v2';
 
 import { ChatroomAvatar } from './avatar.js';
 import { roomAvatarFingerprint } from './avatar-fingerprint.js';
 import { ChatroomCompositeAvatar } from './composite-avatar.js';
+import { CHATROOM_COMMAND_SUBMIT } from './conversation-model.js';
 import type { ChatroomPageItem, ChatroomPageSource } from './chatroom-page-source.js';
 import type { ChatroomSidebarImageCache, ChatroomSidebarImageCapture } from './sidebar-image-cache.js';
 import './chatroom-page.css';
@@ -268,11 +270,10 @@ function Timeline({ items, participants, roomId, source, t }: {
   );
 }
 
-function Composer({ roomId, source, shortcutPolicy, navigation, signal, t }: {
-  readonly roomId?: string;
+function Composer({ source, shortcutPolicy, pageComposer, signal, t }: {
   readonly source: ChatroomPageSource;
   readonly shortcutPolicy: 'enter' | 'mod-enter';
-  readonly navigation: CordisXReactPageProps['navigation'];
+  readonly pageComposer?: AgentPageComposerCommandAdapter;
   readonly signal: AbortSignal;
   readonly t: Translate;
 }) {
@@ -285,16 +286,22 @@ function Composer({ roomId, source, shortcutPolicy, navigation, signal, t }: {
     setSending(true);
     setError(undefined);
     try {
-      const result = await source.submit(roomId, draft);
-      if (signal.aborted) return;
-      if (result.status === 'target-error') {
-        setError(t('composer.target-error', { code: result.code }));
+      if (pageComposer === undefined) {
+        setError(t('composer.unavailable'));
         return;
       }
+      source.pageComposerCompletion(
+        await pageComposer.execute({
+          $schema:
+            'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-page-composer-command-request.v1.schema.json',
+          contract: 'cordisx.agent-page-composer-command-request/v1',
+          schemaVersion: 1,
+          command: { id: CHATROOM_COMMAND_SUBMIT },
+          submitPayload: draft,
+        }),
+      );
+      if (signal.aborted) return;
       setDraft('');
-      // Source delivery completes before route authority changes; the current
-      // page generation cannot be torn down with a send still in flight.
-      if (result.roomCreated) await navigation.navigate({ id: 'room', params: { roomId: result.roomId } });
     } catch {
       if (!signal.aborted) setError(t('composer.send-failed'));
     } finally {
@@ -402,10 +409,9 @@ export function ChatroomPage({ source, imageCache, ...props }: CordisXReactPageP
             t={props.t}
           />
           <Composer
-            roomId={snapshot.room?.id}
             source={source}
             shortcutPolicy={snapshot.shortcutPolicy}
-            navigation={props.navigation}
+            pageComposer={props.pageComposer}
             signal={props.signal}
             t={props.t}
           />

@@ -1599,6 +1599,286 @@ test('Shell v9 bootstrap denial fails the freshly persisted run closed before ac
   store.dispose();
 });
 
+test('page v2 fresh admission declares the persisted Room before acquire, records its exact link, and never directly sends', async () => {
+  const userItem = {
+    kind: 'message',
+    itemId: 'page-v2-user-item',
+    messageId: 'page-v2-room-message',
+    sequence: 1,
+    source: 'agent-loop',
+    author: { participantId: 'user', role: 'human', displayName: { key: 'user', fallback: 'You' } },
+    semantic: { purpose: 'conversation' },
+    body: [{ kind: 'text', text: { key: 'message', fallback: 'Start the exact page Room task.' } }],
+    reactions: [],
+    timestamp: '2026-09-05T00:00:00.000Z',
+    deliveryState: 'pending',
+    runState: 'idle',
+    ariaLive: 'off',
+    actions: [],
+  };
+  let room = createRoom({
+    id: 'page-v2-fresh',
+    title: 'Fresh page Room',
+    timelineSequence: 1,
+    participants: [{ id: 'user', name: 'You', kind: 'human' }],
+    items: [userItem],
+  });
+  room = addRoomRun(room, {
+    runId: 'page-v2-lead',
+    memberId: 'leader',
+    title: 'Lead',
+    status: 'creating',
+  });
+  const member = room.memberships.find(candidate => candidate.memberId === 'leader');
+  const harness = runtimeHarness({ room });
+  const store = DurableChatroomRoomStore.memory([room]);
+  const controller = new ChatroomAgentSessionController(
+    { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+    CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+    store,
+  );
+  const order = [];
+  const origin = {
+    $schema:
+      'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-page-composer-origin.v1.schema.json',
+    contract: 'cordisx.agent-page-composer-origin/v1',
+    schemaVersion: 1,
+    originId: 'page-v2-origin',
+    binding: { bindingId: 'page-v2-binding', ownerGeneration: 'page-v2-owner' },
+    generation: 'page-v2-generation',
+    executionId: 'page-v2-execution',
+    commandId: CHATROOM_COMMAND_SUBMIT,
+    scope: 'page-composer-submit',
+    page: { outlet: 'main', routeDefinitionId: 'new-room' },
+  };
+  const route = { outlet: 'main', routeDefinitionId: 'room', param: 'roomId', roomId: room.id };
+  const outcomes = await controller.submitDeliveriesViaPageAdmissionV2Fresh(
+    room.id,
+    [{ memberId: 'leader', runId: 'page-v2-lead' }],
+    userItem.itemId,
+    origin,
+    route,
+    'Start the exact page Room task.',
+    {
+      declare: async request => {
+        order.push('declare');
+        assert.equal(harness.creates.length, 0, 'page target declaration precedes exact acquisition');
+        assert.deepEqual(request, {
+          origin,
+          target: {
+            roomId: room.id,
+            participantId: member.participantId,
+            memberId: member.memberId,
+            runId: 'page-v2-lead',
+            route,
+          },
+        });
+        return {
+          status: 'declared',
+          continuation: {
+            $schema:
+              'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-page-admission-route-continuation.v1.schema.json',
+            contract: 'cordisx.agent-page-admission-route-continuation/v1',
+            schemaVersion: 1,
+            token: 'page-v2-continuation',
+          },
+        };
+      },
+    },
+    {
+      reserve: async request => {
+        order.push('reserve');
+        assert.equal(harness.creates.length, 1, 'reserve receives the exact acquired handle');
+        assert.equal(request.handle, harness.handles[0].handle);
+        assert.equal(request.continuation.token, 'page-v2-continuation');
+        assert.deepEqual(request.message, { text: 'Start the exact page Room task.' });
+        return {
+          status: 'reserved',
+          reservation: {
+            reservationId: 'page-v2-reservation',
+            submit: async () => {
+              order.push('submit');
+              return admission('page-v2-host-message');
+            },
+            revoke: async () => {},
+          },
+        };
+      },
+    },
+  );
+
+  assert.deepEqual(order, ['declare', 'reserve', 'submit']);
+  assert.deepEqual(outcomes, [{
+    memberId: 'leader',
+    runId: 'page-v2-lead',
+    outcome: {
+      status: 'accepted',
+      roomId: room.id,
+      runId: 'page-v2-lead',
+      messageId: 'page-v2-host-message',
+      sessionId: 'session-created-1',
+      disposition: 'created',
+    },
+  }]);
+  assert.deepEqual(
+    harness.handles[0].calls.messages,
+    [],
+    'page admission never falls through to Agent direct dispatch',
+  );
+  assert.deepEqual(store.rooms.get(room.id).admissionMessageLinks, [{
+    roomId: room.id,
+    itemId: userItem.itemId,
+    participantId: member.participantId,
+    memberId: member.memberId,
+    runId: 'page-v2-lead',
+    sessionId: 'session-created-1',
+    messageId: 'page-v2-host-message',
+    owner,
+  }]);
+  await controller.dispose();
+  store.dispose();
+});
+
+test('page v2 fresh N2/N3 materializes one exact direct Lead authority run before independent target reservations', async () => {
+  for (
+    const targetMemberIds of [
+      ['reviewer', 'integrator'],
+      ['reviewer', 'integrator', 'qa'],
+    ]
+  ) {
+    const userItem = {
+      kind: 'message',
+      itemId: `page-v2-authority-item-${targetMemberIds.length}`,
+      messageId: `page-v2-authority-room-message-${targetMemberIds.length}`,
+      sequence: 1,
+      source: 'agent-loop',
+      author: { participantId: 'user', role: 'human', displayName: { key: 'user', fallback: 'You' } },
+      semantic: { purpose: 'conversation' },
+      body: [{ kind: 'text', text: { key: 'message', fallback: 'Review this exact page admission.' } }],
+      reactions: [],
+      timestamp: '2026-09-06T00:00:00.000Z',
+      deliveryState: 'pending',
+      runState: 'idle',
+      ariaLive: 'off',
+      actions: [],
+    };
+    let room = createRoom({
+      id: `page-v2-authority-${targetMemberIds.length}`,
+      title: 'Fresh authority Room',
+      timelineSequence: userItem.sequence,
+      participants: [{ id: 'user', name: 'You', kind: 'human' }],
+      items: [userItem],
+    });
+    if (targetMemberIds.length === 3) {
+      room = createRoom({
+        ...room,
+        memberships: room.memberships.map(member =>
+          member.memberId === 'qa' ? { ...member, reportsToMemberId: 'leader' } : member
+        ),
+      });
+    }
+    for (const memberId of targetMemberIds) {
+      const member = room.memberships.find(candidate => candidate.memberId === memberId);
+      room = addRoomRun(room, {
+        runId: `page-v2-${memberId}`,
+        memberId,
+        title: `${member.label} target run`,
+        status: 'creating',
+      });
+    }
+
+    const harness = runtimeHarness({ room });
+    const store = DurableChatroomRoomStore.memory([room]);
+    const controller = new ChatroomAgentSessionController(
+      { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
+      CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+      store,
+    );
+    const origin = {
+      $schema:
+        'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-page-composer-origin.v1.schema.json',
+      contract: 'cordisx.agent-page-composer-origin/v1',
+      schemaVersion: 1,
+      originId: `page-v2-authority-origin-${targetMemberIds.length}`,
+      binding: { bindingId: 'page-v2-authority-binding', ownerGeneration: 'page-v2-authority-owner' },
+      generation: 'page-v2-authority-generation',
+      executionId: `page-v2-authority-execution-${targetMemberIds.length}`,
+      commandId: CHATROOM_COMMAND_SUBMIT,
+      scope: 'page-composer-submit',
+      page: { outlet: 'main', routeDefinitionId: 'new-room' },
+    };
+    const route = { outlet: 'main', routeDefinitionId: 'room', param: 'roomId', roomId: room.id };
+    const outcomes = await controller.submitDeliveriesViaPageAdmissionV2Fresh(
+      room.id,
+      targetMemberIds.map(memberId => ({ memberId, runId: `page-v2-${memberId}` })),
+      userItem.itemId,
+      origin,
+      route,
+      'Review this exact page admission.',
+      {
+        declare: async request => ({
+          status: 'declared',
+          continuation: {
+            $schema:
+              'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-page-admission-route-continuation.v1.schema.json',
+            contract: 'cordisx.agent-page-admission-route-continuation/v1',
+            schemaVersion: 1,
+            token: `page-v2-authority-${request.target.runId}`,
+          },
+        }),
+      },
+      {
+        reserve: async request => {
+          const current = store.rooms.get(room.id);
+          const leadRuns = current.runs.filter(run => run.memberId === 'leader');
+          assert.equal(leadRuns.length, 1, `N${targetMemberIds.length} must converge on one Lead authority run`);
+          assert.ok(leadRuns[0].sessionId, 'the Lead authority run must be acquired before target reserve');
+          assert.ok(
+            harness.approvals.authorityAnswerers.has(leadRuns[0].sessionId),
+            'the exact Lead authority answerer must be registered before target reserve',
+          );
+          return {
+            status: 'reserved',
+            reservation: {
+              reservationId: `page-v2-authority-reservation-${request.continuation.token}`,
+              submit: async () => admission(`page-v2-authority-message-${request.continuation.token}`),
+              revoke: async () => {},
+            },
+          };
+        },
+      },
+    );
+
+    assert.deepEqual(
+      outcomes.map(delivery => ({
+        memberId: delivery.memberId,
+        runId: delivery.runId,
+        status: delivery.outcome.status,
+      })),
+      targetMemberIds.map(memberId => ({
+        memberId,
+        runId: `page-v2-${memberId}`,
+        status: 'accepted',
+      })),
+    );
+    const current = store.rooms.get(room.id);
+    const leadRuns = current.runs.filter(run => run.memberId === 'leader');
+    assert.equal(leadRuns.length, 1);
+    assert.equal(leadRuns[0].title, 'Lead authority run');
+    assert.equal(leadRuns[0].sessionSelfIntroduction, undefined, 'authority-only Lead must not self-introduce');
+    assert.equal(harness.creates.filter(request => request.definition.agentId === 'chatroom.generalist').length, 1);
+    assert.equal(harness.creates.length, targetMemberIds.length + 1);
+    assert.deepEqual(
+      current.admissionMessageLinks.map(link => link.memberId).sort(),
+      [...targetMemberIds].sort(),
+      'only explicit targets receive durable admission links',
+    );
+    assert.ok(harness.handles.every(pair => pair.calls.messages.length === 0), 'no direct Agent dispatch is available');
+    await controller.dispose();
+    store.dispose();
+  }
+});
+
 test('Shell v8 admission reuses the exact Lead authority before creating Reviewer, then routes a v2 pending approval', async () => {
   const userItem = {
     kind: 'message',
@@ -2167,8 +2447,10 @@ test('Shell v8 admission stops before issue or reserve when the exact Reviewer r
   }
 });
 
-test('Shell v8 admission fails closed when Reviewer has no exact reports-to Lead run', async () => {
-  const room = roomWithRun();
+test('Shell v8 admission fails closed when Reviewer has multiple unpreferred reports-to Lead runs', async () => {
+  let room = roomWithRun();
+  room = addRoomRun(room, { runId: 'lead-run-a', memberId: 'leader', title: 'Lead A', status: 'creating' });
+  room = addRoomRun(room, { runId: 'lead-run-b', memberId: 'leader', title: 'Lead B', status: 'creating' });
   const harness = runtimeHarness({ room });
   const store = DurableChatroomRoomStore.memory([room]);
   const controller = new ChatroomAgentSessionController(

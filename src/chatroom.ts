@@ -1,6 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis';
+import type { AgentPageComposerCommandContext } from '@cordisx/protocol/agent-page-admission/v2';
 import { ChatroomComposerSettings, Config, configApplies } from './composer-settings.js';
-import { CORDISX_PAGE_SCHEMA_V3, CORDISX_ROUTE_SCHEMA_V2 } from 'cordisx/contracts';
+import { CORDISX_PAGE_SCHEMA_V3, CORDISX_ROUTE_SCHEMA_V2, type CordisXCommandContext } from 'cordisx/contracts';
 
 // Keep product-owned avatar packages visible to Vite's initial dependency
 // scan without evaluating React-bound modules before the Host publishes its
@@ -18,6 +19,7 @@ import {
   parseChatroomAgentConfiguration,
 } from './agent-definition.js';
 import { ChatroomAgentSessionController } from './agent-session-controller.js';
+import { CHATROOM_COMMAND_SUBMIT } from './conversation-model.js';
 import { ChatroomConversationController } from './conversation-source.js';
 import { createLazyChatroomPage } from './chatroom-page-loader.js';
 import { ChatroomPageSource } from './chatroom-page-source.js';
@@ -134,6 +136,11 @@ export const inject = [
   'agents',
   'sessions',
   'approvals',
+  'agentPageAdmissionTargets',
+  'agentPageAdmissionReservations',
+  'agentPageAdmissionRouteDeclarations',
+  'agentPageAdmissionRouteReservations',
+  'agentPageFreshRoomNavigation',
   'entities',
   'documents',
   'settings',
@@ -165,6 +172,29 @@ const roomRoute = {
   id: 'room',
   path: '/main/chatroom/:roomId',
 } as const;
+
+/** Only the Host page adapter may provide this v2 context to a generic command. */
+function pageComposerCommandContext(
+  context: CordisXCommandContext,
+): AgentPageComposerCommandContext | undefined {
+  const value = context.hostContext;
+  if (
+    value === undefined
+    || !('scope' in value)
+    || value.$schema
+      !== 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-page-composer-command-context.v2.schema.json'
+    || value.contract !== 'cordisx.agent-page-composer-command-context/v2'
+    || value.schemaVersion !== 2
+    || value.scope !== 'page-composer-submit'
+    || typeof value.command.id !== 'string'
+    || typeof value.submitPayload !== 'string'
+    || typeof value.binding.bindingId !== 'string'
+    || typeof value.binding.ownerGeneration !== 'string'
+    || typeof value.generation !== 'string'
+    || value.origin.scope !== 'page-composer-submit'
+  ) return undefined;
+  return value;
+}
 
 function agentConfiguration(config: unknown): ChatroomAgentConfiguration {
   if (config === null || typeof config !== 'object' || Array.isArray(config)) {
@@ -364,6 +394,22 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   const composerSettings = new ChatroomComposerSettings(ctx.settings);
   const product = ChatroomProductBase.attach(roomStore);
   const pageSource = new ChatroomPageSource(controller, agentSession, composerSettings);
+  ctx.commands.register(
+    { id: CHATROOM_COMMAND_SUBMIT, title: message('composer.placeholder', 'Write a message') },
+    async command => {
+      const pageContext = pageComposerCommandContext(command);
+      if (pageContext === undefined) {
+        throw new Error('Chatroom page composer command context is unavailable.');
+      }
+      return await pageSource.handlePageComposerCommand(pageContext, {
+        targets: ctx.agentPageAdmissionTargets,
+        reservations: ctx.agentPageAdmissionReservations,
+        routeDeclarations: ctx.agentPageAdmissionRouteDeclarations,
+        routeReservations: ctx.agentPageAdmissionRouteReservations,
+        freshNavigation: ctx.agentPageFreshRoomNavigation,
+      });
+    },
+  );
   const playgroundBridge = ctx.reflect.get(
     'playgroundRoomSimulationBridge',
     false,

@@ -40,7 +40,7 @@ test('registers one plugin-owned lazy React Room page through public CordisX mod
   );
 });
 
-test('preserves direct Agent Session delivery, replay, approval and first-message ordering', async () => {
+test('routes page composer delivery through the Host-bound v2 admission command', async () => {
   const [entry, page, pageSource, sessions] = await Promise.all([
     source('src/chatroom.ts'),
     source('src/chatroom-page.tsx'),
@@ -49,16 +49,22 @@ test('preserves direct Agent Session delivery, replay, approval and first-messag
   ]);
 
   assert.match(entry, /await agentSession\.hydrate\(\)/u);
+  assert.match(entry, /ctx\.commands\.register\(\s*\{ id: CHATROOM_COMMAND_SUBMIT/u);
+  assert.match(entry, /agentPageAdmissionTargets/u);
+  assert.match(entry, /agentPageAdmissionRouteDeclarations/u);
   assert.match(pageSource, /sessions\.projectionForRoom/u);
   assert.match(pageSource, /sessions\.hydrateRoom/u);
-  assert.match(pageSource, /sessions\.sendToRoom/u);
+  assert.match(pageSource, /handlePageComposerCommand/u);
+  assert.match(pageSource, /submitDeliveriesViaPageAdmissionV2Existing/u);
+  assert.match(pageSource, /submitDeliveriesViaPageAdmissionV2Fresh/u);
+  assert.match(pageSource, /pageComposerCompletion/u);
+  assert.doesNotMatch(pageSource, /sessions\.sendToRoom/u);
+  assert.match(page, /pageComposer\.execute/u);
+  assert.match(page, /source\.pageComposerCompletion/u);
+  assert.doesNotMatch(page, /source\.submit\(/u);
   assert.match(pageSource, /sessions\.answerApprovalItem/u);
   assert.match(pageSource, /decidePlaygroundAgentApprovalFromRoom/u);
   assert.match(sessions, /SessionEvent remains the durable fact/u);
-  assert.ok(
-    page.indexOf('await source.submit(roomId, draft)')
-      < page.indexOf("await navigation.navigate({ id: 'room'"),
-  );
   assert.match(entry, /pageSource\.dispose\(\)/u);
 });
 
