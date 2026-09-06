@@ -152,7 +152,7 @@ test('uses only public Host selection and sanitized Markdown primitives in a car
     readFile(new URL('../src/team-architecture-page.css', import.meta.url), 'utf8'),
   ]);
 
-  assert.match(page, /import \{ EmptyState, MarkdownViewer, Select, SelectionRail \} from 'cordisx\/ui';/u);
+  assert.match(page, /import \{ Button, EmptyState, MarkdownViewer, Select, SelectionRail \} from 'cordisx\/ui';/u);
   assert.doesNotMatch(page, /from ['"](?:tdesign-react|react-markdown|rehype-|remark-)/u);
   assert.match(page, /const sections = entity\.declaredCapabilities\.promptSections;/u);
   assert.match(page, /<SelectionRail[\s\S]*?options=\{sections\.map\([\s\S]*?layout="responsive"/u);
@@ -180,7 +180,11 @@ test('keeps active Session detail navigation unavailable until a public Host act
   ]);
 
   assert.match(viewModel, /readonly detail\?: AgentDetailReference;/u);
+  assert.match(viewModel, /services\.references\.get\(\{ sessionId \}\)/u);
+  assert.match(viewModel, /services\.navigation\.open\(\{ target \}\)/u);
   assert.match(viewModel, /Never infer it from[\s\S]*?URL, current Agent, or mutable entity record/u);
-  assert.match(page, /<Fact label=\{t\('detail\.session\.target'\)\}>[\s\S]*?t\('detail\.unavailable'\)/u);
+  assert.match(page, /<SessionDetailTarget session=\{session\} source=\{source\} t=\{t\} \/>/u);
+  assert.match(page, /session\.detail === undefined \|\| unavailable/u);
+  assert.match(page, /source\.openSessionDetail\(session\.sessionId\)/u);
   assert.doesNotMatch(page, /session\.detailsUrl\.url/u);
 });
