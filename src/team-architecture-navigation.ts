@@ -27,6 +27,13 @@ import type { TeamArchitectureDataSnapshot, TeamArchitectureDataSource } from '.
 
 export const TEAM_ARCHITECTURE_LOCALE_NAMESPACE = 'org.cordisx.chatroom.team-architecture' as const;
 export const TEAM_ARCHITECTURE_PAGE_ID = 'org.cordisx.chatroom.manager.team-architecture' as const;
+export const TEAM_ARCHITECTURE_DETAIL_PAGE_IDS = Object.freeze({
+  overview: `${TEAM_ARCHITECTURE_PAGE_ID}.detail.overview`,
+  prompts: `${TEAM_ARCHITECTURE_PAGE_ID}.detail.prompts`,
+  relationships: `${TEAM_ARCHITECTURE_PAGE_ID}.detail.relationships`,
+  capabilities: `${TEAM_ARCHITECTURE_PAGE_ID}.detail.capabilities`,
+  sessions: `${TEAM_ARCHITECTURE_PAGE_ID}.detail.sessions`,
+});
 export const TEAM_ARCHITECTURE_ROUTE_ID = 'org.cordisx.chatroom.manager.team-architecture.root' as const;
 export const TEAM_ARCHITECTURE_DETAIL_ROUTE_ID = 'org.cordisx.chatroom.manager.team-architecture.detail' as const;
 export const TEAM_ARCHITECTURE_DETAIL_PROMPTS_ROUTE_ID =
@@ -63,6 +70,39 @@ export const TEAM_ARCHITECTURE_PAGE: CordisXPageMetadataV3 = Object.freeze({
   chrome: 'standard',
 });
 
+export const TEAM_ARCHITECTURE_DETAIL_PAGES: readonly CordisXPageMetadataV3[] = Object.freeze([
+  Object.freeze({
+    ...TEAM_ARCHITECTURE_PAGE,
+    id: TEAM_ARCHITECTURE_DETAIL_PAGE_IDS.overview,
+    title: message('detail.tab.overview', '概览'),
+    icon: 'host:info',
+  }),
+  Object.freeze({
+    ...TEAM_ARCHITECTURE_PAGE,
+    id: TEAM_ARCHITECTURE_DETAIL_PAGE_IDS.prompts,
+    title: message('detail.tab.prompts', '提示词'),
+    icon: 'host:files',
+  }),
+  Object.freeze({
+    ...TEAM_ARCHITECTURE_PAGE,
+    id: TEAM_ARCHITECTURE_DETAIL_PAGE_IDS.relationships,
+    title: message('detail.tab.relationships', '关系'),
+    icon: 'host:hierarchy',
+  }),
+  Object.freeze({
+    ...TEAM_ARCHITECTURE_PAGE,
+    id: TEAM_ARCHITECTURE_DETAIL_PAGE_IDS.capabilities,
+    title: message('detail.tab.capabilities', '能力'),
+    icon: 'host:layers',
+  }),
+  Object.freeze({
+    ...TEAM_ARCHITECTURE_PAGE,
+    id: TEAM_ARCHITECTURE_DETAIL_PAGE_IDS.sessions,
+    title: message('detail.tab.sessions', '会话'),
+    icon: 'host:history',
+  }),
+]);
+
 export const TEAM_ARCHITECTURE_ROUTES: readonly CordisXRouteDefinitionV2<'manager.content'>[] = Object.freeze([
   Object.freeze({
     $schema: CORDISX_ROUTE_SCHEMA_V2,
@@ -80,7 +120,7 @@ export const TEAM_ARCHITECTURE_ROUTES: readonly CordisXRouteDefinitionV2<'manage
     id: TEAM_ARCHITECTURE_DETAIL_ROUTE_ID,
     path: '/manager/extensions/chatroom/team-architecture/:memberId',
     outlet: 'manager.content',
-    page: TEAM_ARCHITECTURE_PAGE_ID,
+    page: TEAM_ARCHITECTURE_DETAIL_PAGE_IDS.overview,
     title: message('detail.identity', '成员详情'),
     description: message('body.introduction', '查看真实 Agent 成员、汇报关系、声明能力和活跃会话。'),
   }),
@@ -90,7 +130,7 @@ export const TEAM_ARCHITECTURE_ROUTES: readonly CordisXRouteDefinitionV2<'manage
     id: TEAM_ARCHITECTURE_DETAIL_PROMPTS_ROUTE_ID,
     path: '/manager/extensions/chatroom/team-architecture/:memberId/prompts',
     outlet: 'manager.content',
-    page: TEAM_ARCHITECTURE_PAGE_ID,
+    page: TEAM_ARCHITECTURE_DETAIL_PAGE_IDS.prompts,
     title: message('detail.tab.prompts', '提示词'),
     description: message('body.introduction', '查看真实 Agent 成员、汇报关系、声明能力和活跃会话。'),
   }),
@@ -100,7 +140,7 @@ export const TEAM_ARCHITECTURE_ROUTES: readonly CordisXRouteDefinitionV2<'manage
     id: TEAM_ARCHITECTURE_DETAIL_RELATIONSHIPS_ROUTE_ID,
     path: '/manager/extensions/chatroom/team-architecture/:memberId/relationships',
     outlet: 'manager.content',
-    page: TEAM_ARCHITECTURE_PAGE_ID,
+    page: TEAM_ARCHITECTURE_DETAIL_PAGE_IDS.relationships,
     title: message('detail.tab.relationships', '关系'),
     description: message('body.introduction', '查看真实 Agent 成员、汇报关系、声明能力和活跃会话。'),
   }),
@@ -110,7 +150,7 @@ export const TEAM_ARCHITECTURE_ROUTES: readonly CordisXRouteDefinitionV2<'manage
     id: TEAM_ARCHITECTURE_DETAIL_CAPABILITIES_ROUTE_ID,
     path: '/manager/extensions/chatroom/team-architecture/:memberId/capabilities',
     outlet: 'manager.content',
-    page: TEAM_ARCHITECTURE_PAGE_ID,
+    page: TEAM_ARCHITECTURE_DETAIL_PAGE_IDS.capabilities,
     title: message('detail.tab.capabilities', '能力'),
     description: message('body.introduction', '查看真实 Agent 成员、汇报关系、声明能力和活跃会话。'),
   }),
@@ -120,7 +160,7 @@ export const TEAM_ARCHITECTURE_ROUTES: readonly CordisXRouteDefinitionV2<'manage
     id: TEAM_ARCHITECTURE_DETAIL_SESSIONS_ROUTE_ID,
     path: '/manager/extensions/chatroom/team-architecture/:memberId/sessions',
     outlet: 'manager.content',
-    page: TEAM_ARCHITECTURE_PAGE_ID,
+    page: TEAM_ARCHITECTURE_DETAIL_PAGE_IDS.sessions,
     title: message('detail.tab.sessions', '会话'),
     description: message('body.introduction', '查看真实 Agent 成员、汇报关系、声明能力和活跃会话。'),
   }),
@@ -152,7 +192,6 @@ function detailTabs(memberId: string): NonNullable<CordisXManagerContentNavigati
       id: 'overview' satisfies TeamEntityDetailTab,
       route: Object.freeze({ id: TEAM_ARCHITECTURE_DETAIL_ROUTE_ID, params: Object.freeze({ memberId }) }),
       label: message('detail.tab.overview', '概览'),
-      icon: 'host:info',
     }),
     Object.freeze({
       id: 'prompts' satisfies TeamEntityDetailTab,
@@ -161,7 +200,6 @@ function detailTabs(memberId: string): NonNullable<CordisXManagerContentNavigati
         params: Object.freeze({ memberId }),
       }),
       label: message('detail.tab.prompts', '提示词'),
-      icon: 'host:files',
     }),
     Object.freeze({
       id: 'relationships' satisfies TeamEntityDetailTab,
@@ -170,7 +208,6 @@ function detailTabs(memberId: string): NonNullable<CordisXManagerContentNavigati
         params: Object.freeze({ memberId }),
       }),
       label: message('detail.tab.relationships', '关系'),
-      icon: 'host:hierarchy',
     }),
     Object.freeze({
       id: 'capabilities' satisfies TeamEntityDetailTab,
@@ -179,7 +216,6 @@ function detailTabs(memberId: string): NonNullable<CordisXManagerContentNavigati
         params: Object.freeze({ memberId }),
       }),
       label: message('detail.tab.capabilities', '能力'),
-      icon: 'host:layers',
     }),
     Object.freeze({
       id: 'sessions' satisfies TeamEntityDetailTab,
@@ -188,7 +224,6 @@ function detailTabs(memberId: string): NonNullable<CordisXManagerContentNavigati
         params: Object.freeze({ memberId }),
       }),
       label: message('detail.tab.sessions', '会话'),
-      icon: 'host:history',
     }),
   ]);
 }
@@ -544,7 +579,8 @@ export function registerTeamArchitectureManagerContributions(
       TEAM_ARCHITECTURE_DETAIL_ROUTE_IDS,
       context.i18n.seat<TeamArchitectureMessages>(TEAM_ARCHITECTURE_LOCALE_NAMESPACE),
     );
-    disposers.push(context.pages.register(TEAM_ARCHITECTURE_PAGE, pageMount));
+    disposers.push(...[TEAM_ARCHITECTURE_PAGE, ...TEAM_ARCHITECTURE_DETAIL_PAGES]
+      .map(page => context.pages.register(page, pageMount)));
     disposers.push(...TEAM_ARCHITECTURE_ROUTES.map(route => context.routes.register(route)));
     disposers.push(context.slots.inject('manager.settings.navigation-items', () =>
       context.slots.register({

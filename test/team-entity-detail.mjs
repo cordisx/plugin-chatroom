@@ -59,6 +59,41 @@ test('declares exact Agent identities and one stable Host record summary across 
       'reload/reprojection must not renumber or relabel detail declarations',
     );
     const details = declarations.filter(declaration => declaration.route.params?.memberId !== undefined);
+    const pageById = new Map([
+      modules.navigation.TEAM_ARCHITECTURE_PAGE,
+      ...modules.navigation.TEAM_ARCHITECTURE_DETAIL_PAGES,
+    ].map(page => [page.id, page]));
+    assert.deepEqual(
+      modules.navigation.TEAM_ARCHITECTURE_ROUTES.map(route => [route.id, route.page, pageById.get(route.page)?.icon]),
+      [
+        [modules.navigation.TEAM_ARCHITECTURE_ROUTE_ID, modules.navigation.TEAM_ARCHITECTURE_PAGE_ID, 'host:hierarchy'],
+        [
+          modules.navigation.TEAM_ARCHITECTURE_DETAIL_ROUTE_ID,
+          modules.navigation.TEAM_ARCHITECTURE_DETAIL_PAGE_IDS.overview,
+          'host:info',
+        ],
+        [
+          modules.navigation.TEAM_ARCHITECTURE_DETAIL_PROMPTS_ROUTE_ID,
+          modules.navigation.TEAM_ARCHITECTURE_DETAIL_PAGE_IDS.prompts,
+          'host:files',
+        ],
+        [
+          modules.navigation.TEAM_ARCHITECTURE_DETAIL_RELATIONSHIPS_ROUTE_ID,
+          modules.navigation.TEAM_ARCHITECTURE_DETAIL_PAGE_IDS.relationships,
+          'host:hierarchy',
+        ],
+        [
+          modules.navigation.TEAM_ARCHITECTURE_DETAIL_CAPABILITIES_ROUTE_ID,
+          modules.navigation.TEAM_ARCHITECTURE_DETAIL_PAGE_IDS.capabilities,
+          'host:layers',
+        ],
+        [
+          modules.navigation.TEAM_ARCHITECTURE_DETAIL_SESSIONS_ROUTE_ID,
+          modules.navigation.TEAM_ARCHITECTURE_DETAIL_PAGE_IDS.sessions,
+          'host:history',
+        ],
+      ],
+    );
 
     assert.equal(details.length, 25);
     for (const member of configuration.members) {
@@ -85,14 +120,6 @@ test('declares exact Agent identities and one stable Host record summary across 
         [member.memberId, member.memberId, member.memberId, member.memberId, member.memberId],
         [member.memberId, member.memberId, member.memberId, member.memberId, member.memberId],
       ]);
-      assert.deepEqual(memberDetails.map(declaration => declaration.tabs.map(tab => tab.icon)), [
-        ['host:info', 'host:files', 'host:hierarchy', 'host:layers', 'host:history'],
-        ['host:info', 'host:files', 'host:hierarchy', 'host:layers', 'host:history'],
-        ['host:info', 'host:files', 'host:hierarchy', 'host:layers', 'host:history'],
-        ['host:info', 'host:files', 'host:hierarchy', 'host:layers', 'host:history'],
-        ['host:info', 'host:files', 'host:hierarchy', 'host:layers', 'host:history'],
-      ]);
-
       const [overview, ...otherTabs] = memberDetails;
       assert.deepEqual(overview.subject, { kind: 'agent-definition', identity: member.definition });
       assert.equal(otherTabs.every(declaration => declaration.subject === undefined), true);
