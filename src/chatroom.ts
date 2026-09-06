@@ -135,6 +135,8 @@ export const inject = [
   'managerContent',
   'agents',
   'sessions',
+  'agentSessionDetailReferences',
+  'agentDetailNavigation',
   'approvals',
   'agentPageAdmissionTargets',
   'agentPageAdmissionReservations',
@@ -441,7 +443,10 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     group: { id: 'rooms', label: message('navigation.rooms', 'Rooms'), order: 20 },
   }, product.activeRooms);
 
-  const teamSource = createTeamArchitectureDataSource(agent, product.store.rooms);
+  const teamSource = createTeamArchitectureDataSource(agent, product.store.rooms, {
+    references: ctx.agentSessionDetailReferences,
+    navigation: ctx.agentDetailNavigation,
+  });
   const managerDisposers: Array<() => void | Promise<void>> = [];
   let manager: Awaited<ReturnType<typeof registerChatroomManager>> | undefined;
   let disposeManagerProjection: (() => void | Promise<void>) | undefined;

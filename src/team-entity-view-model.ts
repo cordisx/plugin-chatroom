@@ -1,5 +1,10 @@
 import { agentAvatarForDefinition, type AgentDefinition, type AgentDefinitionIdentity } from './agent-definition.js';
-import type { ChatroomRoomRegistry, Room, RoomRun, StoredRoomRunDetailsUrl } from './room.js';
+import type { AgentDetailReference } from '@cordisx/protocol/agents/v1';
+import type {
+  AgentDetailNavigationService,
+  AgentSessionDetailReferenceService,
+} from '@cordisx/protocol/agent-detail-navigation/v1';
+import type { ChatroomRoomRegistry, Room, RoomRun } from './room.js';
 import type { ChatroomAgentConfiguration } from './agent-definition.js';
 
 export type TeamEntityRoleFilter = 'all' | 'leader' | 'member';
@@ -20,7 +25,18 @@ export interface TeamEntityActiveSession {
   readonly runId: string;
   readonly runTitle: string;
   readonly status: RoomRun['status'];
-  readonly detailsUrl: StoredRoomRunDetailsUrl;
+  readonly sessionId: string;
+  /**
+   * Present only when a future public Host detail-action seam supplies the
+   * exact Host-issued reference for this active Session. Never infer it from
+   * a title, URL, current Agent, or mutable entity record.
+   */
+  readonly detail?: AgentDetailReference;
+}
+
+export interface TeamSessionDetailServices {
+  readonly references: AgentSessionDetailReferenceService;
+  readonly navigation: AgentDetailNavigationService;
 }
 
 export interface TeamEntityDeclaredCapabilities {
@@ -109,11 +125,13 @@ export interface TeamArchitectureDataSnapshot {
   readonly revision: number;
   readonly configuration: ChatroomAgentConfiguration;
   readonly rooms: readonly Room[];
+  readonly sessionDetails: ReadonlyMap<string, AgentDetailReference>;
 }
 
 export interface TeamArchitectureDataSource {
   getSnapshot(): TeamArchitectureDataSnapshot;
   subscribe(listener: () => void): () => void;
+  openSessionDetail(sessionId: string): Promise<boolean>;
   dispose(): void;
 }
 
@@ -177,6 +195,7 @@ const activeSessionsFor = (
   memberId: string,
   definition: AgentDefinitionIdentity,
   rooms: readonly Room[],
+  sessionDetails: ReadonlyMap<string, AgentDetailReference>,
 ): readonly TeamEntityActiveSession[] =>
   Object.freeze(
     rooms.flatMap(room => {
@@ -187,9 +206,7 @@ const activeSessionsFor = (
       return room.runs.flatMap(run => {
         if (
           run.memberId !== memberId
-          || run.taskBinding?.state !== 'active'
-          || !sameIdentity(run.taskBinding.definition, definition)
-          || run.detailsUrl === undefined
+          || run.sessionId === undefined
           || (run.presence.state !== 'joined' && run.presence.state !== 'ready')
         ) return [];
         return [Object.freeze({
@@ -199,7 +216,10 @@ const activeSessionsFor = (
           runId: run.runId,
           runTitle: run.title,
           status: run.status,
-          detailsUrl: Object.freeze({ ...run.detailsUrl }),
+          sessionId: run.sessionId,
+          ...(sessionDetails.get(run.sessionId) === undefined
+            ? {}
+            : { detail: sessionDetails.get(run.sessionId)! }),
         })];
       });
     }).sort((left, right) =>
@@ -223,6 +243,7 @@ const relationshipKindFor = (
 export function projectTeamEntities(
   configuration: ChatroomAgentConfiguration,
   rooms: readonly Room[],
+  sessionDetails: ReadonlyMap<string, AgentDetailReference> = new Map(),
 ): readonly TeamEntityViewModel[] {
   const definitions = new Map(
     configuration.definitions.map(definition => [identityKey(definition.identity), definition]),
@@ -237,7 +258,7 @@ export function projectTeamEntities(
   }
   return Object.freeze(configuration.members.map(member => {
     const definition = definitions.get(identityKey(member.definition));
-    const activeSessions = activeSessionsFor(member.memberId, member.definition, rooms);
+    const activeSessions = activeSessionsFor(member.memberId, member.definition, rooms, sessionDetails);
     return Object.freeze({
       memberId: member.memberId,
       label: member.label,
@@ -309,10 +330,12 @@ const matchesFilters = (entity: TeamEntityViewModel, filters: TeamEntityFilters)
 };
 
 export function buildTeamArchitectureViewModel(
-  snapshot: Pick<TeamArchitectureDataSnapshot, 'configuration' | 'rooms'>,
+  snapshot:
+    & Pick<TeamArchitectureDataSnapshot, 'configuration' | 'rooms'>
+    & Partial<Pick<TeamArchitectureDataSnapshot, 'sessionDetails'>>,
   filters: TeamEntityFilters = {},
 ): TeamArchitectureViewModel {
-  const entities = projectTeamEntities(snapshot.configuration, snapshot.rooms);
+  const entities = projectTeamEntities(snapshot.configuration, snapshot.rooms, snapshot.sessionDetails ?? new Map());
   const byId = new Map(entities.map(entity => [entity.memberId, entity]));
   const matchedMemberIds = new Set(
     entities.filter(entity => matchesFilters(entity, filters))
@@ -362,31 +385,67 @@ export function buildTeamArchitectureViewModel(
 export function createTeamArchitectureDataSource(
   configuration: ChatroomAgentConfiguration,
   registry: ChatroomRoomRegistry,
+  services?: TeamSessionDetailServices,
 ): TeamArchitectureDataSource {
   let revision = 0;
   let disposed = false;
+  let detailEpoch = 0;
+  let sessionDetails = new Map<string, AgentDetailReference>();
   let snapshot: TeamArchitectureDataSnapshot = Object.freeze({
     revision,
     configuration,
     rooms: Object.freeze([...registry.snapshot()]),
+    sessionDetails,
   });
   const listeners = new Set<() => void>();
-  const unsubscribeRegistry = registry.subscribe(() => {
+  const refresh = () => {
     if (disposed) return;
     revision += 1;
     snapshot = Object.freeze({
       revision,
       configuration,
       rooms: Object.freeze([...registry.snapshot()]),
+      sessionDetails,
     });
     for (const listener of listeners) listener();
+  };
+  const refreshDetails = async () => {
+    if (services === undefined || disposed) return;
+    const epoch = ++detailEpoch;
+    const candidates = [...registry.snapshot()].flatMap(room =>
+      room.runs.flatMap(run =>
+        run.sessionId === undefined || (run.presence.state !== 'joined' && run.presence.state !== 'ready')
+          ? []
+          : [run.sessionId]
+      )
+    );
+    const next = new Map<string, AgentDetailReference>();
+    await Promise.all([...new Set(candidates)].map(async sessionId => {
+      const result = await services.references.get({ sessionId });
+      if (result.status === 'accepted' && result.sessionId === sessionId) next.set(sessionId, result.target);
+    }));
+    if (disposed || epoch !== detailEpoch) return;
+    sessionDetails = next;
+    refresh();
+  };
+  const unsubscribeRegistry = registry.subscribe(() => {
+    detailEpoch += 1;
+    refresh();
+    void refreshDetails();
   });
+  void refreshDetails();
   return Object.freeze({
     getSnapshot: () => snapshot,
     subscribe(listener: () => void): () => void {
       if (disposed) return () => undefined;
       listeners.add(listener);
       return () => listeners.delete(listener);
+    },
+    async openSessionDetail(sessionId: string): Promise<boolean> {
+      const target = sessionDetails.get(sessionId);
+      if (target === undefined || services === undefined) return false;
+      const result = await services.navigation.open({ target });
+      return result.status === 'accepted';
     },
     dispose(): void {
       if (disposed) return;

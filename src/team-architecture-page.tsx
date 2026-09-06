@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode, useMemo, useState, useSyncExternalStore } from 'cordisx/react';
 import { defineReactPage } from 'cordisx/react';
-import { EmptyState, MarkdownViewer, Select, SelectionRail } from 'cordisx/ui';
+import { Button, EmptyState, MarkdownViewer, Select, SelectionRail } from 'cordisx/ui';
 import type { CordisXLocalizationSeat, CordisXReactPageProps } from 'cordisx/contracts';
 import {
   buildTeamArchitectureViewModel,
@@ -334,10 +334,42 @@ function PromptWorkspace({ entity, t }: {
   );
 }
 
-function EntityDetail({ entity, entities, tab, t }: {
+function SessionDetailTarget({ session, source, t }: {
+  readonly session: TeamEntityViewModel['activeSessions'][number];
+  readonly source: TeamArchitectureDataSource;
+  readonly t: Translate;
+}) {
+  const [opening, setOpening] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
+  if (session.detail === undefined || unavailable) {
+    return <span className="cx-team-architecture__muted">{t('detail.unavailable')}</span>;
+  }
+  return (
+    <Button
+      type="button"
+      variant="secondary"
+      disabled={opening}
+      onClick={() => {
+        setOpening(true);
+        void source.openSessionDetail(session.sessionId).then(opened => {
+          if (!opened) setUnavailable(true);
+          setOpening(false);
+        }).catch(() => {
+          setUnavailable(true);
+          setOpening(false);
+        });
+      }}
+    >
+      {t('detail.session.target')}
+    </Button>
+  );
+}
+
+function EntityDetail({ entity, entities, tab, source, t }: {
   readonly entity: TeamEntityViewModel;
   readonly entities: readonly TeamEntityViewModel[];
   readonly tab: TeamEntityDetailTab;
+  readonly source: TeamArchitectureDataSource;
   readonly t: Translate;
 }) {
   const byId = useMemo(() => new Map(entities.map(candidate => [candidate.memberId, candidate])), [entities]);
@@ -494,7 +526,7 @@ function EntityDetail({ entity, entities, tab, t }: {
                     </Fact>
                     <Fact label={t('detail.session.status')}>{session.status}</Fact>
                     <Fact label={t('detail.session.target')}>
-                      <code>{session.detailsUrl.target}: {session.detailsUrl.url}</code>
+                      <SessionDetailTarget session={session} source={source} t={t} />
                     </Fact>
                   </dl>
                 </li>
@@ -678,7 +710,7 @@ function TeamArchitecturePage({ source, detailRouteIds, routeId, params, navigat
       <div className="cx-team-architecture">
         {entity === undefined || tab === undefined
           ? <EmptyState title={t('detail.missing.title')} description={t('detail.missing.description')} />
-          : <EntityDetail entity={entity} entities={entities} tab={tab} t={t} />}
+          : <EntityDetail entity={entity} entities={entities} tab={tab} source={source} t={t} />}
       </div>
     );
   }
