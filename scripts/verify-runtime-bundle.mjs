@@ -54,7 +54,11 @@ if (initialBytes > MAX_CHATROOM_INITIAL_GRAPH_BYTES) {
   throw new Error(`Chatroom initial graph exceeds ${MAX_CHATROOM_INITIAL_GRAPH_BYTES} bytes: ${initialBytes}`);
 }
 
-const page = manifest.files.find(file => file.kind === 'module' && file.path.includes('chatroom-page-'));
+const page = manifest.files.find(file =>
+  file.kind === 'module'
+  && file.path.includes('chatroom-page-')
+  && !file.path.includes('chatroom-page-loader-')
+);
 const pageLoader = manifest.files.find(
   file => file.kind === 'module' && file.path.includes('chatroom-page-loader-'),
 );
