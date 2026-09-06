@@ -15,6 +15,7 @@ import {
   CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V5,
   CORDISX_PAGE_SCHEMA_V3,
   CORDISX_ROUTE_SCHEMA_V2,
+  CORDISX_SURFACE_CONTRIBUTION_SCHEMA_V9,
 } from 'cordisx/contracts';
 
 import { createChatroomManagerCollectionPage } from './manager-pages.js';
@@ -479,12 +480,15 @@ export async function registerChatroomManager(
     retain(context.routes.register(archivedRoute));
     retain(context.routes.register(settingsRoute));
     const navigation = context.slots.register({
+      $schema: CORDISX_SURFACE_CONTRIBUTION_SCHEMA_V9,
+      schemaVersion: 9,
       name: 'manager.settings.navigation-items',
       id: 'manage-chats',
       group: 'after-settings',
       order: 160,
     }, {
       route: { id: CHATROOM_MANAGER_ROOMS_ROUTE_ID },
+      navigationGroup: { id: 'collaboration' },
     });
     disposers.push(() => navigation.dispose());
   } catch (error) {

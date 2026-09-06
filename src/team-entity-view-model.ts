@@ -105,6 +105,60 @@ export interface TeamEntityViewModel {
   readonly activeSessions: readonly TeamEntityActiveSession[];
 }
 
+export interface TeamEntityPromptSource {
+  readonly kind: 'upstream' | 'current';
+  readonly identity: AgentDefinitionIdentity;
+  readonly label: string;
+  readonly promptSections: TeamEntityDeclaredCapabilities['promptSections'];
+}
+
+export function teamEntityPromptSources(
+  entity: TeamEntityViewModel,
+  entities: readonly TeamEntityViewModel[],
+): readonly TeamEntityPromptSource[] {
+  const sourceFor = (identity: AgentDefinitionIdentity) =>
+    entities.find(candidate => sameIdentity(candidate.definitionIdentity, identity));
+  return Object.freeze([
+    ...entity.extendsDefinitions.map(identity => {
+      const source = sourceFor(identity);
+      return Object.freeze({
+        kind: 'upstream' as const,
+        identity: Object.freeze({ ...identity }),
+        label: source?.definitionName ?? source?.label ?? identity.agentId,
+        promptSections: source?.declaredCapabilities.promptSections ?? Object.freeze([]),
+      });
+    }),
+    Object.freeze({
+      kind: 'current' as const,
+      identity: entity.definitionIdentity,
+      label: entity.definitionName ?? entity.label,
+      promptSections: entity.declaredCapabilities.promptSections,
+    }),
+  ]);
+}
+
+export function teamEntityLocalHierarchy(
+  entity: TeamEntityViewModel,
+  entities: readonly TeamEntityViewModel[],
+): Readonly<{
+  parents: readonly TeamEntityViewModel[];
+  current: TeamEntityViewModel;
+  children: readonly TeamEntityViewModel[];
+}> {
+  const byId = new Map(entities.map(candidate => [candidate.memberId, candidate]));
+  const parentIds = new Set(
+    entities
+      .filter(candidate => candidate.relationships.directReportMemberIds.includes(entity.memberId))
+      .map(candidate => candidate.memberId),
+  );
+  if (entity.relationships.reportsToMemberId !== undefined) parentIds.add(entity.relationships.reportsToMemberId);
+  return Object.freeze({
+    parents: Object.freeze([...parentIds].flatMap(id => byId.get(id) ?? [])),
+    current: entity,
+    children: Object.freeze(entity.relationships.directReportMemberIds.flatMap(id => byId.get(id) ?? [])),
+  });
+}
+
 export interface TeamEntityTreeNode {
   readonly entity: TeamEntityViewModel;
   /** True only for a direct search/filter match; false means retained ancestor context. */

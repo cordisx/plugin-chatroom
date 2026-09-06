@@ -32,7 +32,7 @@
     "node": ">=22.19"
   },
   "devDependencies": {
-    "@cordisx/protocol": "github:cordisx/cordisx-protocol#9b86aff6a4840695544c9d4fa3b8c4b53a1edbf3",
+    "@cordisx/protocol": "github:cordisx/cordisx-protocol#703a3d03f1b533c4d54bf51e5c8818b53bdda4f5",
     "@deepseek-ai/cordis": "4.0.1",
     "@deepseek-ai/schemastery": "3.18.1",
     "@oneworks/avatar": "1.0.0-rc.9",
@@ -42,7 +42,7 @@
     "@vitejs/plugin-react": "6.1.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
-    "cordisx": "github:cordisx/cordisx#c998d99532dd994f47980258d7dc2476d9f7c6af",
+    "cordisx": "github:cordisx/cordisx#998673a98339bcdf6975044ca045f7278981400a",
     "dprint": "0.57.1",
     "esbuild": "^0.28.2",
     "react": "19.2.8",

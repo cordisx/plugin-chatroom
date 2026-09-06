@@ -182,9 +182,9 @@ test('package pins the exact Protocol bootstrap-route and Host runtime releases 
   const packageJson = JSON.parse(readFileSync(path.join(repositoryRoot, 'package.json'), 'utf8'));
   assert.equal(
     packageJson.devDependencies['@cordisx/protocol'],
-    'github:cordisx/cordisx-protocol#9b86aff6a4840695544c9d4fa3b8c4b53a1edbf3',
+    'github:cordisx/cordisx-protocol#703a3d03f1b533c4d54bf51e5c8818b53bdda4f5',
   );
-  assert.equal(packageJson.devDependencies.cordisx, 'github:cordisx/cordisx#c998d99532dd994f47980258d7dc2476d9f7c6af');
+  assert.equal(packageJson.devDependencies.cordisx, 'github:cordisx/cordisx#998673a98339bcdf6975044ca045f7278981400a');
   assert.equal(packageJson.main, packageManifest.entry);
   assert.equal(packageManifest.entry, './dist/runtime/chatroom.js');
   assert.equal(

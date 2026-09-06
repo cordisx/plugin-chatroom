@@ -4,6 +4,7 @@ import {
   CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V3,
   CORDISX_PAGE_SCHEMA_V3,
   CORDISX_ROUTE_SCHEMA_V2,
+  CORDISX_SURFACE_CONTRIBUTION_SCHEMA_V9,
   type CordisXI18n,
   type CordisXLocaleCatalog,
   type CordisXManagerContentNavigationDeclarationV1,
@@ -250,7 +251,6 @@ export function teamArchitectureManagerContentDeclarations(
       candidate.identity.agentId === member.definition.agentId
       && candidate.identity.revision === member.definition.revision
     ));
-    const definitionDisplayName = definition?.name ?? member.label;
     return detailRoutes.map((
       { tab, routeId },
     ): CordisXManagerContentNavigationDeclarationV2 | CordisXManagerContentNavigationDeclarationV3 =>
@@ -293,8 +293,8 @@ export function teamArchitectureManagerContentDeclarations(
             title: Object.freeze({
               namespace: TEAM_ARCHITECTURE_LOCALE_NAMESPACE,
               key: 'detail.record-title',
-              params: Object.freeze({ label: definitionDisplayName }),
-              fallback: definitionDisplayName,
+              params: Object.freeze({ label: member.label }),
+              fallback: member.label,
             }),
             ...(definition.description === undefined ? {} : {
               description: Object.freeze({
@@ -399,7 +399,12 @@ const zhCNMessages: TeamArchitectureMessageCatalog = Object.freeze({
   'detail.prompts.note':
     '按 AgentDefinition 中的来源顺序展示直接声明；当前没有权威 effective resolver 或逐项继承来源，因此不会推导或暗示继承后的有效提示词。',
   'detail.prompt-inherit': '提示词继承模式',
+  'detail.prompt-inherit.append': '先继承上游提示词，再追加当前定义',
+  'detail.prompt-inherit.replace': '仅使用当前定义',
   'detail.prompt-upstream': '上游定义',
+  'detail.prompt-current': '当前定义',
+  'detail.prompt-self': 'Self · {label}',
+  'detail.prompt-unconfigured': '当前未配置',
   'detail.prompt-section.id': '分区 ID',
   'detail.prompt-section.provenance': '来源',
   'detail.provenance.direct': '直接声明',
@@ -502,7 +507,12 @@ const enMessages: TeamArchitectureMessageCatalog = Object.freeze({
   'detail.prompts.note':
     'Direct declarations are shown in AgentDefinition source order. No authoritative effective resolver or per-item inheritance provenance is available, so effective inherited prompts are neither inferred nor implied.',
   'detail.prompt-inherit': 'Prompt inheritance mode',
+  'detail.prompt-inherit.append': 'Use upstream prompts first, then append this definition',
+  'detail.prompt-inherit.replace': 'Use only this definition',
   'detail.prompt-upstream': 'Upstream definitions',
+  'detail.prompt-current': 'Current definition',
+  'detail.prompt-self': 'Self · {label}',
+  'detail.prompt-unconfigured': 'Not configured here',
   'detail.prompt-section.id': 'Section ID',
   'detail.prompt-section.provenance': 'Provenance',
   'detail.provenance.direct': 'Direct declaration',
@@ -583,13 +593,21 @@ export function registerTeamArchitectureManagerContributions(
       .map(page => context.pages.register(page, pageMount)));
     disposers.push(...TEAM_ARCHITECTURE_ROUTES.map(route => context.routes.register(route)));
     disposers.push(context.slots.inject('manager.settings.navigation-items', () =>
-      context.slots.register({
-        name: 'manager.settings.navigation-items',
-        id: 'team-architecture',
-        group: 'after-settings',
-        order: 200,
-        disabled: Object.freeze({ value: false }),
-      }, Object.freeze({ route: Object.freeze({ id: TEAM_ARCHITECTURE_ROUTE_ID }) }))));
+      context.slots.register(
+        {
+          $schema: CORDISX_SURFACE_CONTRIBUTION_SCHEMA_V9,
+          schemaVersion: 9,
+          name: 'manager.settings.navigation-items',
+          id: 'team-architecture',
+          group: 'after-settings',
+          order: 200,
+          disabled: Object.freeze({ value: false }),
+        },
+        Object.freeze({
+          route: Object.freeze({ id: TEAM_ARCHITECTURE_ROUTE_ID }),
+          navigationGroup: Object.freeze({ id: 'collaboration' as const }),
+        }),
+      )));
   } catch (error) {
     for (const dispose of disposers.reverse()) void dispose();
     throw error;

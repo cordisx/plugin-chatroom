@@ -250,6 +250,12 @@
   letter-spacing: 0.02em;
 }
 
+.cx-team-architecture__avatar > .cxr-ui-agent-avatar,
+.cx-team-architecture__avatar .cxa-avatar {
+  width: 100%;
+  height: 100%;
+}
+
 .cx-team-architecture__entity-main {
   display: grid;
   align-content: center;
@@ -361,12 +367,143 @@
   min-width: 0;
   grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
   align-items: start;
-  gap: 18px;
+  gap: 0;
 }
 
 .cx-team-architecture__prompt-selector,
 .cx-team-architecture__prompt-content {
   min-width: 0;
+}
+
+.cx-team-architecture__prompt-selector {
+  padding-right: 18px;
+  border-right: 1px solid color-mix(in srgb, currentColor 13%, transparent);
+}
+
+.cx-team-architecture__prompt-tree,
+.cx-team-architecture__prompt-kind,
+.cx-team-architecture__prompt-kind > [role='group'] {
+  display: grid;
+}
+
+.cx-team-architecture__prompt-tree {
+  gap: 5px;
+}
+
+.cx-team-architecture__prompt-kind {
+  gap: 3px;
+}
+
+.cx-team-architecture__prompt-kind > [role='group'] {
+  position: relative;
+  gap: 2px;
+  margin-left: 12px;
+  padding-left: 16px;
+}
+
+.cx-team-architecture__prompt-kind > [role='group']::before {
+  position: absolute;
+  top: 0;
+  bottom: 12px;
+  left: 0;
+  border-left: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  content: '';
+}
+
+.cx-team-architecture__prompt-kind button {
+  appearance: none;
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 2px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cx-team-architecture__prompt-kind > button {
+  font-weight: 650;
+}
+
+.cx-team-architecture__prompt-kind > [role='group'] > button::before {
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  width: 16px;
+  border-top: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  content: '';
+}
+
+.cx-team-architecture__prompt-kind button:hover,
+.cx-team-architecture__prompt-kind button[aria-selected='true'] {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.cx-team-architecture__prompt-kind button:focus-visible {
+  outline: 2px solid color-mix(in srgb, currentColor 78%, transparent);
+  outline-offset: -2px;
+}
+
+.cx-team-architecture__prompt-kind button small {
+  color: color-mix(in srgb, currentColor 58%, transparent);
+}
+
+.cx-team-architecture__prompt-content {
+  padding-left: 18px;
+}
+
+.cx-team-architecture__prompt-document {
+  display: grid;
+  gap: 8px;
+}
+
+.cx-team-architecture__relationship-map {
+  display: grid;
+  min-height: 430px;
+  place-content: center;
+  justify-items: center;
+  padding: 28px;
+  border-radius: 12px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, currentColor 2.5%, transparent) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(color-mix(in srgb, currentColor 2.5%, transparent) 1px, transparent 1px) 0 0 / 24px 24px,
+    color-mix(in srgb, currentColor 1.5%, transparent);
+}
+
+.cx-team-architecture__relationship-level {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.cx-team-architecture__relationship-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+}
+
+.cx-team-architecture__relationship-level-label {
+  color: color-mix(in srgb, currentColor 58%, transparent);
+  font-size: 0.74rem;
+  font-weight: 650;
+}
+
+.cx-team-architecture__relationship-connector {
+  width: 1px;
+  height: 28px;
+  border-left: 1.5px solid color-mix(in srgb, currentColor 32%, transparent);
+}
+
+.cx-team-architecture__entity[data-current='true'] {
+  border-color: color-mix(in srgb, var(--cx-primary, currentColor) 58%, transparent);
+  background: color-mix(in srgb, var(--cx-primary, currentColor) 9%, transparent);
 }
 
 .cx-team-architecture__tokens,
@@ -418,6 +555,18 @@
 
   .cx-team-architecture__prompt-workspace {
     grid-template-columns: 1fr;
+  }
+
+  .cx-team-architecture__prompt-selector {
+    padding-right: 0;
+    padding-bottom: 16px;
+    border-right: 0;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 13%, transparent);
+  }
+
+  .cx-team-architecture__prompt-content {
+    padding-top: 16px;
+    padding-left: 0;
   }
 
   .cx-team-architecture__chart-scroll {
