@@ -50,23 +50,48 @@ test('groups prompt sources in upstream-then-current order with friendly definit
   assert.equal(sources.every(source => !source.label.includes('chatroom-internal-v1')), true);
 });
 
-test('projects only direct parents, current entity, and direct children without siblings', () => {
+const flattenSubtreeLabels = node => [
+  node.entity.label,
+  ...node.children.flatMap(flattenSubtreeLabels),
+];
+
+test('projects direct parents and the complete scoped descendant tree without siblings', () => {
   const entities = projectTeamEntities(complexConfiguration(), []);
-  const frontend = entities.find(entity => entity.memberId === 'frontend');
-  assert.ok(frontend);
-  const hierarchy = teamEntityLocalHierarchy(frontend, entities);
-  assert.deepEqual(hierarchy.parents.map(entity => entity.memberId), ['integrator']);
-  assert.equal(hierarchy.current.memberId, 'frontend');
-  assert.deepEqual(hierarchy.children.map(entity => entity.memberId), ['design-system']);
+  const backend = entities.find(entity => entity.memberId === 'backend');
+  assert.ok(backend);
+  const backendHierarchy = teamEntityLocalHierarchy(backend, entities);
+  assert.deepEqual(backendHierarchy.parents.map(entity => entity.label), ['Integrator']);
+  assert.deepEqual(flattenSubtreeLabels(backendHierarchy.subtree), [
+    'Backend',
+    'API Platform',
+    'Data Platform',
+  ]);
+
+  const integrator = entities.find(entity => entity.memberId === 'integrator');
+  assert.ok(integrator);
+  const integratorHierarchy = teamEntityLocalHierarchy(integrator, entities);
+  assert.deepEqual(integratorHierarchy.parents.map(entity => entity.label), ['Lead']);
+  assert.deepEqual(flattenSubtreeLabels(integratorHierarchy.subtree), [
+    'Integrator',
+    'Backend',
+    'API Platform',
+    'Data Platform',
+    'Frontend',
+    'Design System',
+    'Infrastructure',
+    'QA',
+    'Automation',
+    'Release Validation',
+  ]);
   assert.equal(
-    [...hierarchy.parents, ...hierarchy.children].some(entity =>
-      ['backend', 'infrastructure'].includes(entity.memberId)
+    flattenSubtreeLabels(integratorHierarchy.subtree).some(label =>
+      ['Reviewer', 'Documentation', 'Product Research', 'Product Design'].includes(label)
     ),
     false,
   );
 
-  const backend = entities.find(entity => entity.memberId === 'backend');
-  assert.ok(backend);
+  const frontend = entities.find(entity => entity.memberId === 'frontend');
+  assert.ok(frontend);
   const multiParentEntities = entities.map(entity =>
     entity.memberId !== backend.memberId
       ? entity
@@ -82,4 +107,8 @@ test('projects only direct parents, current entity, and direct children without 
     teamEntityLocalHierarchy(frontend, multiParentEntities).parents.map(entity => entity.memberId),
     ['integrator', 'backend'],
   );
+  assert.deepEqual(flattenSubtreeLabels(teamEntityLocalHierarchy(frontend, multiParentEntities).subtree), [
+    'Frontend',
+    'Design System',
+  ]);
 });

@@ -218,7 +218,7 @@ test('uses public Host avatars and Markdown with cardless responsive prompt and 
     readFile(new URL('../src/team-architecture-page.css', import.meta.url), 'utf8'),
   ]);
 
-  assert.match(page, /import \{ AgentAvatar, Button, EmptyState, Icon, MarkdownViewer, Select \} from 'cordisx\/ui';/u);
+  assert.match(page, /HorizontalSplitPane,[\s\S]*?Icon,[\s\S]*?from 'cordisx\/ui';/u);
   assert.doesNotMatch(page, /from ['"](?:tdesign-react|react-markdown|rehype-|remark-)/u);
   assert.match(page, /teamEntityPromptSources\(entity, entities\)/u);
   assert.match(
@@ -232,9 +232,8 @@ test('uses public Host avatars and Markdown with cardless responsive prompt and 
   assert.match(page, /aria-expanded=\{expandedKinds\.has\(node\.kind\)\}/u);
   assert.match(page, /aria-controls=\{`team-prompt-group-\$\{node\.kind\}`\}/u);
   assert.match(page, /aria-selected=\{source\.id === selectedId\}/u);
-  assert.match(page, /<Icon className="cx-team-architecture__prompt-icon" name="host:folder"/u);
-  assert.match(page, /<Icon className="cx-team-architecture__prompt-icon" name="host:files"/u);
-  assert.match(page, /className="cx-team-architecture__prompt-chevron"/u);
+  assert.match(page, /name=\{expandedKinds\.has\(node\.kind\) \? 'folder-open' : 'folder'\}/u);
+  assert.match(page, /<Icon name="file" aria-hidden="true" \/>/u);
   assert.match(page, /event\.key === 'ArrowDown'/u);
   assert.match(page, /event\.key === 'ArrowRight'/u);
   assert.match(page, /event\.key === 'ArrowLeft'/u);
@@ -242,10 +241,12 @@ test('uses public Host avatars and Markdown with cardless responsive prompt and 
   assert.match(page, /<MarkdownViewer[\s\S]*?source=\{section\.text\}/u);
   assert.match(page, /<EmptyState title=\{t\('detail\.prompt-unconfigured'\)\} \/>/u);
   assert.match(page, /teamEntityLocalHierarchy\(entity, entities\)/u);
-  assert.match(page, /\{parents\.length === 0 \? null : \(/u);
+  assert.match(page, /const \{ parents, subtree \} = teamEntityLocalHierarchy/u);
+  assert.match(page, /<TreeNodeView[\s\S]*?node=\{subtree\}[\s\S]*?currentMemberId=\{entity\.memberId\}/u);
+  assert.match(page, /semantic="tree"/u);
   assert.match(page, /function EntityCard/u);
-  assert.match(page, /<EntityCard entity=\{entity\} current t=\{t\} \/>/u);
-  assert.doesNotMatch(page, /relationship-card/u);
+  assert.doesNotMatch(page, /relationship-(?:card|map|level|level-label|row|connector)/u);
+  assert.doesNotMatch(css, /relationship-(?:card|map|level|level-label|row|connector)/u);
   assert.doesNotMatch(page, />└</u);
   assert.doesNotMatch(page, /cx-team-architecture__prompt-metadata/u);
   assert.doesNotMatch(page, /t\('detail\.prompt-(?:inherit|upstream)'\)/u);
@@ -254,14 +255,6 @@ test('uses public Host avatars and Markdown with cardless responsive prompt and 
 
   const sectionRule = css.match(/\.cx-team-architecture__section \{([^}]*)\}/u)?.[1] ?? '';
   assert.doesNotMatch(sectionRule, /(?:border|background|border-radius|padding)\s*:/u);
-  assert.match(
-    css,
-    /\.cx-team-architecture__prompt-workspace \{[\s\S]*?grid-template-columns: minmax\(180px, 240px\) minmax\(0, 1fr\);/u,
-  );
-  assert.match(
-    css,
-    /@media \(max-width: 620px\) \{[\s\S]*?\.cx-team-architecture__prompt-workspace \{\s*grid-template-columns: 1fr;/u,
-  );
   assert.doesNotMatch(css, /cx-team-architecture__prompt-metadata/u);
 });
 
@@ -275,15 +268,24 @@ test('renders a compact IDE prompt tree with guide lines and independent pane sc
   assert.match(page, /data-unconfigured=\{source\.sections\.length === 0 \? 'true' : undefined\}/u);
   assert.match(page, /className="cx-team-architecture" data-detail-tab=\{tab\}/u);
   assert.match(
+    page,
+    /<HorizontalSplitPane[\s\S]*?initialLeftSize=\{270\}[\s\S]*?minLeftSize=\{220\}[\s\S]*?maxLeftSize=\{360\}[\s\S]*?separatorLabel=\{t\('detail\.prompts'\)\}/u,
+  );
+  assert.match(page, /left=\{[\s\S]*?cx-team-architecture__prompt-selector/u);
+  assert.match(page, /right=\{[\s\S]*?cx-team-architecture__prompt-content/u);
+  assert.doesNotMatch(page, /prompt-chevron|<svg|host:folder|host:files/u);
+  assert.doesNotMatch(css, /prompt-chevron|prompt-icon/u);
+  assert.match(
     css,
     /\.cx-team-architecture__prompt-kind button \{[\s\S]*?min-height: 26px;[\s\S]*?padding: 2px 6px;/u,
   );
   assert.match(css, /\.cx-team-architecture__prompt-kind > \[role='group'\]::before/u);
   assert.match(css, /\.cx-team-architecture__prompt-kind > \[role='group'\] > button::before/u);
-  assert.match(
-    css,
-    /\.cx-team-architecture__prompt-workspace \{[\s\S]*?height: 100%;[\s\S]*?min-height: 0;[\s\S]*?overflow: hidden;/u,
-  );
+  const workspaceRule = css.match(/\.cx-team-architecture__prompt-workspace \{([^}]*)\}/u)?.[1] ?? '';
+  assert.match(workspaceRule, /height: 100%;/u);
+  assert.match(workspaceRule, /min-height: 0;/u);
+  assert.match(workspaceRule, /overflow: hidden;/u);
+  assert.doesNotMatch(workspaceRule, /display:|grid-template-columns:/u);
   const sharedPaneRule = css.match(
     /\.cx-team-architecture__prompt-selector,\s*\.cx-team-architecture__prompt-content \{([^}]*)\}/u,
   )?.[1] ?? '';
@@ -292,10 +294,6 @@ test('renders a compact IDE prompt tree with guide lines and independent pane sc
   assert.match(sharedPaneRule, /overscroll-behavior: contain;/u);
   assert.match(selectorRule, /overflow-y: auto;/u);
   assert.match(css, /\.cx-team-architecture__prompt-content \{\s*overflow: auto;/u);
-  assert.match(
-    css,
-    /grid-template-rows: minmax\(120px, 2fr\) minmax\(180px, 3fr\);/u,
-  );
 });
 
 test('keeps active Session detail navigation unavailable until a public Host action exists', async () => {

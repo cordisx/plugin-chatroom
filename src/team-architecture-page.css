@@ -367,13 +367,9 @@
 }
 
 .cx-team-architecture__prompt-workspace {
-  display: grid;
   height: 100%;
   min-height: 0;
   min-width: 0;
-  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  gap: 0;
   overflow: hidden;
 }
 
@@ -387,7 +383,6 @@
 .cx-team-architecture__prompt-selector {
   overflow-y: auto;
   padding-right: 8px;
-  border-right: 1px solid color-mix(in srgb, currentColor 13%, transparent);
   scrollbar-gutter: stable;
 }
 
@@ -451,28 +446,6 @@
   font-weight: 650;
 }
 
-.cx-team-architecture__prompt-chevron {
-  width: 7px;
-  height: 7px;
-  flex: none;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  opacity: 0.72;
-  transform: rotate(-45deg);
-  transform-origin: center;
-  transition: transform 120ms ease;
-}
-
-.cx-team-architecture__prompt-chevron[data-expanded='true'] {
-  transform: rotate(45deg) translate(-1px, -1px);
-}
-
-.cx-team-architecture__prompt-icon {
-  width: 16px;
-  height: 16px;
-  flex: none;
-}
-
 .cx-team-architecture__prompt-row-main {
   display: flex;
   min-width: 0;
@@ -532,42 +505,44 @@
   gap: 8px;
 }
 
-.cx-team-architecture__relationship-map {
-  display: grid;
-  min-height: 430px;
-  place-content: center;
-  justify-items: center;
-  padding: 28px;
-  border-radius: 12px;
-  background:
-    linear-gradient(90deg, color-mix(in srgb, currentColor 2.5%, transparent) 1px, transparent 1px) 0 0 / 24px 24px,
-    linear-gradient(color-mix(in srgb, currentColor 2.5%, transparent) 1px, transparent 1px) 0 0 / 24px 24px,
-    color-mix(in srgb, currentColor 1.5%, transparent);
-}
-
-.cx-team-architecture__relationship-level {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-}
-
-.cx-team-architecture__relationship-row {
+.cx-team-architecture__relationship-tree {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
+  width: max-content;
+  min-width: 100%;
+  min-height: 430px;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  gap: 14px;
 }
 
-.cx-team-architecture__relationship-level-label {
-  color: color-mix(in srgb, currentColor 58%, transparent);
-  font-size: 0.74rem;
-  font-weight: 650;
+.cx-team-architecture__relationship-parent-row {
+  position: relative;
+  display: flex;
+  width: max-content;
+  align-items: flex-start;
+  gap: 28px;
 }
 
-.cx-team-architecture__relationship-connector {
-  width: 1px;
-  height: 28px;
-  border-left: 1.5px solid color-mix(in srgb, currentColor 32%, transparent);
+.cx-team-architecture__relationship-parent-row > .cx-team-architecture__branch::after {
+  position: absolute;
+  top: calc(100% + 18px);
+  right: -14px;
+  left: -14px;
+  border-top: 1.5px solid color-mix(in srgb, currentColor 32%, transparent);
+  content: '';
+}
+
+.cx-team-architecture__relationship-parent-row > .cx-team-architecture__branch:first-child::after {
+  left: 50%;
+}
+
+.cx-team-architecture__relationship-parent-row > .cx-team-architecture__branch:last-child::after {
+  right: 50%;
+}
+
+.cx-team-architecture__relationship-parent-row > .cx-team-architecture__branch:only-child::after {
+  display: none;
 }
 
 .cx-team-architecture__entity[data-current='true'] {
@@ -622,22 +597,6 @@
     grid-template-columns: 1fr;
   }
 
-  .cx-team-architecture__prompt-workspace {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(120px, 2fr) minmax(180px, 3fr);
-  }
-
-  .cx-team-architecture__prompt-selector {
-    padding-right: 0;
-    border-right: 0;
-    border-bottom: 1px solid color-mix(in srgb, currentColor 13%, transparent);
-  }
-
-  .cx-team-architecture__prompt-content {
-    padding-top: 12px;
-    padding-left: 0;
-  }
-
   .cx-team-architecture__chart-scroll {
     padding-right: 12px;
     padding-left: 12px;
@@ -649,7 +608,4 @@
     scroll-behavior: auto !important;
   }
 
-  .cx-team-architecture__prompt-chevron {
-    transition: none;
-  }
 }

@@ -9,7 +9,7 @@ import {
   useSyncExternalStore,
 } from 'cordisx/react';
 import { defineReactPage } from 'cordisx/react';
-import { AgentAvatar, Button, EmptyState, Icon, MarkdownViewer, Select } from 'cordisx/ui';
+import { AgentAvatar, Button, EmptyState, HorizontalSplitPane, Icon, MarkdownViewer, Select } from 'cordisx/ui';
 import type { CordisXLocalizationSeat, CordisXReactPageProps } from 'cordisx/contracts';
 import {
   buildTeamArchitectureViewModel,
@@ -194,6 +194,8 @@ function StringList({ values, empty }: { readonly values: readonly string[]; rea
 
 interface TreeNodeViewProps {
   readonly node: TeamEntityTreeNode;
+  readonly currentMemberId?: string;
+  readonly semantic?: 'list' | 'tree';
   readonly onSelect: (memberId: string) => void;
   readonly t: Translate;
 }
@@ -246,23 +248,32 @@ function EntityCard({ entity, current, contextOnly, onSelect, t }: {
     );
 }
 
-function TreeNodeView({ node, onSelect, t }: TreeNodeViewProps) {
+function TreeNodeView({ node, currentMemberId, semantic = 'list', onSelect, t }: TreeNodeViewProps) {
   const entity = node.entity;
   const hasChildren = node.children.length > 0;
+  const current = entity.memberId === currentMemberId;
   return (
     <div
       className="cx-team-architecture__branch"
-      role="listitem"
+      role={semantic === 'tree' ? 'treeitem' : 'listitem'}
     >
       <div className="cx-team-architecture__node-seat" data-has-children={hasChildren ? 'true' : undefined}>
-        <EntityCard entity={entity} contextOnly={!node.matches} onSelect={onSelect} t={t} />
+        <EntityCard
+          entity={entity}
+          current={current}
+          contextOnly={!node.matches}
+          onSelect={current ? undefined : onSelect}
+          t={t}
+        />
       </div>
       {hasChildren && (
-        <div className="cx-team-architecture__children" role="list">
+        <div className="cx-team-architecture__children" role={semantic === 'tree' ? 'group' : 'list'}>
           {node.children.map(child => (
             <TreeNodeView
               key={child.entity.memberId}
               node={child}
+              currentMemberId={currentMemberId}
+              semantic={semantic}
               onSelect={onSelect}
               t={t}
             />
@@ -365,92 +376,99 @@ function PromptWorkspace({ entity, entities, t }: {
       className="cx-team-architecture__section cx-team-architecture__prompt-section"
       aria-label={t('detail.tab.prompts')}
     >
-      <div className="cx-team-architecture__prompt-workspace">
-        <nav className="cx-team-architecture__prompt-selector" aria-label={t('detail.prompts')}>
-          <div className="cx-team-architecture__prompt-tree" role="tree" onKeyDown={onTreeKeyDown}>
-            {nodes.map(node => (
-              <div className="cx-team-architecture__prompt-kind" key={node.id}>
-                <button
-                  ref={element => {
-                    if (element === null) itemRefs.current.delete(node.id);
-                    else itemRefs.current.set(node.id, element);
-                  }}
-                  type="button"
-                  role="treeitem"
-                  aria-expanded={expandedKinds.has(node.kind)}
-                  aria-controls={`team-prompt-group-${node.kind}`}
-                  aria-level={1}
-                  tabIndex={focusId === node.id ? 0 : -1}
-                  onFocus={() => setFocusId(node.id)}
-                  onClick={() => toggleKind(node.kind)}
-                >
-                  <span
-                    className="cx-team-architecture__prompt-chevron"
-                    data-expanded={expandedKinds.has(node.kind) ? 'true' : 'false'}
-                    aria-hidden="true"
-                  />
-                  <Icon className="cx-team-architecture__prompt-icon" name="host:folder" aria-hidden="true" />
-                  <span className="cx-team-architecture__prompt-row-label">{promptKindLabel(node.kind, t)}</span>
-                </button>
-                <div
-                  id={`team-prompt-group-${node.kind}`}
-                  role="group"
-                  hidden={!expandedKinds.has(node.kind)}
-                >
-                  {node.sources.map(source => (
-                    <button
-                      ref={element => {
-                        if (element === null) itemRefs.current.delete(source.id);
-                        else itemRefs.current.set(source.id, element);
-                      }}
-                      key={source.id}
-                      type="button"
-                      role="treeitem"
-                      aria-selected={source.id === selectedId}
-                      aria-controls="team-entity-prompt-content"
-                      aria-level={2}
-                      data-unconfigured={source.sections.length === 0 ? 'true' : undefined}
-                      tabIndex={focusId === source.id ? 0 : -1}
-                      onFocus={() => setFocusId(source.id)}
-                      onClick={() => setSelectedId(source.id)}
-                    >
-                      <span className="cx-team-architecture__prompt-row-main">
-                        <Icon className="cx-team-architecture__prompt-icon" name="host:files" aria-hidden="true" />
-                        <span className="cx-team-architecture__prompt-row-label">
-                          {source.source.kind === 'current'
-                            ? t('detail.prompt-self', { label: entity.label })
-                            : source.source.label}
+      <HorizontalSplitPane
+        className="cx-team-architecture__prompt-workspace"
+        initialLeftSize={270}
+        minLeftSize={220}
+        maxLeftSize={360}
+        separatorLabel={t('detail.prompts')}
+        left={
+          <nav className="cx-team-architecture__prompt-selector" aria-label={t('detail.prompts')}>
+            <div className="cx-team-architecture__prompt-tree" role="tree" onKeyDown={onTreeKeyDown}>
+              {nodes.map(node => (
+                <div className="cx-team-architecture__prompt-kind" key={node.id}>
+                  <button
+                    ref={element => {
+                      if (element === null) itemRefs.current.delete(node.id);
+                      else itemRefs.current.set(node.id, element);
+                    }}
+                    type="button"
+                    role="treeitem"
+                    aria-expanded={expandedKinds.has(node.kind)}
+                    aria-controls={`team-prompt-group-${node.kind}`}
+                    aria-level={1}
+                    tabIndex={focusId === node.id ? 0 : -1}
+                    onFocus={() => setFocusId(node.id)}
+                    onClick={() => toggleKind(node.kind)}
+                  >
+                    <Icon
+                      name={expandedKinds.has(node.kind) ? 'folder-open' : 'folder'}
+                      aria-hidden="true"
+                    />
+                    <span className="cx-team-architecture__prompt-row-label">{promptKindLabel(node.kind, t)}</span>
+                  </button>
+                  <div
+                    id={`team-prompt-group-${node.kind}`}
+                    role="group"
+                    hidden={!expandedKinds.has(node.kind)}
+                  >
+                    {node.sources.map(source => (
+                      <button
+                        ref={element => {
+                          if (element === null) itemRefs.current.delete(source.id);
+                          else itemRefs.current.set(source.id, element);
+                        }}
+                        key={source.id}
+                        type="button"
+                        role="treeitem"
+                        aria-selected={source.id === selectedId}
+                        aria-controls="team-entity-prompt-content"
+                        aria-level={2}
+                        data-unconfigured={source.sections.length === 0 ? 'true' : undefined}
+                        tabIndex={focusId === source.id ? 0 : -1}
+                        onFocus={() => setFocusId(source.id)}
+                        onClick={() => setSelectedId(source.id)}
+                      >
+                        <span className="cx-team-architecture__prompt-row-main">
+                          <Icon name="file" aria-hidden="true" />
+                          <span className="cx-team-architecture__prompt-row-label">
+                            {source.source.kind === 'current'
+                              ? t('detail.prompt-self', { label: entity.label })
+                              : source.source.label}
+                          </span>
                         </span>
-                      </span>
-                      {source.sections.length === 0
-                        ? <small>{t('detail.prompt-unconfigured')}</small>
-                        : null}
-                    </button>
-                  ))}
+                        {source.sections.length === 0
+                          ? <small>{t('detail.prompt-unconfigured')}</small>
+                          : null}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </nav>
+        }
+        right={
+          <div
+            id="team-entity-prompt-content"
+            className="cx-team-architecture__prompt-content"
+            role="tabpanel"
+            aria-label={`${promptKindLabel(selected.kind, t)} · ${selected.source.label}`}
+          >
+            {selected.sections.length === 0
+              ? <EmptyState title={t('detail.prompt-unconfigured')} />
+              : selected.sections.map(section => (
+                <div className="cx-team-architecture__prompt-document" key={section.sectionId}>
+                  <code>{section.sectionId}</code>
+                  <MarkdownViewer
+                    aria-label={`${promptKindLabel(section.kind, t)} · ${selected.source.label}`}
+                    source={section.text}
+                  />
+                </div>
+              ))}
           </div>
-        </nav>
-        <div
-          id="team-entity-prompt-content"
-          className="cx-team-architecture__prompt-content"
-          role="tabpanel"
-          aria-label={`${promptKindLabel(selected.kind, t)} · ${selected.source.label}`}
-        >
-          {selected.sections.length === 0
-            ? <EmptyState title={t('detail.prompt-unconfigured')} />
-            : selected.sections.map(section => (
-              <div className="cx-team-architecture__prompt-document" key={section.sectionId}>
-                <code>{section.sectionId}</code>
-                <MarkdownViewer
-                  aria-label={`${promptKindLabel(section.kind, t)} · ${selected.source.label}`}
-                  source={section.text}
-                />
-              </div>
-            ))}
-        </div>
-      </div>
+        }
+      />
     </section>
   );
 }
@@ -461,34 +479,52 @@ function RelationshipHierarchy({ entity, entities, onSelect, t }: {
   readonly onSelect: (memberId: string) => void;
   readonly t: Translate;
 }) {
-  const { parents, children } = teamEntityLocalHierarchy(entity, entities);
+  const { parents, subtree } = teamEntityLocalHierarchy(entity, entities);
   return (
     <section className="cx-team-architecture__section" aria-label={t('detail.tab.relationships')}>
-      <div className="cx-team-architecture__relationship-map" role="group" aria-label={t('detail.relationships')}>
-        {parents.length === 0 ? null : (
-          <>
-            <div className="cx-team-architecture__relationship-level" data-level="parents">
-              <span className="cx-team-architecture__relationship-level-label">{t('detail.manager')}</span>
-              <div className="cx-team-architecture__relationship-row">
-                {parents.map(parent => <EntityCard key={parent.memberId} entity={parent} onSelect={onSelect} t={t} />)}
-              </div>
-            </div>
-            <span className="cx-team-architecture__relationship-connector" aria-hidden="true" />
-          </>
-        )}
-        <div className="cx-team-architecture__relationship-level" data-level="current">
-          <div className="cx-team-architecture__relationship-row">
-            <EntityCard entity={entity} current t={t} />
-          </div>
-        </div>
-        <span className="cx-team-architecture__relationship-connector" aria-hidden="true" />
-        <div className="cx-team-architecture__relationship-level" data-level="children">
-          <span className="cx-team-architecture__relationship-level-label">{t('detail.direct-reports')}</span>
-          <div className="cx-team-architecture__relationship-row">
-            {children.length === 0
-              ? <span className="cx-team-architecture__muted">{t('detail.none')}</span>
-              : children.map(child => <EntityCard key={child.memberId} entity={child} onSelect={onSelect} t={t} />)}
-          </div>
+      <div
+        className="cx-team-architecture__chart-scroll"
+        role="region"
+        aria-label={t('detail.relationships')}
+        tabIndex={0}
+      >
+        <div className="cx-team-architecture__relationship-tree" role="tree" aria-label={t('detail.relationships')}>
+          {parents.length === 0
+            ? (
+              <TreeNodeView
+                node={subtree}
+                currentMemberId={entity.memberId}
+                semantic="tree"
+                onSelect={onSelect}
+                t={t}
+              />
+            )
+            : (
+              <>
+                <div
+                  className="cx-team-architecture__relationship-parent-row"
+                  role="group"
+                  aria-label={t('detail.manager')}
+                >
+                  {parents.map(parent => (
+                    <div className="cx-team-architecture__branch" role="treeitem" key={parent.memberId}>
+                      <div className="cx-team-architecture__node-seat" data-has-children="true">
+                        <EntityCard entity={parent} onSelect={onSelect} t={t} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="cx-team-architecture__children cx-team-architecture__relationship-current" role="group">
+                  <TreeNodeView
+                    node={subtree}
+                    currentMemberId={entity.memberId}
+                    semantic="tree"
+                    onSelect={onSelect}
+                    t={t}
+                  />
+                </div>
+              </>
+            )}
         </div>
       </div>
     </section>
