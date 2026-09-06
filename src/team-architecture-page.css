@@ -124,7 +124,7 @@
   max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 24px 16px 30px;
+  padding: 16px 12px 20px;
   border-radius: 12px;
   background:
     linear-gradient(90deg, color-mix(in srgb, currentColor 2.5%, transparent) 1px, transparent 1px) 0 0 / 24px 24px,
@@ -140,7 +140,7 @@
   min-width: 100%;
   align-items: flex-start;
   justify-content: center;
-  gap: 76px;
+  gap: 36px;
 }
 
 .cx-team-architecture__branch {
@@ -161,7 +161,7 @@
   top: 100%;
   left: 50%;
   width: 1px;
-  height: 18px;
+  height: 12px;
   border-left: 1.5px solid color-mix(in srgb, currentColor 32%, transparent);
   content: '';
 }
@@ -172,29 +172,29 @@
   width: max-content;
   align-items: flex-start;
   justify-content: center;
-  gap: 28px;
+  gap: 16px;
 }
 
 .cx-team-architecture__children > .cx-team-architecture__branch {
-  padding-top: 36px;
+  padding-top: 24px;
 }
 
 .cx-team-architecture__children > .cx-team-architecture__branch::before,
 .cx-team-architecture__children > .cx-team-architecture__branch::after {
   position: absolute;
-  top: 18px;
+  top: 12px;
   content: '';
 }
 
 .cx-team-architecture__children > .cx-team-architecture__branch::before {
   left: 50%;
-  height: 18px;
+  height: 12px;
   border-left: 1.5px solid color-mix(in srgb, currentColor 32%, transparent);
 }
 
 .cx-team-architecture__children > .cx-team-architecture__branch::after {
-  right: -14px;
-  left: -14px;
+  right: -8px;
+  left: -8px;
   border-top: 1.5px solid color-mix(in srgb, currentColor 32%, transparent);
 }
 
@@ -213,17 +213,18 @@
 .cx-team-architecture__entity {
   position: relative;
   display: grid;
-  width: 248px;
-  min-width: 248px;
-  min-height: 102px;
-  grid-template-columns: 46px minmax(0, 1fr);
+  width: 164px;
+  min-width: 164px;
+  height: 54px;
+  min-height: 54px;
+  grid-template-columns: 32px minmax(0, 1fr);
   align-items: center;
-  gap: 10px 12px;
-  padding: 14px;
+  gap: 8px;
+  padding: 8px;
   border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
-  border-radius: 14px;
+  border-radius: 10px;
   background: color-mix(in srgb, currentColor 3%, transparent);
-  box-shadow: 0 10px 30px color-mix(in srgb, #000 8%, transparent), 0 1px 2px color-mix(in srgb, #000 8%, transparent);
+  box-shadow: 0 5px 16px color-mix(in srgb, #000 7%, transparent), 0 1px 2px color-mix(in srgb, #000 8%, transparent);
   color: inherit;
   font: inherit;
   text-align: left;
@@ -233,8 +234,8 @@
 
 .cx-team-architecture__entity:hover {
   border-color: color-mix(in srgb, currentColor 36%, transparent);
-  box-shadow: 0 14px 34px color-mix(in srgb, #000 11%, transparent), 0 2px 4px color-mix(in srgb, #000 9%, transparent);
-  transform: translateY(-2px);
+  box-shadow: 0 7px 20px color-mix(in srgb, #000 10%, transparent), 0 2px 4px color-mix(in srgb, #000 8%, transparent);
+  transform: translateY(-1px);
 }
 
 .cx-team-architecture__entity[data-context-only='true'] {
@@ -244,8 +245,8 @@
 
 .cx-team-architecture__avatar {
   display: grid;
-  width: 46px;
-  height: 46px;
+  width: 32px;
+  height: 32px;
   place-items: center;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
@@ -253,13 +254,12 @@
   background:
     radial-gradient(circle at 34% 28%, color-mix(in srgb, currentColor 20%, transparent), transparent 38%),
     color-mix(in srgb, currentColor 8%, transparent);
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   font-weight: 720;
   letter-spacing: 0.02em;
 }
 
-.cx-team-architecture__avatar > .cxr-ui-agent-avatar,
-.cx-team-architecture__avatar .cxa-avatar {
+.cx-team-architecture__avatar-image {
   width: 100%;
   height: 100%;
 }
@@ -267,13 +267,14 @@
 .cx-team-architecture__entity-main {
   display: grid;
   align-content: center;
-  gap: 3px;
+  gap: 1px;
   min-width: 0;
 }
 
 .cx-team-architecture__entity-title {
   overflow: hidden;
-  font-size: 0.95rem;
+  min-width: 0;
+  font-size: 0.82rem;
   font-weight: 680;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -282,41 +283,12 @@
 
 .cx-team-architecture__entity-identity {
   overflow: hidden;
+  min-width: 0;
   color: color-mix(in srgb, currentColor 65%, transparent);
-  font-size: 0.74rem;
-  line-height: 1.35;
+  font-size: 0.7rem;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.cx-team-architecture__session-state {
-  display: flex;
-  grid-column: 1 / -1;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  padding-top: 7px;
-  border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
-  color: color-mix(in srgb, currentColor 62%, transparent);
-  font-size: 0.72rem;
-  line-height: 1.3;
-}
-
-.cx-team-architecture__session-dot {
-  width: 7px;
-  height: 7px;
-  flex: none;
-  border-radius: 50%;
-  background: color-mix(in srgb, currentColor 30%, transparent);
-}
-
-.cx-team-architecture__session-state--active {
-  color: color-mix(in srgb, #17844a 82%, currentColor);
-}
-
-.cx-team-architecture__session-state--active .cx-team-architecture__session-dot {
-  background: #28a966;
-  box-shadow: 0 0 0 3px color-mix(in srgb, #28a966 16%, transparent);
 }
 
 .cx-team-architecture__status {
@@ -510,7 +482,7 @@
   display: flex;
   width: max-content;
   min-width: 100%;
-  min-height: 430px;
+  min-height: 320px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -521,14 +493,14 @@
   display: flex;
   width: max-content;
   align-items: flex-start;
-  gap: 28px;
+  gap: 16px;
 }
 
 .cx-team-architecture__relationship-parent-row > .cx-team-architecture__branch::after {
   position: absolute;
-  top: calc(100% + 18px);
-  right: -14px;
-  left: -14px;
+  top: calc(100% + 12px);
+  right: -8px;
+  left: -8px;
   border-top: 1.5px solid color-mix(in srgb, currentColor 32%, transparent);
   content: '';
 }

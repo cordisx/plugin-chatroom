@@ -9,7 +9,18 @@ import {
   useSyncExternalStore,
 } from 'cordisx/react';
 import { defineReactPage } from 'cordisx/react';
-import { AgentAvatar, Button, EmptyState, HorizontalSplitPane, Icon, MarkdownViewer, Select } from 'cordisx/ui';
+import {
+  AgentAvatar,
+  Button,
+  EmptyState,
+  HorizontalSplitPane,
+  HoverCard,
+  Icon,
+  MarkdownViewer,
+  Select,
+  Stack,
+  Text,
+} from 'cordisx/ui';
 import type { CordisXLocalizationSeat, CordisXReactPageProps } from 'cordisx/contracts';
 import {
   buildTeamArchitectureViewModel,
@@ -204,48 +215,64 @@ function EntityCard({ entity, current, contextOnly, onSelect, t }: {
   readonly entity: TeamEntityViewModel;
   readonly current?: boolean;
   readonly contextOnly?: boolean;
-  readonly onSelect?: (memberId: string) => void;
+  readonly onSelect: (memberId: string) => void;
   readonly t: Translate;
 }) {
+  const title = entity.title ?? roleLabel(entity, t);
+  const sessionStatus = entity.sessionState === 'active'
+    ? t('entity.active-sessions', { count: entity.activeSessions.length })
+    : t('entity.no-active-sessions');
   const content = (
     <>
       <span className="cx-team-architecture__avatar" aria-hidden="true">
-        <AgentAvatar participant={{ id: entity.memberId, name: entity.label, avatar: entity.avatar }} />
+        <AgentAvatar
+          className="cx-team-architecture__avatar-image"
+          participant={{ id: entity.memberId, name: entity.label, avatar: entity.avatar }}
+        />
       </span>
       <span className="cx-team-architecture__entity-main">
         <span className="cx-team-architecture__entity-title">{entity.label}</span>
-        <span className="cx-team-architecture__entity-identity">{roleLabel(entity, t)}</span>
-      </span>
-      <span
-        className={entity.sessionState === 'active'
-          ? 'cx-team-architecture__session-state cx-team-architecture__session-state--active'
-          : 'cx-team-architecture__session-state'}
-      >
-        <span className="cx-team-architecture__session-dot" aria-hidden="true" />
-        {entity.sessionState === 'active'
-          ? t('entity.active-sessions', { count: entity.activeSessions.length })
-          : t('entity.no-active-sessions')}
+        <span className="cx-team-architecture__entity-identity">{title}</span>
       </span>
     </>
   );
-  return onSelect === undefined
-    ? (
-      <div className="cx-team-architecture__entity" data-current={current ? 'true' : undefined}>
-        {content}
-      </div>
-    )
-    : (
-      <button
-        type="button"
-        className="cx-team-architecture__entity"
-        data-current={current ? 'true' : undefined}
-        data-context-only={contextOnly ? 'true' : undefined}
-        onClick={() => onSelect(entity.memberId)}
-        aria-label={t('entity.open', { label: entity.label })}
-      >
-        {content}
-      </button>
-    );
+  return (
+    <HoverCard
+      placement="top"
+      trigger={
+        <button
+          type="button"
+          className="cx-team-architecture__entity"
+          data-current={current ? 'true' : undefined}
+          data-context-only={contextOnly ? 'true' : undefined}
+          onClick={() => onSelect(entity.memberId)}
+          aria-label={t('entity.open', { label: entity.label })}
+        >
+          {content}
+        </button>
+      }
+      content={
+        <Stack gap="small">
+          <Text as="div">
+            <strong>{entity.label}</strong>
+          </Text>
+          <Text as="div" tone="muted">{title}</Text>
+          <Text as="div">
+            <span>{t('detail.member-id')}</span> <code>{entity.memberId}</code>
+          </Text>
+          {entity.definitionName === undefined
+            ? null
+            : (
+              <Text as="div">
+                <span>{t('detail.definition-name')}</span> {entity.definitionName}
+              </Text>
+            )}
+          {entity.description === undefined ? null : <Text as="div" tone="muted">{entity.description}</Text>}
+          <Text as="div">{sessionStatus}</Text>
+        </Stack>
+      }
+    />
+  );
 }
 
 function TreeNodeView({ node, currentMemberId, semantic = 'list', onSelect, t }: TreeNodeViewProps) {
@@ -262,7 +289,7 @@ function TreeNodeView({ node, currentMemberId, semantic = 'list', onSelect, t }:
           entity={entity}
           current={current}
           contextOnly={!node.matches}
-          onSelect={current ? undefined : onSelect}
+          onSelect={onSelect}
           t={t}
         />
       </div>

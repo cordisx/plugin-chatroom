@@ -218,7 +218,7 @@ test('uses public Host avatars and Markdown with cardless responsive prompt and 
     readFile(new URL('../src/team-architecture-page.css', import.meta.url), 'utf8'),
   ]);
 
-  assert.match(page, /HorizontalSplitPane,[\s\S]*?Icon,[\s\S]*?from 'cordisx\/ui';/u);
+  assert.match(page, /HorizontalSplitPane,[\s\S]*?HoverCard,[\s\S]*?Icon,[\s\S]*?from 'cordisx\/ui';/u);
   assert.doesNotMatch(page, /from ['"](?:tdesign-react|react-markdown|rehype-|remark-)/u);
   assert.match(page, /teamEntityPromptSources\(entity, entities\)/u);
   assert.match(
@@ -256,6 +256,48 @@ test('uses public Host avatars and Markdown with cardless responsive prompt and 
   const sectionRule = css.match(/\.cx-team-architecture__section \{([^}]*)\}/u)?.[1] ?? '';
   assert.doesNotMatch(sectionRule, /(?:border|background|border-radius|padding)\s*:/u);
   assert.doesNotMatch(css, /cx-team-architecture__prompt-metadata/u);
+});
+
+test('reuses one compact member card with full Host HoverCard details across both trees', async () => {
+  const [page, css] = await Promise.all([
+    readFile(new URL('../src/team-architecture-page.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/team-architecture-page.css', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(page, /const title = entity\.title \?\? roleLabel\(entity, t\);/u);
+  assert.match(page, /<HoverCard[\s\S]*?placement="top"[\s\S]*?trigger=\{[\s\S]*?<button/u);
+  assert.match(page, /content=\{[\s\S]*?<Stack gap="small">/u);
+  assert.match(page, /<strong>\{entity\.label\}<\/strong>/u);
+  assert.match(page, /\{title\}<\/Text>/u);
+  assert.match(page, /<code>\{entity\.memberId\}<\/code>/u);
+  assert.match(page, /entity\.definitionName/u);
+  assert.match(page, /entity\.description/u);
+  assert.match(page, /\{sessionStatus\}<\/Text>/u);
+  assert.doesNotMatch(page, /cx-team-architecture__session-(?:state|dot)/u);
+  assert.doesNotMatch(css, /cx-team-architecture__session-(?:state|dot)/u);
+  assert.match(page, /<TreeNodeView[\s\S]*?<EntityCard/u);
+  assert.match(page, /<EntityCard entity=\{parent\} onSelect=\{onSelect\} t=\{t\} \/>/u);
+
+  const entityRule = css.match(/\.cx-team-architecture__entity \{([^}]*)\}/u)?.[1] ?? '';
+  const avatarRule = css.match(/\.cx-team-architecture__avatar \{([^}]*)\}/u)?.[1] ?? '';
+  const forestRule = css.match(/\.cx-team-architecture__forest \{([^}]*)\}/u)?.[1] ?? '';
+  const childrenRule = css.match(/\.cx-team-architecture__children \{([^}]*)\}/u)?.[1] ?? '';
+  const chartRule = css.match(/\.cx-team-architecture__chart-scroll \{([^}]*)\}/u)?.[1] ?? '';
+  const nameRule = css.match(/\.cx-team-architecture__entity-title \{([^}]*)\}/u)?.[1] ?? '';
+  const titleRule = css.match(/\.cx-team-architecture__entity-identity \{([^}]*)\}/u)?.[1] ?? '';
+  assert.match(entityRule, /width: 164px;/u);
+  assert.match(entityRule, /height: 54px;/u);
+  assert.match(avatarRule, /width: 32px;/u);
+  assert.match(avatarRule, /height: 32px;/u);
+  assert.match(forestRule, /gap: 36px;/u);
+  assert.match(childrenRule, /gap: 16px;/u);
+  assert.match(chartRule, /padding: 16px 12px 20px;/u);
+  for (const rule of [nameRule, titleRule]) {
+    assert.match(rule, /overflow: hidden;/u);
+    assert.match(rule, /min-width: 0;/u);
+    assert.match(rule, /text-overflow: ellipsis;/u);
+    assert.match(rule, /white-space: nowrap;/u);
+  }
 });
 
 test('renders a compact IDE prompt tree with guide lines and independent pane scrolling', async () => {
