@@ -13,11 +13,6 @@ const avatarDevelopmentDependencies = () =>
   ]);
 void avatarDevelopmentDependencies;
 
-import {
-  CHATROOM_DEFAULT_AGENT_CONFIGURATION,
-  type ChatroomAgentConfiguration,
-  parseChatroomAgentConfiguration,
-} from './agent-definition.js';
 import { ChatroomAgentSessionController } from './agent-session-controller.js';
 import { CHATROOM_COMMAND_SUBMIT } from './conversation-model.js';
 import { ChatroomConversationController } from './conversation-source.js';
@@ -28,6 +23,7 @@ import { CHATROOM_MANAGER_CONTENT_DECLARATIONS, registerChatroomManager } from '
 import { ChatroomProductBase } from './product-base.js';
 import { configurationFromEntitySnapshot } from './entity-registry-configuration.js';
 import { DurableChatroomRoomStore } from './room-store.js';
+import { chatroomAgentConfigurationFromRuntimeConfig } from './runtime-config.js';
 import { registerTalentMarket, TALENT_MARKET_MANAGER_CONTENT_DECLARATIONS } from './talent-market-page.js';
 import {
   registerTeamArchitectureManagerContributions,
@@ -198,18 +194,12 @@ function pageComposerCommandContext(
   return value;
 }
 
-function agentConfiguration(config: unknown): ChatroomAgentConfiguration {
-  if (config === null || typeof config !== 'object' || Array.isArray(config)) {
-    return CHATROOM_DEFAULT_AGENT_CONFIGURATION;
-  }
-  const team = (config as { readonly team?: unknown; readonly agent?: unknown; }).team
-    ?? (config as { readonly agent?: unknown; }).agent;
-  return team === undefined ? CHATROOM_DEFAULT_AGENT_CONFIGURATION : parseChatroomAgentConfiguration(team);
-}
-
 export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   const entitySnapshot = await ctx.entities.snapshot();
-  const agent = configurationFromEntitySnapshot(agentConfiguration(config), entitySnapshot);
+  const agent = configurationFromEntitySnapshot(
+    chatroomAgentConfigurationFromRuntimeConfig(config),
+    entitySnapshot,
+  );
   const roomStore = await DurableChatroomRoomStore.openOwnerDocuments(ctx.documents);
   const agentSession = new ChatroomAgentSessionController(
     { agents: ctx.agents, sessions: ctx.sessions, approvals: ctx.approvals },
