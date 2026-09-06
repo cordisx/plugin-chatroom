@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { CHATROOM_DEFAULT_AGENT_CONFIGURATION, parseChatroomAgentConfiguration } from '../dist/agent-definition.js';
@@ -75,4 +76,14 @@ test('keeps nonaccepted Session detail reads and opens unavailable', async () =>
   assert.equal(entity.activeSessions[0]?.detail, undefined);
   assert.equal(await source.openSessionDetail('session-1'), false);
   source.dispose();
+});
+
+test('declares both Host detail services before injecting them into the Team source', async () => {
+  const entry = await readFile(new URL('../src/chatroom.ts', import.meta.url), 'utf8');
+  assert.match(entry, /'agentSessionDetailReferences'/u);
+  assert.match(entry, /'agentDetailNavigation'/u);
+  assert.match(
+    entry,
+    /createTeamArchitectureDataSource\(agent, product\.store\.rooms, \{[\s\S]*?references: ctx\.agentSessionDetailReferences,[\s\S]*?navigation: ctx\.agentDetailNavigation,/u,
+  );
 });
