@@ -223,6 +223,7 @@ export interface RoomMembership {
   /** Frozen participant identity; it is not assumed to equal memberId. */
   readonly participantId: string;
   readonly label: string;
+  readonly title?: string;
   /** Exact catalog identity; membership never embeds or mutates a definition. */
   readonly definition: AgentDefinitionIdentity;
   /** Effective Avatar is resolved once and frozen with this Room snapshot. */

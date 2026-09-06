@@ -37,6 +37,7 @@ export function createRoom(input: CreateRoomInput): Room {
       memberId: member.memberId,
       participantId: member.participantId ?? member.memberId,
       label: member.label,
+      ...(member.title === undefined ? {} : { title: member.title }),
       definition: Object.freeze({ ...member.definition }),
       avatar: member.avatar === undefined
         ? createGeneratedAgentAvatarRef({ namespace: 'agent-definition', agentId: member.definition.agentId })

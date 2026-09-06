@@ -1,4 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis';
+import type {
+  AgentConversationShellBinding as AgentConversationShellBindingV9,
+  AgentConversationShellCommandContext as AgentConversationShellCommandContextV9,
+} from '@cordisx/protocol/agent-conversation-shell/v9';
 import type { AgentPageComposerCommandContext } from '@cordisx/protocol/agent-page-admission/v2';
 import { ChatroomComposerSettings, Config, configApplies } from './composer-settings.js';
 import { CORDISX_PAGE_SCHEMA_V3, CORDISX_ROUTE_SCHEMA_V2, type CordisXCommandContext } from 'cordisx/contracts';
@@ -14,9 +18,17 @@ const avatarDevelopmentDependencies = () =>
 void avatarDevelopmentDependencies;
 
 import { ChatroomAgentSessionController } from './agent-session-controller.js';
-import { CHATROOM_COMMAND_SUBMIT } from './conversation-model.js';
+import { ChatroomAgentSessionConversationSourceV7 } from './agent-session-conversation-source-v7.js';
+import { v3BindingFor } from './agent-session-conversation-source.js';
+import {
+  CHATROOM_COMMAND_APPROVAL_APPROVE,
+  CHATROOM_COMMAND_APPROVAL_CANCEL,
+  CHATROOM_COMMAND_APPROVAL_DENY,
+  CHATROOM_COMMAND_SUBMIT,
+  text,
+} from './conversation-model.js';
 import { ChatroomConversationController } from './conversation-source.js';
-import { createLazyChatroomPage } from './chatroom-page-loader.js';
+import { selectChatroomPageMount } from './chatroom-page-surface.js';
 import { ChatroomPageSource } from './chatroom-page-source.js';
 import { manifest, roomSessionDetailRoute } from './chatroom-runtime-contract.js';
 import { CHATROOM_MANAGER_CONTENT_DECLARATIONS, registerChatroomManager } from './manager-chat.js';
@@ -179,6 +191,9 @@ function pageComposerCommandContext(
   if (
     value === undefined
     || !('scope' in value)
+    || !('$schema' in value)
+    || !('contract' in value)
+    || !('schemaVersion' in value)
     || value.$schema
       !== 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-page-composer-command-context.v2.schema.json'
     || value.contract !== 'cordisx.agent-page-composer-command-context/v2'
@@ -190,6 +205,19 @@ function pageComposerCommandContext(
     || typeof value.binding.ownerGeneration !== 'string'
     || typeof value.generation !== 'string'
     || value.origin.scope !== 'page-composer-submit'
+  ) return undefined;
+  return value;
+}
+
+function shellApprovalCommandContext(
+  context: CordisXCommandContext,
+): Extract<AgentConversationShellCommandContextV9, { readonly scope: 'approval'; }> | undefined {
+  const value = context.hostContext;
+  if (
+    value === undefined
+    || !('scope' in value)
+    || value.scope !== 'approval'
+    || !('approval' in value)
   ) return undefined;
   return value;
 }
@@ -402,6 +430,41 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       });
     },
   );
+  const shell = ctx.reflect.get('agentConversationShell', false);
+  if (shell !== undefined) {
+    const handleApprovalCommand = async (command: CordisXCommandContext) => {
+      const hostContext = shellApprovalCommandContext(command);
+      if (hostContext === undefined) {
+        throw new Error('Chatroom conversation approval context is unavailable.');
+      }
+      const intent = controller.handle(hostContext);
+      if (intent === undefined) {
+        const roomId = controller.selectedRoomId(hostContext);
+        if (roomId !== undefined) agentSession.answerApprovalCommand(roomId, hostContext);
+        return;
+      }
+      if (intent.kind === 'playground-approval-decision') {
+        await controller.decidePlaygroundAgentApprovalFromRoom(
+          intent.roomId,
+          intent.itemId,
+          intent.operationId,
+          intent.decision,
+        );
+      }
+    };
+    ctx.commands.register(
+      { id: CHATROOM_COMMAND_APPROVAL_APPROVE, title: text('approval.approve', 'Approve') },
+      handleApprovalCommand,
+    );
+    ctx.commands.register(
+      { id: CHATROOM_COMMAND_APPROVAL_DENY, title: text('approval.deny', 'Deny') },
+      handleApprovalCommand,
+    );
+    ctx.commands.register(
+      { id: CHATROOM_COMMAND_APPROVAL_CANCEL, title: text('approval.cancel', 'Cancel') },
+      handleApprovalCommand,
+    );
+  }
   const playgroundBridge = ctx.reflect.get(
     'playgroundRoomSimulationBridge',
     false,
@@ -413,7 +476,27 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       controller,
       agentSession,
     );
-  ctx.pages.register(page, createLazyChatroomPage(pageSource, product.sidebarImages));
+  const pageMount = await selectChatroomPageMount(
+    shell,
+    (binding: AgentConversationShellBindingV9) => {
+      const domain = controller.createSource(v3BindingFor(binding), { admissionMode: 'v9' });
+      let unsubscribeSettings = () => {};
+      const source = new ChatroomAgentSessionConversationSourceV7(
+        binding,
+        domain,
+        agentSession,
+        composerSettings.current,
+        () => unsubscribeSettings(),
+      );
+      unsubscribeSettings = composerSettings.subscribe(policy => source.setComposerShortcutPolicy(policy));
+      return source;
+    },
+    async () => {
+      const { createLazyChatroomPage } = await import('./chatroom-page-loader.js');
+      return createLazyChatroomPage(pageSource, product.sidebarImages);
+    },
+  );
+  ctx.pages.register(page, pageMount);
   ctx.routes.register(newRoomRoute);
   ctx.routes.register(roomRoute);
   ctx.routes.register(roomSessionDetailRoute);

@@ -77,6 +77,7 @@ export interface TeamEntityViewModel {
   /** Stable organization-node identity. Never substitute a title or participant id. */
   readonly memberId: string;
   readonly label: string;
+  readonly title?: string;
   readonly entityType: 'agent-member';
   readonly role: 'leader' | 'member';
   readonly attentionPolicy: 'ambient' | 'mention-only';
@@ -144,6 +145,7 @@ export function teamEntityLocalHierarchy(
   parents: readonly TeamEntityViewModel[];
   current: TeamEntityViewModel;
   children: readonly TeamEntityViewModel[];
+  subtree: TeamEntityTreeNode;
 }> {
   const byId = new Map(entities.map(candidate => [candidate.memberId, candidate]));
   const parentIds = new Set(
@@ -152,10 +154,19 @@ export function teamEntityLocalHierarchy(
       .map(candidate => candidate.memberId),
   );
   if (entity.relationships.reportsToMemberId !== undefined) parentIds.add(entity.relationships.reportsToMemberId);
+  const buildSubtree = (current: TeamEntityViewModel, path: ReadonlySet<string>): TeamEntityTreeNode => {
+    const nextPath = new Set(path).add(current.memberId);
+    const children = current.relationships.directReportMemberIds.flatMap(memberId => {
+      const child = byId.get(memberId);
+      return child === undefined || nextPath.has(child.memberId) ? [] : [buildSubtree(child, nextPath)];
+    });
+    return Object.freeze({ entity: current, matches: true, children: Object.freeze(children) });
+  };
   return Object.freeze({
     parents: Object.freeze([...parentIds].flatMap(id => byId.get(id) ?? [])),
     current: entity,
     children: Object.freeze(entity.relationships.directReportMemberIds.flatMap(id => byId.get(id) ?? [])),
+    subtree: buildSubtree(entity, new Set()),
   });
 }
 
@@ -316,6 +327,7 @@ export function projectTeamEntities(
     return Object.freeze({
       memberId: member.memberId,
       label: member.label,
+      ...(member.title === undefined ? {} : { title: member.title }),
       entityType: 'agent-member' as const,
       role: member.role,
       attentionPolicy: member.attentionPolicy,
@@ -355,6 +367,7 @@ const searchableTextFor = (entity: TeamEntityViewModel): string =>
   [
     entity.memberId,
     entity.label,
+    entity.title,
     entity.definitionIdentity.agentId,
     entity.definitionIdentity.revision,
     entity.definitionName,

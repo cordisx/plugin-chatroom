@@ -4,6 +4,10 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 import typescript from 'typescript';
+import {
+  PLAYGROUND_COMPLEX_TEAM_DEFINITIONS,
+  PLAYGROUND_COMPLEX_TEAM_MEMBERS,
+} from './fixtures/playground-complex-team.mjs';
 
 const sourceFiles = ['engagement-config', 'agent-definition', 'team-architecture-navigation'];
 
@@ -45,6 +49,29 @@ function resolveExactOverview(declarations, identity) {
     && declaration.subject.identity.revision === identity.revision
   );
 }
+
+test('registers all 18 Playground members as unique exact Manager definition subjects', async () => {
+  const modules = await importCurrentNavigation();
+  try {
+    const configuration = modules.agentDefinition.parseChatroomAgentConfiguration({
+      ...modules.agentDefinition.CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+      seedLeaderIds: ['leader'],
+      members: PLAYGROUND_COMPLEX_TEAM_MEMBERS,
+      definitions: [
+        ...modules.agentDefinition.CHATROOM_DEFAULT_AGENT_CONFIGURATION.definitions,
+        ...PLAYGROUND_COMPLEX_TEAM_DEFINITIONS,
+      ],
+    });
+    const declarations = modules.navigation.teamArchitectureManagerContentDeclarations({ configuration });
+    const subjects = declarations.flatMap(declaration =>
+      declaration.subject?.kind === 'agent-definition' ? [declaration.subject.identity] : []
+    );
+    assert.equal(subjects.length, 18);
+    assert.equal(new Set(subjects.map(identity => `${identity.agentId}@${identity.revision}`)).size, 18);
+  } finally {
+    await rm(modules.directory, { recursive: true, force: true });
+  }
+});
 
 test('declares exact Agent identities and one stable Host record summary across all five tabs', async () => {
   const modules = await importCurrentNavigation();
@@ -186,13 +213,15 @@ test('fails the Manager subject and summary closed when a member identity is sta
 });
 
 test('uses public Host avatars and Markdown with cardless responsive prompt and relationship workspaces', async () => {
-  const [page, css, navigation] = await Promise.all([
+  const [page, css] = await Promise.all([
     readFile(new URL('../src/team-architecture-page.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../src/team-architecture-page.css', import.meta.url), 'utf8'),
-    readFile(new URL('../src/team-architecture-navigation.ts', import.meta.url), 'utf8'),
   ]);
 
-  assert.match(page, /import \{ AgentAvatar, Button, EmptyState, MarkdownViewer, Select \} from 'cordisx\/ui';/u);
+  assert.match(
+    page,
+    /HorizontalSplitPane,[\s\S]*?HoverCard,[\s\S]*?Icon,[\s\S]*?PanZoomCanvas,[\s\S]*?from 'cordisx\/ui';/u,
+  );
   assert.doesNotMatch(page, /from ['"](?:tdesign-react|react-markdown|rehype-|remark-)/u);
   assert.match(page, /teamEntityPromptSources\(entity, entities\)/u);
   assert.match(
@@ -204,7 +233,10 @@ test('uses public Host avatars and Markdown with cardless responsive prompt and 
   assert.match(page, /role="treeitem"/u);
   assert.match(page, /role="group"/u);
   assert.match(page, /aria-expanded=\{expandedKinds\.has\(node\.kind\)\}/u);
+  assert.match(page, /aria-controls=\{`team-prompt-group-\$\{node\.kind\}`\}/u);
   assert.match(page, /aria-selected=\{source\.id === selectedId\}/u);
+  assert.match(page, /name=\{expandedKinds\.has\(node\.kind\) \? 'folder-open' : 'folder'\}/u);
+  assert.match(page, /<Icon name="file" aria-hidden="true" \/>/u);
   assert.match(page, /event\.key === 'ArrowDown'/u);
   assert.match(page, /event\.key === 'ArrowRight'/u);
   assert.match(page, /event\.key === 'ArrowLeft'/u);
@@ -212,27 +244,173 @@ test('uses public Host avatars and Markdown with cardless responsive prompt and 
   assert.match(page, /<MarkdownViewer[\s\S]*?source=\{section\.text\}/u);
   assert.match(page, /<EmptyState title=\{t\('detail\.prompt-unconfigured'\)\} \/>/u);
   assert.match(page, /teamEntityLocalHierarchy\(entity, entities\)/u);
-  assert.match(page, /\{parents\.length === 0 \? null : \(/u);
+  assert.match(page, /const \{ parents, subtree \} = teamEntityLocalHierarchy/u);
+  assert.match(page, /<EntityTreeCanvas[\s\S]*?nodes=\{nodes\}[\s\S]*?currentMemberId=\{entity\.memberId\}/u);
   assert.match(page, /function EntityCard/u);
-  assert.match(page, /<EntityCard entity=\{entity\} current t=\{t\} \/>/u);
-  assert.doesNotMatch(page, /relationship-card/u);
+  assert.doesNotMatch(page, /relationship-(?:card|map|level|level-label|row|connector)/u);
+  assert.doesNotMatch(css, /relationship-(?:card|map|level|level-label|row|connector)/u);
   assert.doesNotMatch(page, />└</u);
-  assert.match(navigation, /先继承上游提示词，再追加当前定义/u);
-  assert.match(navigation, /Use upstream prompts first, then append this definition/u);
+  assert.doesNotMatch(page, /cx-team-architecture__prompt-metadata/u);
+  assert.doesNotMatch(page, /t\('detail\.prompt-(?:inherit|upstream)'\)/u);
   assert.doesNotMatch(page, /<h3/u);
   assert.doesNotMatch(page, /cx-team-architecture__detail-(?:heading|eyebrow)/u);
 
   const sectionRule = css.match(/\.cx-team-architecture__section \{([^}]*)\}/u)?.[1] ?? '';
   assert.doesNotMatch(sectionRule, /(?:border|background|border-radius|padding)\s*:/u);
+  assert.doesNotMatch(css, /cx-team-architecture__prompt-metadata/u);
+});
+
+test('reuses one compact member card with full Host HoverCard details across both trees', async () => {
+  const [page, css] = await Promise.all([
+    readFile(new URL('../src/team-architecture-page.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/team-architecture-page.css', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(page, /const title = entity\.title \?\? roleLabel\(entity, t\);/u);
+  assert.match(page, /<HoverCard[\s\S]*?placement="top"[\s\S]*?trigger=\{[\s\S]*?<button/u);
+  assert.match(page, /content=\{[\s\S]*?<Stack gap="small">/u);
+  assert.match(page, /<strong>\{entity\.label\}<\/strong>/u);
+  assert.match(page, /\{title\}<\/Text>/u);
+  assert.match(page, /<code>\{entity\.memberId\}<\/code>/u);
+  assert.match(page, /entity\.definitionName/u);
+  assert.match(page, /entity\.description/u);
+  assert.match(page, /\{sessionStatus\}<\/Text>/u);
+  assert.doesNotMatch(page, /cx-team-architecture__session-(?:state|dot)/u);
+  assert.doesNotMatch(css, /cx-team-architecture__session-(?:state|dot)/u);
+  assert.match(page, /<TreeNodeView[\s\S]*?<EntityCard/u);
+  assert.match(page, /<EntityCard entity=\{parent\} onSelect=\{onSelect\} t=\{t\} \/>/u);
+
+  const entityRule = css.match(/\.cx-team-architecture__entity \{([^}]*)\}/u)?.[1] ?? '';
+  const avatarRule = css.match(/\.cx-team-architecture__avatar \{([^}]*)\}/u)?.[1] ?? '';
+  const forestRule = css.match(/\.cx-team-architecture__forest \{([^}]*)\}/u)?.[1] ?? '';
+  const childrenRule = css.match(/\.cx-team-architecture__children \{([^}]*)\}/u)?.[1] ?? '';
+  const viewportRule = css.match(/\.cx-team-architecture__tree-viewport \{([^}]*)\}/u)?.[1] ?? '';
+  const nameRule = css.match(/\.cx-team-architecture__entity-title \{([^}]*)\}/u)?.[1] ?? '';
+  const titleRule = css.match(/\.cx-team-architecture__entity-identity \{([^}]*)\}/u)?.[1] ?? '';
+  const nodeSeatRule = css.match(/\.cx-team-architecture__node-seat \{([^}]*)\}/u)?.[1] ?? '';
+  const toggleRule = css.match(/\.cx-team-architecture__tree-toggle \{([^}]*)\}/u)?.[1] ?? '';
+  const connectorRule = css.match(
+    /\.cx-team-architecture__node-seat\[data-has-children='true'\]::after \{([^}]*)\}/u,
+  )?.[1] ?? '';
+  assert.match(entityRule, /width: fit-content;/u);
+  assert.match(entityRule, /max-width: 120px;/u);
+  assert.match(entityRule, /height: 72px;/u);
+  assert.match(entityRule, /grid-template-columns: minmax\(0, 1fr\);/u);
+  assert.match(entityRule, /grid-template-rows: 32px minmax\(0, 1fr\);/u);
+  assert.match(entityRule, /justify-items: center;/u);
+  assert.match(entityRule, /border: 0;/u);
+  assert.match(entityRule, /background: transparent;/u);
+  assert.match(entityRule, /box-shadow: none;/u);
+  assert.match(avatarRule, /width: 32px;/u);
+  assert.match(avatarRule, /height: 32px;/u);
+  assert.match(forestRule, /gap: 24px;/u);
+  assert.match(childrenRule, /gap: 12px;/u);
+  assert.match(viewportRule, /height: 100%;/u);
+  assert.match(nodeSeatRule, /width: fit-content;/u);
+  assert.match(nodeSeatRule, /max-width: 120px;/u);
+  assert.match(toggleRule, /position: absolute;/u);
+  assert.match(toggleRule, /top: 22px;/u);
+  assert.match(toggleRule, /left: calc\(50% \+ 6px\);/u);
+  assert.match(toggleRule, /width: 20px;/u);
+  assert.match(toggleRule, /height: 20px;/u);
+  assert.match(toggleRule, /border-radius: 50%;/u);
+  assert.match(connectorRule, /top: 36px;/u);
+  assert.match(connectorRule, /left: 50%;/u);
+  assert.match(connectorRule, /height: 48px;/u);
+  assert.match(page, /\{hasChildren && \([\s\S]*?className="cx-team-architecture__tree-toggle"/u);
+  assert.match(page, /onClick=\{\(\) => onToggle\(entity\.memberId\)\}/u);
+  assert.match(page, /onClick=\{\(\) => onSelect\(entity\.memberId\)\}/u);
+  assert.doesNotMatch(page, /tree-toggle[\s\S]{0,500}<Icon/u);
+  for (const rule of [nameRule, titleRule]) {
+    assert.match(rule, /overflow: hidden;/u);
+    assert.match(rule, /min-width: 0;/u);
+    assert.match(rule, /text-overflow: ellipsis;/u);
+    assert.match(rule, /white-space: nowrap;/u);
+  }
+});
+
+test('uses Host pan zoom, depth-three expansion, search reveal, and icon-leading compact filters', async () => {
+  const [page, css] = await Promise.all([
+    readFile(new URL('../src/team-architecture-page.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/team-architecture-page.css', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(page, /expandableMemberIds\(nodes, startDepth, 3\)/u);
+  assert.match(page, /const effectiveExpanded = revealMatches \? allExpanded : expandedMemberIds;/u);
+  assert.match(page, /if \(revealMatches\) return;/u);
+  assert.match(page, /\{expanded && \([\s\S]*?node\.children\.map/u);
+  assert.match(page, /aria-expanded=\{hasChildren \? expanded : undefined\}/u);
+  assert.match(page, /t\('tree\.expand',[\s\S]*?count: node\.children\.length/u);
+  assert.match(
+    page,
+    /<PanZoomCanvas[\s\S]*?fill[\s\S]*?minScale=\{0\.3\}[\s\S]*?controls=\{\{ fitLabel: t\('tree\.fit'\), resetLabel: t\('tree\.reset'\) \}\}/u,
+  );
+  assert.doesNotMatch(page, /controllerRef=|canvas\.current|cx-team-architecture__tree-actions/u);
+  assert.doesNotMatch(css, /cx-team-architecture__tree-actions/u);
+  assert.doesNotMatch(page, /cx-team-architecture__chart-scroll/u);
+  assert.doesNotMatch(css, /cx-team-architecture__chart-scroll/u);
+  assert.doesNotMatch(css, /100vh|calc\([^)]*vh|\.cxr-|data-cordisx-page/u);
+
+  assert.match(page, /<FilterToolbar[\s\S]*?search=\{[\s\S]*?<SearchField/u);
+  assert.match(page, /<SearchField[\s\S]*?aria-label=\{t\('search\.label'\)\}[\s\S]*?onChange=\{setQuery\}/u);
+  for (const icon of ['role', 'session', 'relationship']) {
+    assert.match(
+      page,
+      new RegExp(`density="compact"[\\s\\S]*?prefixIcon=\\{<Icon name="${icon}" aria-hidden="true" \\/>\\}`),
+    );
+  }
+  assert.doesNotMatch(css, /cx-team-architecture__(?:filter|controls|search)|caret/u);
+  assert.doesNotMatch(page, /onWheel=|onPointerDown=|onPointerMove=|onPointerUp=/u);
+  assert.doesNotMatch(css, /user-select/u);
+
+  const rootRule = css.match(/\.cx-team-architecture:not\(\[data-detail-tab\]\) \{([^}]*)\}/u)?.[1] ?? '';
+  const groupsRule = css.match(/\.cx-team-architecture__groups \{([^}]*)\}/u)?.[1] ?? '';
+  const canvasRule = css.match(/\.cx-team-architecture__tree-canvas \{([^}]*)\}/u)?.[1] ?? '';
+  const viewportRule = css.match(/\.cx-team-architecture__tree-viewport \{([^}]*)\}/u)?.[1] ?? '';
+  assert.doesNotMatch(viewportRule, /overflow/u);
+  assert.match(canvasRule, /grid-template-rows: minmax\(0, 1fr\);/u);
+  for (const rule of [rootRule, groupsRule, canvasRule, viewportRule]) {
+    assert.match(rule, /height: 100%;/u);
+    assert.match(rule, /min-height: 0;/u);
+  }
+});
+
+test('renders a compact IDE prompt tree with guide lines and independent pane scrolling', async () => {
+  const [page, css] = await Promise.all([
+    readFile(new URL('../src/team-architecture-page.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/team-architecture-page.css', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(page, /id=\{`team-prompt-group-\$\{node\.kind\}`\}[\s\S]*?role="group"/u);
+  assert.match(page, /data-unconfigured=\{source\.sections\.length === 0 \? 'true' : undefined\}/u);
+  assert.match(page, /className="cx-team-architecture" data-detail-tab=\{tab\}/u);
+  assert.match(
+    page,
+    /<HorizontalSplitPane[\s\S]*?initialLeftSize=\{270\}[\s\S]*?minLeftSize=\{220\}[\s\S]*?maxLeftSize=\{360\}[\s\S]*?separatorLabel=\{t\('detail\.prompts'\)\}/u,
+  );
+  assert.match(page, /left=\{[\s\S]*?cx-team-architecture__prompt-selector/u);
+  assert.match(page, /right=\{[\s\S]*?cx-team-architecture__prompt-content/u);
+  assert.doesNotMatch(page, /prompt-chevron|<svg|host:folder|host:files/u);
+  assert.doesNotMatch(css, /prompt-chevron|prompt-icon/u);
   assert.match(
     css,
-    /\.cx-team-architecture__prompt-workspace \{[\s\S]*?grid-template-columns: minmax\(180px, 240px\) minmax\(0, 1fr\);/u,
+    /\.cx-team-architecture__prompt-kind button \{[\s\S]*?min-height: 26px;[\s\S]*?padding: 2px 6px;/u,
   );
-  assert.match(
-    css,
-    /@media \(max-width: 620px\) \{[\s\S]*?\.cx-team-architecture__prompt-workspace \{\s*grid-template-columns: 1fr;/u,
-  );
-  assert.doesNotMatch(css, /cx-team-architecture__prompt-section/u);
+  assert.match(css, /\.cx-team-architecture__prompt-kind > \[role='group'\]::before/u);
+  assert.match(css, /\.cx-team-architecture__prompt-kind > \[role='group'\] > button::before/u);
+  const workspaceRule = css.match(/\.cx-team-architecture__prompt-workspace \{([^}]*)\}/u)?.[1] ?? '';
+  assert.match(workspaceRule, /height: 100%;/u);
+  assert.match(workspaceRule, /min-height: 0;/u);
+  assert.match(workspaceRule, /overflow: hidden;/u);
+  assert.doesNotMatch(workspaceRule, /display:|grid-template-columns:/u);
+  const sharedPaneRule = css.match(
+    /\.cx-team-architecture__prompt-selector,\s*\.cx-team-architecture__prompt-content \{([^}]*)\}/u,
+  )?.[1] ?? '';
+  const selectorRule = css.match(/\.cx-team-architecture__prompt-selector \{([^}]*)\}/u)?.[1] ?? '';
+  assert.match(sharedPaneRule, /min-height: 0;/u);
+  assert.match(sharedPaneRule, /overscroll-behavior: contain;/u);
+  assert.match(selectorRule, /overflow-y: auto;/u);
+  assert.match(css, /\.cx-team-architecture__prompt-content \{\s*overflow: auto;/u);
 });
 
 test('keeps active Session detail navigation unavailable until a public Host action exists', async () => {

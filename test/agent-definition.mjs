@@ -76,6 +76,34 @@ test('parses and freezes a complete OneWorks-style Agent catalog', () => {
   assert.equal(Object.isFrozen(parsed.definitions[1].promptSections), true);
 });
 
+test('keeps a chosen member name separate from an optional job title and preserves legacy label-only input', () => {
+  const base = definition('base', 'v1');
+  const named = parseChatroomAgentConfiguration(team([base], [{
+    memberId: 'leader',
+    label: 'Avery Chen',
+    title: 'Team Lead',
+    definition: base.identity,
+    role: 'leader',
+    attentionPolicy: 'ambient',
+  }]));
+  assert.equal(named.members[0].label, 'Avery Chen');
+  assert.equal(named.members[0].title, 'Team Lead');
+  assert.equal(Object.isFrozen(named.members[0]), true);
+
+  const legacy = parseChatroomAgentConfiguration(team([base]));
+  assert.equal(legacy.members[0].label, 'Lead');
+  assert.equal(legacy.members[0].title, undefined);
+  assert.throws(() =>
+    parseChatroomAgentConfiguration(team([base], [{
+      memberId: 'leader',
+      label: 'Avery Chen',
+      title: '   ',
+      definition: base.identity,
+      role: 'leader',
+      attentionPolicy: 'ambient',
+    }])), /members\[0\]\.title must be a non-empty string/u);
+});
+
 test('rejects missing ancestors, cycles, duplicates, and unreachable definitions', () => {
   const base = definition('base', 'v1');
   const leaf = definition('leaf', 'v1', { extends: [base.identity] });

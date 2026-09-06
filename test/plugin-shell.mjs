@@ -4,16 +4,23 @@ import test from 'node:test';
 
 const source = name => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 
-test('registers one plugin-owned lazy React Room page through public CordisX modules', async () => {
-  const [entry, loader, page, pageSource, css] = await Promise.all([
+test('prefers the Host-owned Shell and retains the lazy React Room page only as a compatibility fallback', async () => {
+  const [entry, surface, loader, page, pageSource, css] = await Promise.all([
     source('src/chatroom.ts'),
+    source('src/chatroom-page-surface.ts'),
     source('src/chatroom-page-loader.tsx'),
     source('src/chatroom-page.tsx'),
     source('src/chatroom-page-source.ts'),
     source('src/chatroom-page.css'),
   ]);
 
-  assert.match(entry, /ctx\.pages\.register\(page, createLazyChatroomPage\(pageSource, product\.sidebarImages\)\)/u);
+  assert.match(entry, /selectChatroomPageMount/u);
+  assert.match(surface, /registerSourceV9/u);
+  assert.match(surface, /mode: 'page-composer-v2'/u);
+  assert.match(entry, /admissionMode: 'v9'/u);
+  assert.match(entry, /ctx\.pages\.register\(page, pageMount\)/u);
+  assert.match(entry, /await import\('\.\/chatroom-page-loader\.js'\)/u);
+  assert.doesNotMatch(`${entry}\n${surface}`, /as unknown/u);
   assert.match(entry, /chrome: 'body-only'/u);
   assert.doesNotMatch(entry, /from '\.\/chatroom-page\.js'/u);
   assert.match(loader, /import\('\.\/chatroom-page\.js'\)/u);
@@ -36,7 +43,7 @@ test('registers one plugin-owned lazy React Room page through public CordisX mod
   assert.match(css, /@media \(max-width: 760px\)/u);
   assert.doesNotMatch(
     `${entry}\n${page}\n${pageSource}`,
-    /ctx\.visuals|agentConversationShell|AgentConversationRenderer|renderer\/host-ui|data-cordisx-app-theme/u,
+    /ctx\.visuals|AgentConversationRenderer|renderer\/host-ui|data-cordisx-app-theme/u,
   );
 });
 

@@ -1,11 +1,19 @@
 .cx-team-architecture {
   box-sizing: border-box;
   display: grid;
+  min-height: 0;
   gap: 12px;
   width: 100%;
   margin: 0;
   padding: 0;
   color: inherit;
+}
+
+.cx-team-architecture:not([data-detail-tab]) {
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .cx-team-architecture *,
@@ -40,41 +48,6 @@
   color: color-mix(in srgb, currentColor 68%, transparent);
 }
 
-.cx-team-architecture__controls {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 8px;
-  padding: 2px;
-  overflow: visible;
-}
-
-.cx-team-architecture__controls .cx-team-architecture__search {
-  display: block;
-  min-width: 220px;
-  flex: 1 1 320px;
-}
-
-.cx-team-architecture__controls input {
-  width: 100%;
-  min-height: 38px;
-  padding: 7px 10px;
-  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, currentColor 4%, transparent);
-  color: inherit;
-  font: inherit;
-}
-
-.cx-team-architecture__controls .cx-team-architecture__filter {
-  width: 144px;
-  min-width: 144px;
-  flex: 0 0 144px;
-}
-
-.cx-team-architecture__controls input:focus-visible,
-.cx-team-architecture__chart-scroll:focus-visible,
 .cx-team-architecture__entity:focus-visible {
   outline: 2px solid color-mix(in srgb, currentColor 78%, transparent);
   outline-offset: 2px;
@@ -83,20 +56,42 @@
 .cx-team-architecture__groups,
 .cx-team-architecture__detail {
   display: grid;
+  min-height: 0;
   gap: 16px;
+}
+
+.cx-team-architecture__groups {
+  height: 100%;
+  min-height: 0;
+  grid-auto-rows: minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .cx-team-architecture__detail-panel {
   min-width: 0;
 }
 
+.cx-team-architecture[data-detail-tab='prompts'],
+.cx-team-architecture[data-detail-tab='relationships'],
+.cx-team-architecture[data-detail-tab='prompts'] .cx-team-architecture__detail,
+.cx-team-architecture[data-detail-tab='relationships'] .cx-team-architecture__detail,
+.cx-team-architecture__detail-panel[data-detail-tab='prompts'],
+.cx-team-architecture__detail-panel[data-detail-tab='relationships'] {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .cx-team-architecture__chart,
 .cx-team-architecture__unestablished {
+  height: 100%;
+  min-height: 0;
   min-width: 0;
 }
 
 .cx-team-architecture__unestablished {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -108,22 +103,34 @@
 
 .cx-team-architecture__section {
   display: grid;
+  min-height: 0;
   gap: 14px;
 }
 
-.cx-team-architecture__chart-scroll {
+.cx-team-architecture__detail-panel[data-detail-tab='relationships'] > .cx-team-architecture__section {
+  height: 100%;
+  overflow: hidden;
+}
+
+.cx-team-architecture__tree-canvas {
+  display: grid;
   width: 100%;
-  max-width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 24px 16px 30px;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.cx-team-architecture__tree-viewport {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
   border-radius: 12px;
   background:
     linear-gradient(90deg, color-mix(in srgb, currentColor 2.5%, transparent) 1px, transparent 1px) 0 0 / 24px 24px,
     linear-gradient(color-mix(in srgb, currentColor 2.5%, transparent) 1px, transparent 1px) 0 0 / 24px 24px,
     color-mix(in srgb, currentColor 1.5%, transparent);
-  scrollbar-gutter: stable;
-  overscroll-behavior-x: contain;
 }
 
 .cx-team-architecture__forest {
@@ -132,7 +139,8 @@
   min-width: 100%;
   align-items: flex-start;
   justify-content: center;
-  gap: 76px;
+  gap: 24px;
+  padding: 16px 80px 20px;
 }
 
 .cx-team-architecture__branch {
@@ -145,15 +153,18 @@
 
 .cx-team-architecture__node-seat {
   position: relative;
+  display: block;
+  width: fit-content;
+  max-width: 120px;
   z-index: 1;
 }
 
 .cx-team-architecture__node-seat[data-has-children='true']::after {
   position: absolute;
-  top: 100%;
+  top: 36px;
   left: 50%;
   width: 1px;
-  height: 18px;
+  height: 48px;
   border-left: 1.5px solid color-mix(in srgb, currentColor 32%, transparent);
   content: '';
 }
@@ -164,29 +175,29 @@
   width: max-content;
   align-items: flex-start;
   justify-content: center;
-  gap: 28px;
+  gap: 12px;
 }
 
 .cx-team-architecture__children > .cx-team-architecture__branch {
-  padding-top: 36px;
+  padding-top: 24px;
 }
 
 .cx-team-architecture__children > .cx-team-architecture__branch::before,
 .cx-team-architecture__children > .cx-team-architecture__branch::after {
   position: absolute;
-  top: 18px;
+  top: 12px;
   content: '';
 }
 
 .cx-team-architecture__children > .cx-team-architecture__branch::before {
   left: 50%;
-  height: 18px;
+  height: 16px;
   border-left: 1.5px solid color-mix(in srgb, currentColor 32%, transparent);
 }
 
 .cx-team-architecture__children > .cx-team-architecture__branch::after {
-  right: -14px;
-  left: -14px;
+  right: -6px;
+  left: -6px;
   border-top: 1.5px solid color-mix(in srgb, currentColor 32%, transparent);
 }
 
@@ -205,67 +216,94 @@
 .cx-team-architecture__entity {
   position: relative;
   display: grid;
-  width: 248px;
-  min-width: 248px;
-  min-height: 102px;
-  grid-template-columns: 46px minmax(0, 1fr);
+  width: fit-content;
+  min-width: 0;
+  max-width: 120px;
+  height: 72px;
+  min-height: 72px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 32px minmax(0, 1fr);
   align-items: center;
-  gap: 10px 12px;
-  padding: 14px;
-  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, currentColor 3%, transparent);
-  box-shadow: 0 10px 30px color-mix(in srgb, #000 8%, transparent), 0 1px 2px color-mix(in srgb, #000 8%, transparent);
+  justify-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+  transition: color 140ms ease, opacity 140ms ease;
 }
 
 .cx-team-architecture__entity:hover {
-  border-color: color-mix(in srgb, currentColor 36%, transparent);
-  box-shadow: 0 14px 34px color-mix(in srgb, #000 11%, transparent), 0 2px 4px color-mix(in srgb, #000 9%, transparent);
-  transform: translateY(-2px);
+  color: color-mix(in srgb, var(--cx-primary, currentColor) 76%, currentColor);
 }
 
 .cx-team-architecture__entity[data-context-only='true'] {
-  border-style: dashed;
   opacity: 0.7;
+}
+
+.cx-team-architecture__tree-toggle {
+  position: absolute;
+  top: 22px;
+  left: calc(50% + 6px);
+  z-index: 2;
+  display: grid;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, currentColor 34%, transparent);
+  border-radius: 50%;
+  background: var(--cx-surface, Canvas);
+  color: inherit;
+  font-size: 0.62rem;
+  line-height: 1;
+}
+
+.cx-team-architecture__tree-toggle[aria-expanded='true'] {
+  border-color: color-mix(in srgb, var(--cx-primary, currentColor) 65%, transparent);
+  background: var(--cx-primary, currentColor);
+  color: var(--cx-primary-text, Canvas);
 }
 
 .cx-team-architecture__avatar {
   display: grid;
-  width: 46px;
-  height: 46px;
+  width: 32px;
+  height: 32px;
   place-items: center;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
   border-radius: 50%;
-  background:
-    radial-gradient(circle at 34% 28%, color-mix(in srgb, currentColor 20%, transparent), transparent 38%),
-    color-mix(in srgb, currentColor 8%, transparent);
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   font-weight: 720;
   letter-spacing: 0.02em;
 }
 
-.cx-team-architecture__avatar > .cxr-ui-agent-avatar,
-.cx-team-architecture__avatar .cxa-avatar {
+.cx-team-architecture__avatar-image {
   width: 100%;
   height: 100%;
 }
 
 .cx-team-architecture__entity-main {
   display: grid;
-  align-content: center;
-  gap: 3px;
+  width: fit-content;
   min-width: 0;
+  max-width: 112px;
+  align-content: center;
+  justify-items: center;
+  gap: 1px;
+  text-align: center;
 }
 
 .cx-team-architecture__entity-title {
   overflow: hidden;
-  font-size: 0.95rem;
+  min-width: 0;
+  font-size: 0.82rem;
   font-weight: 680;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -274,41 +312,12 @@
 
 .cx-team-architecture__entity-identity {
   overflow: hidden;
+  min-width: 0;
   color: color-mix(in srgb, currentColor 65%, transparent);
-  font-size: 0.74rem;
-  line-height: 1.35;
+  font-size: 0.7rem;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.cx-team-architecture__session-state {
-  display: flex;
-  grid-column: 1 / -1;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  padding-top: 7px;
-  border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
-  color: color-mix(in srgb, currentColor 62%, transparent);
-  font-size: 0.72rem;
-  line-height: 1.3;
-}
-
-.cx-team-architecture__session-dot {
-  width: 7px;
-  height: 7px;
-  flex: none;
-  border-radius: 50%;
-  background: color-mix(in srgb, currentColor 30%, transparent);
-}
-
-.cx-team-architecture__session-state--active {
-  color: color-mix(in srgb, #17844a 82%, currentColor);
-}
-
-.cx-team-architecture__session-state--active .cx-team-architecture__session-dot {
-  background: #28a966;
-  box-shadow: 0 0 0 3px color-mix(in srgb, #28a966 16%, transparent);
 }
 
 .cx-team-architecture__status {
@@ -352,32 +361,30 @@
   min-width: 0;
 }
 
-.cx-team-architecture__prompt-metadata {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 18px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent);
-  color: color-mix(in srgb, currentColor 68%, transparent);
-  font-size: 0.78rem;
+.cx-team-architecture__prompt-section {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .cx-team-architecture__prompt-workspace {
-  display: grid;
+  height: 100%;
+  min-height: 0;
   min-width: 0;
-  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
-  align-items: start;
-  gap: 0;
+  overflow: hidden;
 }
 
 .cx-team-architecture__prompt-selector,
 .cx-team-architecture__prompt-content {
+  min-height: 0;
   min-width: 0;
+  overscroll-behavior: contain;
 }
 
 .cx-team-architecture__prompt-selector {
-  padding-right: 18px;
-  border-right: 1px solid color-mix(in srgb, currentColor 13%, transparent);
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-gutter: stable;
 }
 
 .cx-team-architecture__prompt-tree,
@@ -387,24 +394,29 @@
 }
 
 .cx-team-architecture__prompt-tree {
-  gap: 5px;
+  gap: 0;
+  padding: 4px 0;
 }
 
 .cx-team-architecture__prompt-kind {
-  gap: 3px;
+  gap: 0;
 }
 
 .cx-team-architecture__prompt-kind > [role='group'] {
   position: relative;
-  gap: 2px;
-  margin-left: 12px;
-  padding-left: 16px;
+  gap: 0;
+  margin-left: 13px;
+  padding-left: 13px;
+}
+
+.cx-team-architecture__prompt-kind > [role='group'][hidden] {
+  display: none;
 }
 
 .cx-team-architecture__prompt-kind > [role='group']::before {
   position: absolute;
   top: 0;
-  bottom: 12px;
+  bottom: 13px;
   left: 0;
   border-left: 1px solid color-mix(in srgb, currentColor 22%, transparent);
   content: '';
@@ -413,16 +425,20 @@
 .cx-team-architecture__prompt-kind button {
   appearance: none;
   position: relative;
-  display: grid;
+  display: flex;
   width: 100%;
+  min-height: 26px;
   min-width: 0;
-  gap: 2px;
-  padding: 7px 9px;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 4px;
   background: transparent;
   color: inherit;
   font: inherit;
+  font-size: 0.8rem;
+  line-height: 20px;
   text-align: left;
   cursor: pointer;
 }
@@ -431,18 +447,36 @@
   font-weight: 650;
 }
 
+.cx-team-architecture__prompt-row-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 5px;
+}
+
+.cx-team-architecture__prompt-row-label {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .cx-team-architecture__prompt-kind > [role='group'] > button::before {
   position: absolute;
   top: 50%;
   right: 100%;
-  width: 16px;
+  width: 13px;
   border-top: 1px solid color-mix(in srgb, currentColor 22%, transparent);
   content: '';
 }
 
-.cx-team-architecture__prompt-kind button:hover,
+.cx-team-architecture__prompt-kind button:hover {
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
 .cx-team-architecture__prompt-kind button[aria-selected='true'] {
-  background: color-mix(in srgb, currentColor 8%, transparent);
+  background: color-mix(in srgb, var(--cx-primary, currentColor) 12%, transparent);
 }
 
 .cx-team-architecture__prompt-kind button:focus-visible {
@@ -451,11 +485,20 @@
 }
 
 .cx-team-architecture__prompt-kind button small {
+  flex: none;
   color: color-mix(in srgb, currentColor 58%, transparent);
+  font-size: 0.68rem;
+}
+
+.cx-team-architecture__prompt-kind button[data-unconfigured='true']:not([aria-selected='true']) {
+  color: color-mix(in srgb, currentColor 68%, transparent);
 }
 
 .cx-team-architecture__prompt-content {
+  overflow: auto;
   padding-left: 18px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .cx-team-architecture__prompt-document {
@@ -463,47 +506,54 @@
   gap: 8px;
 }
 
-.cx-team-architecture__relationship-map {
-  display: grid;
-  min-height: 430px;
-  place-content: center;
-  justify-items: center;
-  padding: 28px;
-  border-radius: 12px;
-  background:
-    linear-gradient(90deg, color-mix(in srgb, currentColor 2.5%, transparent) 1px, transparent 1px) 0 0 / 24px 24px,
-    linear-gradient(color-mix(in srgb, currentColor 2.5%, transparent) 1px, transparent 1px) 0 0 / 24px 24px,
-    color-mix(in srgb, currentColor 1.5%, transparent);
-}
-
-.cx-team-architecture__relationship-level {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-}
-
-.cx-team-architecture__relationship-row {
+.cx-team-architecture__relationship-tree {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
+  width: max-content;
+  min-width: 100%;
+  min-height: 320px;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  gap: 14px;
+  padding: 16px 80px 20px;
 }
 
-.cx-team-architecture__relationship-level-label {
-  color: color-mix(in srgb, currentColor 58%, transparent);
-  font-size: 0.74rem;
-  font-weight: 650;
+.cx-team-architecture__relationship-parent-row {
+  position: relative;
+  display: flex;
+  width: max-content;
+  align-items: flex-start;
+  gap: 12px;
 }
 
-.cx-team-architecture__relationship-connector {
-  width: 1px;
-  height: 28px;
-  border-left: 1.5px solid color-mix(in srgb, currentColor 32%, transparent);
+.cx-team-architecture__relationship-parent-row > .cx-team-architecture__branch::after {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: -6px;
+  left: -6px;
+  border-top: 1.5px solid color-mix(in srgb, currentColor 32%, transparent);
+  content: '';
+}
+
+.cx-team-architecture__relationship-parent-row > .cx-team-architecture__branch:first-child::after {
+  left: 50%;
+}
+
+.cx-team-architecture__relationship-parent-row > .cx-team-architecture__branch:last-child::after {
+  right: 50%;
+}
+
+.cx-team-architecture__relationship-parent-row > .cx-team-architecture__branch:only-child::after {
+  display: none;
 }
 
 .cx-team-architecture__entity[data-current='true'] {
-  border-color: color-mix(in srgb, var(--cx-primary, currentColor) 58%, transparent);
-  background: color-mix(in srgb, var(--cx-primary, currentColor) 9%, transparent);
+  color: color-mix(in srgb, var(--cx-primary, currentColor) 82%, currentColor);
+}
+
+.cx-team-architecture__entity[data-current='true'] .cx-team-architecture__avatar {
+  outline: 2px solid color-mix(in srgb, var(--cx-primary, currentColor) 58%, transparent);
+  outline-offset: 2px;
 }
 
 .cx-team-architecture__tokens,
@@ -553,26 +603,6 @@
     grid-template-columns: 1fr;
   }
 
-  .cx-team-architecture__prompt-workspace {
-    grid-template-columns: 1fr;
-  }
-
-  .cx-team-architecture__prompt-selector {
-    padding-right: 0;
-    padding-bottom: 16px;
-    border-right: 0;
-    border-bottom: 1px solid color-mix(in srgb, currentColor 13%, transparent);
-  }
-
-  .cx-team-architecture__prompt-content {
-    padding-top: 16px;
-    padding-left: 0;
-  }
-
-  .cx-team-architecture__chart-scroll {
-    padding-right: 12px;
-    padding-left: 12px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

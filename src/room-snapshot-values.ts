@@ -180,6 +180,7 @@ export const freezeConfiguredMember = (
     memberId: member.memberId,
     participantId: member.participantId ?? member.memberId,
     label: member.label,
+    ...(member.title === undefined ? {} : { title: member.title }),
     definition: Object.freeze({ ...member.definition }),
     avatar: agentAvatarForDefinition(member.definition, configuration.definitions),
     role: member.role,

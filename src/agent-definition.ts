@@ -48,7 +48,10 @@ export interface ChatroomAgentConfiguration {
 export interface ChatroomAgentMemberConfiguration {
   readonly memberId: string;
   readonly participantId?: string;
+  /** User-chosen member name. Kept as label for backward compatibility. */
   readonly label: string;
+  /** Optional job title; never replaces the member's chosen name. */
+  readonly title?: string;
   readonly definition: AgentDefinitionIdentity;
   readonly role: 'leader' | 'member';
   readonly attentionPolicy: 'ambient' | 'mention-only';
@@ -340,6 +343,7 @@ export function parseChatroomAgentConfiguration(value: unknown): ChatroomAgentCo
         participantId: requiredString(candidate.participantId, `${field}.participantId`),
       }),
       label: requiredString(candidate.label, `${field}.label`),
+      ...(candidate.title === undefined ? {} : { title: requiredString(candidate.title, `${field}.title`) }),
       definition: parseIdentity(candidate.definition, `${field}.definition`),
       role,
       attentionPolicy,
