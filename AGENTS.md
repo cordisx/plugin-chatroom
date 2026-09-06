@@ -11,3 +11,4 @@
 - Do not create a standalone page or direct DOM integration. The Host owns
   plugin page chrome, routing, shared React, and lifecycle.
 - Read `.agents/rules/README.md` before changing this repository.
+- Read the organization [CSS ownership and maintenance rule](https://github.com/cordisx/cordisxmono/blob/main/.agents/rules/css.md) before changing CSS, stylesheet-generating code, or a style-bearing DOM contract.
