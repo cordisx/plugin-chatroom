@@ -208,7 +208,7 @@ test('package pins the exact Protocol bootstrap-route and Host runtime releases 
   );
   assert.equal(
     packageJson.devDependencies.cordisx,
-    'github:cordisx/cordisx#c85bae3ef5c8008496c193fd59a7f802fcfe3d0a',
+    'github:cordisx/cordisx#30eb3c6dd1823023010231dcf6b6f2836a179386',
   );
   assert.equal(packageJson.main, packageManifest.entry);
   assert.equal(packageManifest.entry, './dist/runtime/chatroom.js');
