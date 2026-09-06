@@ -17,6 +17,8 @@ import {
   HoverCard,
   Icon,
   MarkdownViewer,
+  PanZoomCanvas,
+  type PanZoomCanvasHandle,
   Select,
   Stack,
   Text,
@@ -58,6 +60,10 @@ export type TeamArchitectureMessages = {
   'tree.unestablished.description': undefined;
   'tree.empty.title': undefined;
   'tree.empty.description': undefined;
+  'tree.expand': { label: string; count: number; };
+  'tree.collapse': { label: string; count: number; };
+  'tree.fit': undefined;
+  'tree.reset': undefined;
   'entity.open': { label: string; };
   'entity.active-sessions': { count: number; };
   'entity.no-active-sessions': undefined;
@@ -206,7 +212,10 @@ function StringList({ values, empty }: { readonly values: readonly string[]; rea
 interface TreeNodeViewProps {
   readonly node: TeamEntityTreeNode;
   readonly currentMemberId?: string;
-  readonly semantic?: 'list' | 'tree';
+  readonly depth: number;
+  readonly expandedMemberIds: ReadonlySet<string>;
+  readonly expansionLocked?: boolean;
+  readonly onToggle: (memberId: string) => void;
   readonly onSelect: (memberId: string) => void;
   readonly t: Translate;
 }
@@ -275,16 +284,29 @@ function EntityCard({ entity, current, contextOnly, onSelect, t }: {
   );
 }
 
-function TreeNodeView({ node, currentMemberId, semantic = 'list', onSelect, t }: TreeNodeViewProps) {
+function TreeNodeView({
+  node,
+  currentMemberId,
+  depth,
+  expandedMemberIds,
+  expansionLocked = false,
+  onToggle,
+  onSelect,
+  t,
+}: TreeNodeViewProps) {
   const entity = node.entity;
   const hasChildren = node.children.length > 0;
+  const expanded = hasChildren && expandedMemberIds.has(entity.memberId);
   const current = entity.memberId === currentMemberId;
+  const childGroupId = `team-tree-children-${encodeURIComponent(entity.memberId)}`;
   return (
     <div
       className="cx-team-architecture__branch"
-      role={semantic === 'tree' ? 'treeitem' : 'listitem'}
+      role="treeitem"
+      aria-level={depth}
+      aria-expanded={hasChildren ? expanded : undefined}
     >
-      <div className="cx-team-architecture__node-seat" data-has-children={hasChildren ? 'true' : undefined}>
+      <div className="cx-team-architecture__node-seat" data-has-children={expanded ? 'true' : undefined}>
         <EntityCard
           entity={entity}
           current={current}
@@ -292,21 +314,158 @@ function TreeNodeView({ node, currentMemberId, semantic = 'list', onSelect, t }:
           onSelect={onSelect}
           t={t}
         />
+        {hasChildren && (
+          <Button
+            className="cx-team-architecture__tree-toggle"
+            type="button"
+            variant="ghost"
+            disabled={expansionLocked}
+            aria-controls={childGroupId}
+            aria-expanded={expanded}
+            aria-label={expanded
+              ? t('tree.collapse', { label: entity.label, count: node.children.length })
+              : t('tree.expand', { label: entity.label, count: node.children.length })}
+            onClick={() => onToggle(entity.memberId)}
+          >
+            <Icon name={expanded ? 'folder-open' : 'folder'} aria-hidden="true" />
+            <span>{node.children.length}</span>
+          </Button>
+        )}
       </div>
-      {hasChildren && (
-        <div className="cx-team-architecture__children" role={semantic === 'tree' ? 'group' : 'list'}>
+      {expanded && (
+        <div id={childGroupId} className="cx-team-architecture__children" role="group">
           {node.children.map(child => (
             <TreeNodeView
               key={child.entity.memberId}
               node={child}
               currentMemberId={currentMemberId}
-              semantic={semantic}
+              depth={depth + 1}
+              expandedMemberIds={expandedMemberIds}
+              expansionLocked={expansionLocked}
+              onToggle={onToggle}
               onSelect={onSelect}
               t={t}
             />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function expandableMemberIds(
+  nodes: readonly TeamEntityTreeNode[],
+  startDepth: number,
+  maximumExpandedDepth?: number,
+): ReadonlySet<string> {
+  const ids = new Set<string>();
+  const visit = (node: TeamEntityTreeNode, depth: number) => {
+    if (node.children.length === 0) return;
+    if (maximumExpandedDepth === undefined || depth < maximumExpandedDepth) ids.add(node.entity.memberId);
+    for (const child of node.children) visit(child, depth + 1);
+  };
+  for (const node of nodes) visit(node, startDepth);
+  return ids;
+}
+
+function EntityTreeCanvas({
+  nodes,
+  parents = [],
+  currentMemberId,
+  revealMatches = false,
+  ariaLabel,
+  onSelect,
+  t,
+}: {
+  readonly nodes: readonly TeamEntityTreeNode[];
+  readonly parents?: readonly TeamEntityViewModel[];
+  readonly currentMemberId?: string;
+  readonly revealMatches?: boolean;
+  readonly ariaLabel: string;
+  readonly onSelect: (memberId: string) => void;
+  readonly t: Translate;
+}) {
+  const startDepth = parents.length === 0 ? 1 : 2;
+  const defaultExpanded = useMemo(() => expandableMemberIds(nodes, startDepth, 3), [nodes, startDepth]);
+  const allExpanded = useMemo(() => expandableMemberIds(nodes, startDepth), [nodes, startDepth]);
+  const [expandedMemberIds, setExpandedMemberIds] = useState<ReadonlySet<string>>(() => defaultExpanded);
+  const canvas = useRef<PanZoomCanvasHandle | null>(null);
+  const effectiveExpanded = revealMatches ? allExpanded : expandedMemberIds;
+  const toggle = (memberId: string) => {
+    if (revealMatches) return;
+    setExpandedMemberIds(current => {
+      const next = new Set(current);
+      if (next.has(memberId)) next.delete(memberId);
+      else next.add(memberId);
+      return next;
+    });
+  };
+  const renderNode = (node: TeamEntityTreeNode, depth: number) => (
+    <TreeNodeView
+      key={node.entity.memberId}
+      node={node}
+      currentMemberId={currentMemberId}
+      depth={depth}
+      expandedMemberIds={effectiveExpanded}
+      expansionLocked={revealMatches}
+      onToggle={toggle}
+      onSelect={onSelect}
+      t={t}
+    />
+  );
+  return (
+    <div className="cx-team-architecture__tree-canvas">
+      <div className="cx-team-architecture__tree-actions">
+        <Button
+          type="button"
+          variant="ghost"
+          title={t('tree.fit')}
+          aria-label={t('tree.fit')}
+          onClick={() => canvas.current?.fitToView()}
+        >
+          <Icon name="relationship" aria-hidden="true" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          title={t('tree.reset')}
+          aria-label={t('tree.reset')}
+          onClick={() => canvas.current?.reset()}
+        >
+          <Icon name="host:reset" aria-hidden="true" />
+        </Button>
+      </div>
+      <PanZoomCanvas
+        className="cx-team-architecture__tree-viewport"
+        aria-label={ariaLabel}
+        controllerRef={canvas}
+        initialScale={1}
+        minScale={0.3}
+        maxScale={2.5}
+      >
+        {parents.length === 0
+          ? (
+            <div className="cx-team-architecture__forest" role="tree" aria-label={ariaLabel}>
+              {nodes.map(node => renderNode(node, 1))}
+            </div>
+          )
+          : (
+            <div className="cx-team-architecture__relationship-tree" role="tree" aria-label={ariaLabel}>
+              <div className="cx-team-architecture__relationship-parent-row" role="group">
+                {parents.map(parent => (
+                  <div className="cx-team-architecture__branch" role="treeitem" aria-level={1} key={parent.memberId}>
+                    <div className="cx-team-architecture__node-seat" data-has-children="true">
+                      <EntityCard entity={parent} onSelect={onSelect} t={t} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="cx-team-architecture__children cx-team-architecture__relationship-current" role="group">
+                {nodes.map(node => renderNode(node, 2))}
+              </div>
+            </div>
+          )}
+      </PanZoomCanvas>
     </div>
   );
 }
@@ -507,53 +666,17 @@ function RelationshipHierarchy({ entity, entities, onSelect, t }: {
   readonly t: Translate;
 }) {
   const { parents, subtree } = teamEntityLocalHierarchy(entity, entities);
+  const nodes = useMemo(() => [subtree], [subtree]);
   return (
     <section className="cx-team-architecture__section" aria-label={t('detail.tab.relationships')}>
-      <div
-        className="cx-team-architecture__chart-scroll"
-        role="region"
-        aria-label={t('detail.relationships')}
-        tabIndex={0}
-      >
-        <div className="cx-team-architecture__relationship-tree" role="tree" aria-label={t('detail.relationships')}>
-          {parents.length === 0
-            ? (
-              <TreeNodeView
-                node={subtree}
-                currentMemberId={entity.memberId}
-                semantic="tree"
-                onSelect={onSelect}
-                t={t}
-              />
-            )
-            : (
-              <>
-                <div
-                  className="cx-team-architecture__relationship-parent-row"
-                  role="group"
-                  aria-label={t('detail.manager')}
-                >
-                  {parents.map(parent => (
-                    <div className="cx-team-architecture__branch" role="treeitem" key={parent.memberId}>
-                      <div className="cx-team-architecture__node-seat" data-has-children="true">
-                        <EntityCard entity={parent} onSelect={onSelect} t={t} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="cx-team-architecture__children cx-team-architecture__relationship-current" role="group">
-                  <TreeNodeView
-                    node={subtree}
-                    currentMemberId={entity.memberId}
-                    semantic="tree"
-                    onSelect={onSelect}
-                    t={t}
-                  />
-                </div>
-              </>
-            )}
-        </div>
-      </div>
+      <EntityTreeCanvas
+        nodes={nodes}
+        parents={parents}
+        currentMemberId={entity.memberId}
+        ariaLabel={t('detail.relationships')}
+        onSelect={onSelect}
+        t={t}
+      />
     </section>
   );
 }
@@ -742,6 +865,7 @@ function TeamArchitectureRoot({
       session,
       relationship,
     }), [query, relationship, role, session, snapshot]);
+  const revealMatches = query.trim() !== '' || role !== 'all' || session !== 'all' || relationship !== 'all';
   const select = (memberId: string) => {
     void navigation.navigate({ id: detailRouteIds.overview, params: { memberId } });
   };
@@ -769,8 +893,9 @@ function TeamArchitectureRoot({
           />
         </label>
         <Select
-          className="cx-team-architecture__filter"
           aria-label={t('filter.role')}
+          density="compact"
+          prefixIcon={<Icon name="role" aria-hidden="true" />}
           value={role}
           options={[
             { value: 'all', label: t('filter.role.all') },
@@ -780,8 +905,9 @@ function TeamArchitectureRoot({
           onChange={selectRole}
         />
         <Select
-          className="cx-team-architecture__filter"
           aria-label={t('filter.session')}
+          density="compact"
+          prefixIcon={<Icon name="session" aria-hidden="true" />}
           value={session}
           options={[
             { value: 'all', label: t('filter.session.all') },
@@ -791,8 +917,9 @@ function TeamArchitectureRoot({
           onChange={selectSession}
         />
         <Select
-          className="cx-team-architecture__filter"
           aria-label={t('filter.relationship')}
+          density="compact"
+          prefixIcon={<Icon name="relationship" aria-hidden="true" />}
           value={relationship}
           options={[
             { value: 'all', label: t('filter.relationship.all') },
@@ -809,45 +936,25 @@ function TeamArchitectureRoot({
           <div className="cx-team-architecture__groups">
             {model.roots.length > 0 && (
               <div className="cx-team-architecture__chart">
-                <div
-                  className="cx-team-architecture__chart-scroll"
-                  role="region"
-                  aria-label={t('tree.heading')}
-                  tabIndex={0}
-                >
-                  <div className="cx-team-architecture__forest" role="list" aria-label={t('tree.heading')}>
-                    {model.roots.map(node => (
-                      <TreeNodeView
-                        key={node.entity.memberId}
-                        node={node}
-                        onSelect={select}
-                        t={t}
-                      />
-                    ))}
-                  </div>
-                </div>
+                <EntityTreeCanvas
+                  nodes={model.roots}
+                  revealMatches={revealMatches}
+                  ariaLabel={t('tree.heading')}
+                  onSelect={select}
+                  t={t}
+                />
               </div>
             )}
             {model.unestablished.length > 0 && (
               <section className="cx-team-architecture__unestablished" aria-labelledby="team-unestablished-heading">
                 <h2 id="team-unestablished-heading">{t('tree.unestablished')}</h2>
-                <div
-                  className="cx-team-architecture__chart-scroll"
-                  role="region"
-                  aria-label={t('tree.unestablished')}
-                  tabIndex={0}
-                >
-                  <div className="cx-team-architecture__forest" role="list" aria-label={t('tree.unestablished')}>
-                    {model.unestablished.map(node => (
-                      <TreeNodeView
-                        key={node.entity.memberId}
-                        node={node}
-                        onSelect={select}
-                        t={t}
-                      />
-                    ))}
-                  </div>
-                </div>
+                <EntityTreeCanvas
+                  nodes={model.unestablished}
+                  revealMatches={revealMatches}
+                  ariaLabel={t('tree.unestablished')}
+                  onSelect={select}
+                  t={t}
+                />
               </section>
             )}
           </div>

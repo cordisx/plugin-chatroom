@@ -133,3 +133,18 @@ test('projects and searches chosen member names separately from optional job tit
   assert.equal(legacy.every(entity => entity.title === undefined), true);
   assert.equal(legacy[0].label, CHATROOM_DEFAULT_AGENT_CONFIGURATION.members[0].label);
 });
+
+test('keeps every ancestor on a deep search path so the canvas can reveal the match', () => {
+  const configuration = complexConfiguration();
+  const model = buildTeamArchitectureViewModel(
+    { configuration, rooms: [] },
+    { query: 'API Platform' },
+  );
+  assert.deepEqual([...model.matchedMemberIds], ['api-platform']);
+  assert.deepEqual(model.roots.flatMap(flattenSubtreeMemberIds), [
+    'leader',
+    'integrator',
+    'backend',
+    'api-platform',
+  ]);
+});

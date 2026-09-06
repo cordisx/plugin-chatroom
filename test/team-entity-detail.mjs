@@ -218,7 +218,10 @@ test('uses public Host avatars and Markdown with cardless responsive prompt and 
     readFile(new URL('../src/team-architecture-page.css', import.meta.url), 'utf8'),
   ]);
 
-  assert.match(page, /HorizontalSplitPane,[\s\S]*?HoverCard,[\s\S]*?Icon,[\s\S]*?from 'cordisx\/ui';/u);
+  assert.match(
+    page,
+    /HorizontalSplitPane,[\s\S]*?HoverCard,[\s\S]*?Icon,[\s\S]*?PanZoomCanvas,[\s\S]*?from 'cordisx\/ui';/u,
+  );
   assert.doesNotMatch(page, /from ['"](?:tdesign-react|react-markdown|rehype-|remark-)/u);
   assert.match(page, /teamEntityPromptSources\(entity, entities\)/u);
   assert.match(
@@ -242,8 +245,7 @@ test('uses public Host avatars and Markdown with cardless responsive prompt and 
   assert.match(page, /<EmptyState title=\{t\('detail\.prompt-unconfigured'\)\} \/>/u);
   assert.match(page, /teamEntityLocalHierarchy\(entity, entities\)/u);
   assert.match(page, /const \{ parents, subtree \} = teamEntityLocalHierarchy/u);
-  assert.match(page, /<TreeNodeView[\s\S]*?node=\{subtree\}[\s\S]*?currentMemberId=\{entity\.memberId\}/u);
-  assert.match(page, /semantic="tree"/u);
+  assert.match(page, /<EntityTreeCanvas[\s\S]*?nodes=\{nodes\}[\s\S]*?currentMemberId=\{entity\.memberId\}/u);
   assert.match(page, /function EntityCard/u);
   assert.doesNotMatch(page, /relationship-(?:card|map|level|level-label|row|connector)/u);
   assert.doesNotMatch(css, /relationship-(?:card|map|level|level-label|row|connector)/u);
@@ -282,21 +284,66 @@ test('reuses one compact member card with full Host HoverCard details across bot
   const avatarRule = css.match(/\.cx-team-architecture__avatar \{([^}]*)\}/u)?.[1] ?? '';
   const forestRule = css.match(/\.cx-team-architecture__forest \{([^}]*)\}/u)?.[1] ?? '';
   const childrenRule = css.match(/\.cx-team-architecture__children \{([^}]*)\}/u)?.[1] ?? '';
-  const chartRule = css.match(/\.cx-team-architecture__chart-scroll \{([^}]*)\}/u)?.[1] ?? '';
+  const viewportRule = css.match(/\.cx-team-architecture__tree-viewport \{([^}]*)\}/u)?.[1] ?? '';
   const nameRule = css.match(/\.cx-team-architecture__entity-title \{([^}]*)\}/u)?.[1] ?? '';
   const titleRule = css.match(/\.cx-team-architecture__entity-identity \{([^}]*)\}/u)?.[1] ?? '';
-  assert.match(entityRule, /width: 164px;/u);
-  assert.match(entityRule, /height: 54px;/u);
+  const connectorRule = css.match(
+    /\.cx-team-architecture__node-seat\[data-has-children='true'\]::after \{([^}]*)\}/u,
+  )?.[1] ?? '';
+  assert.match(entityRule, /width: fit-content;/u);
+  assert.match(entityRule, /max-width: 190px;/u);
+  assert.match(entityRule, /height: 48px;/u);
+  assert.match(entityRule, /border: 0;/u);
+  assert.match(entityRule, /background: transparent;/u);
+  assert.match(entityRule, /box-shadow: none;/u);
   assert.match(avatarRule, /width: 32px;/u);
   assert.match(avatarRule, /height: 32px;/u);
-  assert.match(forestRule, /gap: 36px;/u);
-  assert.match(childrenRule, /gap: 16px;/u);
-  assert.match(chartRule, /padding: 16px 12px 20px;/u);
+  assert.match(forestRule, /gap: 24px;/u);
+  assert.match(childrenRule, /gap: 12px;/u);
+  assert.match(viewportRule, /height: 100%;/u);
+  assert.match(connectorRule, /left: var\(--cx-team-avatar-center\);/u);
   for (const rule of [nameRule, titleRule]) {
     assert.match(rule, /overflow: hidden;/u);
     assert.match(rule, /min-width: 0;/u);
     assert.match(rule, /text-overflow: ellipsis;/u);
     assert.match(rule, /white-space: nowrap;/u);
+  }
+});
+
+test('uses Host pan zoom, depth-three expansion, search reveal, and icon-leading compact filters', async () => {
+  const [page, css] = await Promise.all([
+    readFile(new URL('../src/team-architecture-page.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/team-architecture-page.css', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(page, /expandableMemberIds\(nodes, startDepth, 3\)/u);
+  assert.match(page, /const effectiveExpanded = revealMatches \? allExpanded : expandedMemberIds;/u);
+  assert.match(page, /if \(revealMatches\) return;/u);
+  assert.match(page, /\{expanded && \([\s\S]*?node\.children\.map/u);
+  assert.match(page, /aria-expanded=\{hasChildren \? expanded : undefined\}/u);
+  assert.match(page, /t\('tree\.expand',[\s\S]*?count: node\.children\.length/u);
+  assert.match(page, /<PanZoomCanvas[\s\S]*?controllerRef=\{canvas\}[\s\S]*?minScale=\{0\.3\}/u);
+  assert.match(page, /canvas\.current\?\.fitToView\(\)/u);
+  assert.match(page, /canvas\.current\?\.reset\(\)/u);
+  assert.doesNotMatch(page, /cx-team-architecture__chart-scroll/u);
+  assert.doesNotMatch(css, /cx-team-architecture__chart-scroll/u);
+
+  for (const icon of ['role', 'session', 'relationship']) {
+    assert.match(
+      page,
+      new RegExp(`density="compact"[\\s\\S]*?prefixIcon=\\{<Icon name="${icon}" aria-hidden="true" \\/>\\}`),
+    );
+  }
+  assert.doesNotMatch(css, /cx-team-architecture__filter/u);
+
+  const rootRule = css.match(/\.cx-team-architecture:not\(\[data-detail-tab\]\) \{([^}]*)\}/u)?.[1] ?? '';
+  const groupsRule = css.match(/\.cx-team-architecture__groups \{([^}]*)\}/u)?.[1] ?? '';
+  const canvasRule = css.match(/\.cx-team-architecture__tree-canvas \{([^}]*)\}/u)?.[1] ?? '';
+  const viewportRule = css.match(/\.cx-team-architecture__tree-viewport \{([^}]*)\}/u)?.[1] ?? '';
+  assert.doesNotMatch(viewportRule, /overflow/u);
+  for (const rule of [rootRule, groupsRule, canvasRule, viewportRule]) {
+    assert.match(rule, /height: 100%;/u);
+    assert.match(rule, /min-height: 0;/u);
   }
 });
 
