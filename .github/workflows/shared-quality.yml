@@ -8,9 +8,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   configuration:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       POLICY_REF: c63c2e8c2ba7e11502934a52ad2ce3734e804cdc
     steps:
