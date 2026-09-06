@@ -36,14 +36,7 @@ jobs:
           --repo "$GITHUB_WORKSPACE" --profile typescript
           --policy-root "$RUNNER_TEMP/quality-policy" --policy-ref "$POLICY_REF"
           --json > "$RUNNER_TEMP/quality-consumption.json"
-      - name: Enforce the source limit on newly added PR files
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: npm run lint:staged -- --diff "$BASE_SHA...$HEAD_SHA" --diff-filter=A
-      - name: Report full-source lint separately from configuration coverage
-        continue-on-error: true
+      - name: Enforce full-source lint
         run: npm run --silent lint:source -- --format json --output-file "$RUNNER_TEMP/source-lint.json"
       - uses: actions/upload-artifact@v4
         if: always()
