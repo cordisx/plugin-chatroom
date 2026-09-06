@@ -1,4 +1,13 @@
-import { Fragment, type ReactNode, useMemo, useState, useSyncExternalStore } from 'cordisx/react';
+import {
+  Fragment,
+  type KeyboardEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'cordisx/react';
 import { defineReactPage } from 'cordisx/react';
 import { AgentAvatar, Button, EmptyState, MarkdownViewer, Select } from 'cordisx/ui';
 import type { CordisXLocalizationSeat, CordisXReactPageProps } from 'cordisx/contracts';
@@ -83,6 +92,8 @@ export type TeamArchitectureMessages = {
   'detail.prompt-inherit.replace': undefined;
   'detail.prompt-upstream': undefined;
   'detail.prompt-current': undefined;
+  'detail.prompt-self': { label: string; };
+  'detail.prompt-unconfigured': undefined;
   'detail.prompt-section.id': undefined;
   'detail.prompt-section.provenance': undefined;
   'detail.provenance.direct': undefined;
@@ -187,6 +198,54 @@ interface TreeNodeViewProps {
   readonly t: Translate;
 }
 
+function EntityCard({ entity, current, contextOnly, onSelect, t }: {
+  readonly entity: TeamEntityViewModel;
+  readonly current?: boolean;
+  readonly contextOnly?: boolean;
+  readonly onSelect?: (memberId: string) => void;
+  readonly t: Translate;
+}) {
+  const content = (
+    <>
+      <span className="cx-team-architecture__avatar" aria-hidden="true">
+        <AgentAvatar participant={{ id: entity.memberId, name: entity.label, avatar: entity.avatar }} />
+      </span>
+      <span className="cx-team-architecture__entity-main">
+        <span className="cx-team-architecture__entity-title">{entity.label}</span>
+        <span className="cx-team-architecture__entity-identity">{roleLabel(entity, t)}</span>
+      </span>
+      <span
+        className={entity.sessionState === 'active'
+          ? 'cx-team-architecture__session-state cx-team-architecture__session-state--active'
+          : 'cx-team-architecture__session-state'}
+      >
+        <span className="cx-team-architecture__session-dot" aria-hidden="true" />
+        {entity.sessionState === 'active'
+          ? t('entity.active-sessions', { count: entity.activeSessions.length })
+          : t('entity.no-active-sessions')}
+      </span>
+    </>
+  );
+  return onSelect === undefined
+    ? (
+      <div className="cx-team-architecture__entity" data-current={current ? 'true' : undefined}>
+        {content}
+      </div>
+    )
+    : (
+      <button
+        type="button"
+        className="cx-team-architecture__entity"
+        data-current={current ? 'true' : undefined}
+        data-context-only={contextOnly ? 'true' : undefined}
+        onClick={() => onSelect(entity.memberId)}
+        aria-label={t('entity.open', { label: entity.label })}
+      >
+        {content}
+      </button>
+    );
+}
+
 function TreeNodeView({ node, onSelect, t }: TreeNodeViewProps) {
   const entity = node.entity;
   const hasChildren = node.children.length > 0;
@@ -196,31 +255,7 @@ function TreeNodeView({ node, onSelect, t }: TreeNodeViewProps) {
       role="listitem"
     >
       <div className="cx-team-architecture__node-seat" data-has-children={hasChildren ? 'true' : undefined}>
-        <button
-          type="button"
-          className="cx-team-architecture__entity"
-          data-context-only={node.matches ? undefined : 'true'}
-          onClick={() => onSelect(entity.memberId)}
-          aria-label={t('entity.open', { label: entity.label })}
-        >
-          <span className="cx-team-architecture__avatar" aria-hidden="true">
-            <AgentAvatar participant={{ id: entity.memberId, name: entity.label, avatar: entity.avatar }} />
-          </span>
-          <span className="cx-team-architecture__entity-main">
-            <span className="cx-team-architecture__entity-title">{entity.label}</span>
-            <span className="cx-team-architecture__entity-identity">{roleLabel(entity, t)}</span>
-          </span>
-          <span
-            className={entity.sessionState === 'active'
-              ? 'cx-team-architecture__session-state cx-team-architecture__session-state--active'
-              : 'cx-team-architecture__session-state'}
-          >
-            <span className="cx-team-architecture__session-dot" aria-hidden="true" />
-            {entity.sessionState === 'active'
-              ? t('entity.active-sessions', { count: entity.activeSessions.length })
-              : t('entity.no-active-sessions')}
-          </span>
-        </button>
+        <EntityCard entity={entity} contextOnly={!node.matches} onSelect={onSelect} t={t} />
       </div>
       {hasChildren && (
         <div className="cx-team-architecture__children" role="list">
@@ -252,25 +287,79 @@ function PromptWorkspace({ entity, entities, t }: {
   readonly t: Translate;
 }) {
   const sourceModels = teamEntityPromptSources(entity, entities);
-  const sources = sourceModels.map(source => ({
-    id: `${source.identity.agentId}@${source.identity.revision}`,
-    label: source.label,
-    provenance: t(source.kind === 'current' ? 'detail.prompt-current' : 'detail.prompt-upstream'),
-    sections: source.promptSections,
+  const promptKinds = [
+    'introduction',
+    'personality',
+    'role',
+    'operations',
+    'tools',
+    'knowledge',
+    'memory-policy',
+    'memory',
+    'other',
+  ] as const;
+  const nodes = promptKinds.map(kind => ({
+    kind,
+    id: `kind:${kind}`,
+    sources: sourceModels.map((source, sourceIndex) => ({
+      id: `source:${kind}:${sourceIndex}`,
+      kind,
+      source,
+      sections: source.promptSections.filter(section => section.kind === kind),
+    })),
   }));
-  const upstreamSources = sources.slice(0, -1);
-  const currentSource = sources.at(-1)!;
-  const entries = sources.flatMap(source => source.sections.map(section => ({ source, section })));
-  const initial = currentSource.sections[0] === undefined
-    ? entries[0]
-    : { source: currentSource, section: currentSource.sections[0] };
-  const initialId = initial === undefined ? '' : `${initial.source.id}:${initial.section.sectionId}`;
-  const [selectedId, setSelectedId] = useState(initialId);
-  const selected = entries.find(entry => `${entry.source.id}:${entry.section.sectionId}` === selectedId)
-    ?? entries[0];
-  if (selected === undefined) {
-    return <EmptyState title={t('detail.none')} />;
-  }
+  const currentSourceIndex = Math.max(0, sourceModels.length - 1);
+  const currentFirstKind = sourceModels[currentSourceIndex]?.promptSections[0]?.kind ?? promptKinds[0];
+  const initialSelectedId = `source:${currentFirstKind}:${currentSourceIndex}`;
+  const [selectedId, setSelectedId] = useState(initialSelectedId);
+  const [expandedKinds, setExpandedKinds] = useState<ReadonlySet<string>>(() => new Set(promptKinds));
+  const [focusId, setFocusId] = useState(`kind:${promptKinds[0]}`);
+  const itemRefs = useRef(new Map<string, HTMLButtonElement>());
+  const visibleIds = nodes.flatMap(node => [
+    node.id,
+    ...(expandedKinds.has(node.kind) ? node.sources.map(source => source.id) : []),
+  ]);
+  const selected = nodes.flatMap(node => node.sources).find(source => source.id === selectedId)
+    ?? nodes[0].sources[currentSourceIndex];
+  useEffect(() => {
+    itemRefs.current.get(focusId)?.focus();
+  }, [expandedKinds, focusId]);
+  const focusRelative = (offset: number) => {
+    const index = visibleIds.indexOf(focusId);
+    const next = visibleIds[Math.max(0, Math.min(visibleIds.length - 1, index + offset))];
+    if (next !== undefined) setFocusId(next);
+  };
+  const toggleKind = (kind: string, expanded?: boolean) => {
+    setExpandedKinds(current => {
+      const next = new Set(current);
+      const shouldExpand = expanded ?? !next.has(kind);
+      if (shouldExpand) next.add(kind);
+      else next.delete(kind);
+      return next;
+    });
+  };
+  const onTreeKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const kindNode = nodes.find(node => node.id === focusId);
+    const sourceNode = nodes.find(node => node.sources.some(source => source.id === focusId));
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      focusRelative(event.key === 'ArrowDown' ? 1 : -1);
+    } else if (event.key === 'ArrowRight' && kindNode !== undefined) {
+      event.preventDefault();
+      if (!expandedKinds.has(kindNode.kind)) toggleKind(kindNode.kind, true);
+      else if (kindNode.sources[0] !== undefined) setFocusId(kindNode.sources[0].id);
+    } else if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      if (sourceNode !== undefined) setFocusId(sourceNode.id);
+      else if (kindNode !== undefined && expandedKinds.has(kindNode.kind)) toggleKind(kindNode.kind, false);
+    } else if ((event.key === 'Enter' || event.key === ' ') && kindNode !== undefined) {
+      event.preventDefault();
+      toggleKind(kindNode.kind);
+    } else if ((event.key === 'Enter' || event.key === ' ') && sourceNode !== undefined) {
+      event.preventDefault();
+      setSelectedId(focusId);
+    }
+  };
   const inheritance = entity.declaredCapabilities.inheritance?.promptSections;
   const inheritanceLabel = inheritance === 'append'
     ? t('detail.prompt-inherit.append')
@@ -284,10 +373,10 @@ function PromptWorkspace({ entity, entities, t }: {
           <strong>{t('detail.prompt-inherit')}</strong> {inheritanceLabel}
         </span>
         <span>
-          <strong>{t('detail.prompt-upstream')}</strong> {upstreamSources.length === 0
+          <strong>{t('detail.prompt-upstream')}</strong> {sourceModels.length <= 1
             ? <span className="cx-team-architecture__muted">{t('detail.none')}</span>
-            : upstreamSources.map((source, index) => (
-              <Fragment key={source.id}>
+            : sourceModels.slice(0, -1).map((source, index) => (
+              <Fragment key={`${source.identity.agentId}@${source.identity.revision}`}>
                 {index === 0 ? null : ', '}
                 <span>{source.label}</span>
               </Fragment>
@@ -296,33 +385,52 @@ function PromptWorkspace({ entity, entities, t }: {
       </div>
       <div className="cx-team-architecture__prompt-workspace">
         <nav className="cx-team-architecture__prompt-selector" aria-label={t('detail.prompts')}>
-          <div className="cx-team-architecture__prompt-tree" role="tree">
-            {sources.map(source => (
-              <div className="cx-team-architecture__prompt-source" key={source.id} role="treeitem" aria-expanded="true">
-                <span className="cx-team-architecture__prompt-source-label">
-                  <span aria-hidden="true">▾</span>
-                  <strong>{source.label}</strong>
-                  <small>{source.provenance}</small>
-                </span>
-                <div role="group">
-                  {source.sections.map(section => {
-                    const id = `${source.id}:${section.sectionId}`;
-                    return (
+          <div className="cx-team-architecture__prompt-tree" role="tree" onKeyDown={onTreeKeyDown}>
+            {nodes.map(node => (
+              <div className="cx-team-architecture__prompt-kind" key={node.id}>
+                <button
+                  ref={element => {
+                    if (element === null) itemRefs.current.delete(node.id);
+                    else itemRefs.current.set(node.id, element);
+                  }}
+                  type="button"
+                  role="treeitem"
+                  aria-expanded={expandedKinds.has(node.kind)}
+                  tabIndex={focusId === node.id ? 0 : -1}
+                  onFocus={() => setFocusId(node.id)}
+                  onClick={() => toggleKind(node.kind)}
+                >
+                  {promptKindLabel(node.kind, t)}
+                </button>
+                {!expandedKinds.has(node.kind) ? null : (
+                  <div role="group">
+                    {node.sources.map(source => (
                       <button
-                        key={id}
+                        ref={element => {
+                          if (element === null) itemRefs.current.delete(source.id);
+                          else itemRefs.current.set(source.id, element);
+                        }}
+                        key={source.id}
                         type="button"
                         role="treeitem"
-                        aria-selected={id === selectedId}
+                        aria-selected={source.id === selectedId}
                         aria-controls="team-entity-prompt-content"
-                        onClick={() => setSelectedId(id)}
+                        tabIndex={focusId === source.id ? 0 : -1}
+                        onFocus={() => setFocusId(source.id)}
+                        onClick={() => setSelectedId(source.id)}
                       >
-                        <span aria-hidden="true">└</span>
-                        <span>{promptKindLabel(section.kind, t)}</span>
-                        <code>{section.sectionId}</code>
+                        <span>
+                          {source.source.kind === 'current'
+                            ? t('detail.prompt-self', { label: entity.label })
+                            : source.source.label}
+                        </span>
+                        {source.sections.length === 0
+                          ? <small>{t('detail.prompt-unconfigured')}</small>
+                          : <small>{source.source.label}</small>}
                       </button>
-                    );
-                  })}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -331,47 +439,23 @@ function PromptWorkspace({ entity, entities, t }: {
           id="team-entity-prompt-content"
           className="cx-team-architecture__prompt-content"
           role="tabpanel"
-          aria-label={`${promptKindLabel(selected.section.kind, t)} · ${selected.section.sectionId}`}
+          aria-label={`${promptKindLabel(selected.kind, t)} · ${selected.source.label}`}
         >
-          <MarkdownViewer
-            aria-label={`${promptKindLabel(selected.section.kind, t)} · ${selected.section.sectionId}`}
-            source={selected.section.text}
-          />
+          {selected.sections.length === 0
+            ? <EmptyState title={t('detail.prompt-unconfigured')} />
+            : selected.sections.map(section => (
+              <div className="cx-team-architecture__prompt-document" key={section.sectionId}>
+                <code>{section.sectionId}</code>
+                <MarkdownViewer
+                  aria-label={`${promptKindLabel(section.kind, t)} · ${selected.source.label}`}
+                  source={section.text}
+                />
+              </div>
+            ))}
         </div>
       </div>
     </section>
   );
-}
-
-function RelationshipEntityCard({ entity, current, onSelect, t }: {
-  readonly entity: TeamEntityViewModel;
-  readonly current?: boolean;
-  readonly onSelect: (memberId: string) => void;
-  readonly t: Translate;
-}) {
-  const content = (
-    <>
-      <span className="cx-team-architecture__relationship-avatar" aria-hidden="true">
-        <AgentAvatar participant={{ id: entity.memberId, name: entity.label, avatar: entity.avatar }} />
-      </span>
-      <span>
-        <strong>{entity.label}</strong>
-        <small>{roleLabel(entity, t)}</small>
-      </span>
-    </>
-  );
-  return current
-    ? <div className="cx-team-architecture__relationship-card" data-current="true">{content}</div>
-    : (
-      <button
-        type="button"
-        className="cx-team-architecture__relationship-card"
-        onClick={() => onSelect(entity.memberId)}
-        aria-label={t('entity.open', { label: entity.label })}
-      >
-        {content}
-      </button>
-    );
 }
 
 function RelationshipHierarchy({ entity, entities, onSelect, t }: {
@@ -384,29 +468,29 @@ function RelationshipHierarchy({ entity, entities, onSelect, t }: {
   return (
     <section className="cx-team-architecture__section" aria-label={t('detail.tab.relationships')}>
       <div className="cx-team-architecture__relationship-map" role="group" aria-label={t('detail.relationships')}>
-        <div className="cx-team-architecture__relationship-level" data-level="parents">
-          <span className="cx-team-architecture__relationship-level-label">{t('detail.manager')}</span>
-          <div>
-            {parents.length === 0
-              ? <span className="cx-team-architecture__muted">{t('entity.relationship.root')}</span>
-              : parents.map(parent => (
-                <RelationshipEntityCard key={parent.memberId} entity={parent} onSelect={onSelect} t={t} />
-              ))}
-          </div>
-        </div>
-        <span className="cx-team-architecture__relationship-connector" aria-hidden="true" />
+        {parents.length === 0 ? null : (
+          <>
+            <div className="cx-team-architecture__relationship-level" data-level="parents">
+              <span className="cx-team-architecture__relationship-level-label">{t('detail.manager')}</span>
+              <div className="cx-team-architecture__relationship-row">
+                {parents.map(parent => <EntityCard key={parent.memberId} entity={parent} onSelect={onSelect} t={t} />)}
+              </div>
+            </div>
+            <span className="cx-team-architecture__relationship-connector" aria-hidden="true" />
+          </>
+        )}
         <div className="cx-team-architecture__relationship-level" data-level="current">
-          <RelationshipEntityCard entity={entity} current onSelect={onSelect} t={t} />
+          <div className="cx-team-architecture__relationship-row">
+            <EntityCard entity={entity} current t={t} />
+          </div>
         </div>
         <span className="cx-team-architecture__relationship-connector" aria-hidden="true" />
         <div className="cx-team-architecture__relationship-level" data-level="children">
           <span className="cx-team-architecture__relationship-level-label">{t('detail.direct-reports')}</span>
-          <div>
+          <div className="cx-team-architecture__relationship-row">
             {children.length === 0
               ? <span className="cx-team-architecture__muted">{t('detail.none')}</span>
-              : children.map(child => (
-                <RelationshipEntityCard key={child.memberId} entity={child} onSelect={onSelect} t={t} />
-              ))}
+              : children.map(child => <EntityCard key={child.memberId} entity={child} onSelect={onSelect} t={t} />)}
           </div>
         </div>
       </div>

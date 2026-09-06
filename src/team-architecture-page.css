@@ -367,7 +367,7 @@
   min-width: 0;
   grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
   align-items: start;
-  gap: 18px;
+  gap: 0;
 }
 
 .cx-team-architecture__prompt-selector,
@@ -376,49 +376,48 @@
 }
 
 .cx-team-architecture__prompt-selector {
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, currentColor 13%, transparent);
-  border-radius: 10px;
-  background: color-mix(in srgb, currentColor 2.5%, transparent);
+  padding-right: 18px;
+  border-right: 1px solid color-mix(in srgb, currentColor 13%, transparent);
 }
 
 .cx-team-architecture__prompt-tree,
-.cx-team-architecture__prompt-source,
-.cx-team-architecture__prompt-source > [role='group'] {
+.cx-team-architecture__prompt-kind,
+.cx-team-architecture__prompt-kind > [role='group'] {
   display: grid;
 }
 
 .cx-team-architecture__prompt-tree {
-  gap: 8px;
-  padding: 8px;
+  gap: 5px;
 }
 
-.cx-team-architecture__prompt-source {
-  gap: 4px;
+.cx-team-architecture__prompt-kind {
+  gap: 3px;
 }
 
-.cx-team-architecture__prompt-source-label {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: 14px minmax(0, 1fr);
-  align-items: center;
-  gap: 2px 6px;
-  padding: 7px 8px 5px;
+.cx-team-architecture__prompt-kind > [role='group'] {
+  position: relative;
+  gap: 2px;
+  margin-left: 12px;
+  padding-left: 16px;
 }
 
-.cx-team-architecture__prompt-source-label small {
-  grid-column: 2;
-  color: color-mix(in srgb, currentColor 58%, transparent);
+.cx-team-architecture__prompt-kind > [role='group']::before {
+  position: absolute;
+  top: 0;
+  bottom: 12px;
+  left: 0;
+  border-left: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  content: '';
 }
 
-.cx-team-architecture__prompt-source button {
+.cx-team-architecture__prompt-kind button {
   appearance: none;
+  position: relative;
   display: grid;
   width: 100%;
   min-width: 0;
-  grid-template-columns: 14px minmax(0, 1fr);
-  gap: 2px 6px;
-  padding: 8px 9px 8px 22px;
+  gap: 2px;
+  padding: 7px 9px;
   border: 0;
   border-radius: 7px;
   background: transparent;
@@ -428,22 +427,40 @@
   cursor: pointer;
 }
 
-.cx-team-architecture__prompt-source button:hover,
-.cx-team-architecture__prompt-source button[aria-selected='true'] {
+.cx-team-architecture__prompt-kind > button {
+  font-weight: 650;
+}
+
+.cx-team-architecture__prompt-kind > [role='group'] > button::before {
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  width: 16px;
+  border-top: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  content: '';
+}
+
+.cx-team-architecture__prompt-kind button:hover,
+.cx-team-architecture__prompt-kind button[aria-selected='true'] {
   background: color-mix(in srgb, currentColor 8%, transparent);
 }
 
-.cx-team-architecture__prompt-source button:focus-visible {
+.cx-team-architecture__prompt-kind button:focus-visible {
   outline: 2px solid color-mix(in srgb, currentColor 78%, transparent);
   outline-offset: -2px;
 }
 
-.cx-team-architecture__prompt-source button code {
-  grid-column: 2;
-  overflow: hidden;
+.cx-team-architecture__prompt-kind button small {
   color: color-mix(in srgb, currentColor 58%, transparent);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.cx-team-architecture__prompt-content {
+  padding-left: 18px;
+}
+
+.cx-team-architecture__prompt-document {
+  display: grid;
+  gap: 8px;
 }
 
 .cx-team-architecture__relationship-map {
@@ -465,7 +482,7 @@
   gap: 8px;
 }
 
-.cx-team-architecture__relationship-level > div {
+.cx-team-architecture__relationship-row {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -484,59 +501,9 @@
   border-left: 1.5px solid color-mix(in srgb, currentColor 32%, transparent);
 }
 
-.cx-team-architecture__relationship-card {
-  appearance: none;
-  display: grid;
-  width: 220px;
-  min-height: 74px;
-  grid-template-columns: 42px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  padding: 11px 13px;
-  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, currentColor 3%, transparent);
-  box-shadow: 0 8px 22px color-mix(in srgb, #000 7%, transparent);
-  color: inherit;
-  font: inherit;
-  text-align: left;
-}
-
-button.cx-team-architecture__relationship-card {
-  cursor: pointer;
-}
-
-button.cx-team-architecture__relationship-card:hover {
-  border-color: color-mix(in srgb, currentColor 36%, transparent);
-  transform: translateY(-1px);
-}
-
-.cx-team-architecture__relationship-card[data-current='true'] {
+.cx-team-architecture__entity[data-current='true'] {
   border-color: color-mix(in srgb, var(--cx-primary, currentColor) 58%, transparent);
   background: color-mix(in srgb, var(--cx-primary, currentColor) 9%, transparent);
-}
-
-.cx-team-architecture__relationship-card > span:last-child {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-}
-
-.cx-team-architecture__relationship-card small {
-  color: color-mix(in srgb, currentColor 58%, transparent);
-}
-
-.cx-team-architecture__relationship-avatar {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  overflow: hidden;
-  border-radius: 50%;
-}
-
-.cx-team-architecture__relationship-avatar > .cxr-ui-agent-avatar {
-  width: 100%;
-  height: 100%;
 }
 
 .cx-team-architecture__tokens,
@@ -588,6 +555,18 @@ button.cx-team-architecture__relationship-card:hover {
 
   .cx-team-architecture__prompt-workspace {
     grid-template-columns: 1fr;
+  }
+
+  .cx-team-architecture__prompt-selector {
+    padding-right: 0;
+    padding-bottom: 16px;
+    border-right: 0;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 13%, transparent);
+  }
+
+  .cx-team-architecture__prompt-content {
+    padding-top: 16px;
+    padding-left: 0;
   }
 
   .cx-team-architecture__chart-scroll {

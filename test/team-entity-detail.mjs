@@ -59,6 +59,11 @@ test('declares exact Agent identities and one stable Host record summary across 
       'reload/reprojection must not renumber or relabel detail declarations',
     );
     const details = declarations.filter(declaration => declaration.route.params?.memberId !== undefined);
+    const leadOverview = details.find(declaration =>
+      declaration.route.params.memberId === 'leader'
+      && declaration.route.id === modules.navigation.TEAM_ARCHITECTURE_DETAIL_ROUTE_ID
+    );
+    assert.equal(leadOverview?.recordSummary?.title.fallback, 'Lead');
     const pageById = new Map([
       modules.navigation.TEAM_ARCHITECTURE_PAGE,
       ...modules.navigation.TEAM_ARCHITECTURE_DETAIL_PAGES,
@@ -123,7 +128,7 @@ test('declares exact Agent identities and one stable Host record summary across 
       const [overview, ...otherTabs] = memberDetails;
       assert.deepEqual(overview.subject, { kind: 'agent-definition', identity: member.definition });
       assert.equal(otherTabs.every(declaration => declaration.subject === undefined), true);
-      assert.equal(overview.recordSummary.title.fallback, definition.name ?? member.label);
+      assert.equal(overview.recordSummary.title.fallback, member.label);
       assert.equal(overview.recordSummary.description?.fallback, definition.description);
       assert.deepEqual(
         memberDetails.map(declaration => declaration.recordSummary),
@@ -190,14 +195,28 @@ test('uses public Host avatars and Markdown with cardless responsive prompt and 
   assert.match(page, /import \{ AgentAvatar, Button, EmptyState, MarkdownViewer, Select \} from 'cordisx\/ui';/u);
   assert.doesNotMatch(page, /from ['"](?:tdesign-react|react-markdown|rehype-|remark-)/u);
   assert.match(page, /teamEntityPromptSources\(entity, entities\)/u);
-  assert.match(page, /role="tree"/u);
-  assert.match(page, /role="treeitem"/u);
-  assert.match(page, /<MarkdownViewer[\s\S]*?source=\{selected\.section\.text\}/u);
-  assert.match(page, /teamEntityLocalHierarchy\(entity, entities\)/u);
   assert.match(
     page,
-    /<AgentAvatar participant=\{\{ id: entity\.memberId, name: entity\.label, avatar: entity\.avatar \}\} \/>/u,
+    /const promptKinds = \[[\s\S]*?'introduction'[\s\S]*?'personality'[\s\S]*?'role'[\s\S]*?'operations'[\s\S]*?'tools'[\s\S]*?'knowledge'[\s\S]*?'memory-policy'[\s\S]*?'memory'[\s\S]*?'other'/u,
   );
+  assert.match(page, /const nodes = promptKinds\.map\(kind => \(\{[\s\S]*?sources: sourceModels\.map/u);
+  assert.match(page, /role="tree"/u);
+  assert.match(page, /role="treeitem"/u);
+  assert.match(page, /role="group"/u);
+  assert.match(page, /aria-expanded=\{expandedKinds\.has\(node\.kind\)\}/u);
+  assert.match(page, /aria-selected=\{source\.id === selectedId\}/u);
+  assert.match(page, /event\.key === 'ArrowDown'/u);
+  assert.match(page, /event\.key === 'ArrowRight'/u);
+  assert.match(page, /event\.key === 'ArrowLeft'/u);
+  assert.match(page, /event\.key === 'Enter' \|\| event\.key === ' '/u);
+  assert.match(page, /<MarkdownViewer[\s\S]*?source=\{section\.text\}/u);
+  assert.match(page, /<EmptyState title=\{t\('detail\.prompt-unconfigured'\)\} \/>/u);
+  assert.match(page, /teamEntityLocalHierarchy\(entity, entities\)/u);
+  assert.match(page, /\{parents\.length === 0 \? null : \(/u);
+  assert.match(page, /function EntityCard/u);
+  assert.match(page, /<EntityCard entity=\{entity\} current t=\{t\} \/>/u);
+  assert.doesNotMatch(page, /relationship-card/u);
+  assert.doesNotMatch(page, />└</u);
   assert.match(navigation, /先继承上游提示词，再追加当前定义/u);
   assert.match(navigation, /Use upstream prompts first, then append this definition/u);
   assert.doesNotMatch(page, /<h3/u);
