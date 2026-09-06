@@ -2,20 +2,22 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-test('Chatroom owns its page composer admission, delivery, and approval seams', async () => {
-  const [pluginSource, pageSource] = await Promise.all([
+test('Chatroom projects into the Host Shell while retaining Host page composer admission', async () => {
+  const [pluginSource, surfaceSource, pageSource] = await Promise.all([
     readFile(new URL('../src/chatroom.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/chatroom-page-surface.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/chatroom-page-source.ts', import.meta.url), 'utf8'),
   ]);
 
   assert.match(pluginSource, /new ChatroomPageSource\(controller, agentSession, composerSettings\)/);
   assert.match(
     pluginSource,
-    /ctx\.pages\.register\(page, createLazyChatroomPage\(pageSource, product\.sidebarImages\)\)/,
+    /ctx\.pages\.register\(page, pageMount\)/,
   );
-  assert.doesNotMatch(pluginSource, /agentConversationShell/);
-  assert.doesNotMatch(pluginSource, /registerSourceV[6-9]/);
-  assert.doesNotMatch(pluginSource, /conversation\.mount/);
+  assert.match(pluginSource, /agentConversationShell/);
+  assert.match(surfaceSource, /registerSourceV9/);
+  assert.match(surfaceSource, /mode: 'page-composer-v2'/);
+  assert.match(pluginSource, /admissionMode: 'v9'/);
   assert.doesNotMatch(pluginSource, /agentAdmission(?:Origins|Reservations|BootstrapTargets|BootstrapReservations)/);
   assert.match(pluginSource, /agentPageAdmissionTargets/);
   assert.match(pluginSource, /agentPageAdmissionRouteDeclarations/);

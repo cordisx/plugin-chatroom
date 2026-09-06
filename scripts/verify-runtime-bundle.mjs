@@ -55,15 +55,27 @@ if (initialBytes > MAX_CHATROOM_INITIAL_GRAPH_BYTES) {
 }
 
 const page = manifest.files.find(file => file.kind === 'module' && file.path.includes('chatroom-page-'));
+const pageLoader = manifest.files.find(
+  file => file.kind === 'module' && file.path.includes('chatroom-page-loader-'),
+);
 const renderer = manifest.files.find(file => file.kind === 'module' && file.path.includes('avatar-renderer-'));
-if (page === undefined || renderer === undefined) {
-  throw new Error('Chatroom build did not preserve its page and Avatar renderer chunks.');
+if (page === undefined || pageLoader === undefined || renderer === undefined) {
+  throw new Error('Chatroom build did not preserve its fallback page, loader, and Avatar renderer chunks.');
 }
 const initialDynamicImports = new Set([...staticClosure].flatMap(path => files.get(path).dynamicImports));
-if (!initialDynamicImports.has(page.path) || initialDynamicImports.has(renderer.path)) {
-  throw new Error('Chatroom page must be the only visual module reachable from activation demand.');
+if (
+  !initialDynamicImports.has(pageLoader.path)
+  || initialDynamicImports.has(page.path)
+  || initialDynamicImports.has(renderer.path)
+) {
+  throw new Error('Only the compatibility page loader may be reachable from activation demand.');
 }
-if (!page.dynamicImports.includes(renderer.path) || page.styles.length !== 1 || renderer.styles.length !== 1) {
+if (
+  !pageLoader.dynamicImports.includes(page.path)
+  || !page.dynamicImports.includes(renderer.path)
+  || page.styles.length !== 1
+  || renderer.styles.length !== 1
+) {
   throw new Error('Chatroom page and Avatar renderer lazy ownership is incomplete.');
 }
 
