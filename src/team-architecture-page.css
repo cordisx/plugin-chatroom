@@ -48,34 +48,6 @@
   color: color-mix(in srgb, currentColor 68%, transparent);
 }
 
-.cx-team-architecture__controls {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 8px;
-  padding: 2px;
-  overflow: visible;
-}
-
-.cx-team-architecture__controls .cx-team-architecture__search {
-  display: block;
-  min-width: 220px;
-  flex: 1 1 320px;
-}
-
-.cx-team-architecture__controls input {
-  width: 100%;
-  min-height: 30px;
-  padding: 4px 8px;
-  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
-  border-radius: 7px;
-  background: color-mix(in srgb, currentColor 4%, transparent);
-  color: inherit;
-  font: inherit;
-}
-
-.cx-team-architecture__controls input:focus-visible,
 .cx-team-architecture__entity:focus-visible {
   outline: 2px solid color-mix(in srgb, currentColor 78%, transparent);
   outline-offset: 2px;
@@ -146,14 +118,7 @@
   height: 100%;
   min-height: 0;
   min-width: 0;
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.cx-team-architecture__tree-actions {
-  display: flex;
-  min-width: 0;
-  justify-content: flex-end;
-  gap: 4px;
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .cx-team-architecture__tree-viewport {
@@ -183,24 +148,23 @@
   display: flex;
   flex: none;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .cx-team-architecture__node-seat {
-  --cx-team-avatar-center: 20px;
   position: relative;
-  display: flex;
-  align-items: center;
-  gap: 2px;
+  display: block;
+  width: fit-content;
+  max-width: 120px;
   z-index: 1;
 }
 
 .cx-team-architecture__node-seat[data-has-children='true']::after {
   position: absolute;
-  top: 100%;
-  left: var(--cx-team-avatar-center);
+  top: 36px;
+  left: 50%;
   width: 1px;
-  height: 12px;
+  height: 48px;
   border-left: 1.5px solid color-mix(in srgb, currentColor 32%, transparent);
   content: '';
 }
@@ -212,7 +176,6 @@
   align-items: flex-start;
   justify-content: center;
   gap: 12px;
-  transform: translateX(calc(20px - 50%));
 }
 
 .cx-team-architecture__children > .cx-team-architecture__branch {
@@ -227,8 +190,8 @@
 }
 
 .cx-team-architecture__children > .cx-team-architecture__branch::before {
-  left: 20px;
-  height: 12px;
+  left: 50%;
+  height: 16px;
   border-left: 1.5px solid color-mix(in srgb, currentColor 32%, transparent);
 }
 
@@ -239,11 +202,11 @@
 }
 
 .cx-team-architecture__children > .cx-team-architecture__branch:first-child::after {
-  left: 20px;
+  left: 50%;
 }
 
 .cx-team-architecture__children > .cx-team-architecture__branch:last-child::after {
-  right: calc(100% - 20px);
+  right: 50%;
 }
 
 .cx-team-architecture__children > .cx-team-architecture__branch:only-child::after {
@@ -255,12 +218,14 @@
   display: grid;
   width: fit-content;
   min-width: 0;
-  max-width: 190px;
-  height: 48px;
-  min-height: 48px;
-  grid-template-columns: 32px minmax(0, 1fr);
+  max-width: 120px;
+  height: 72px;
+  min-height: 72px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 32px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  justify-items: center;
+  gap: 2px;
   padding: 4px;
   border: 0;
   border-radius: 6px;
@@ -282,7 +247,29 @@
 }
 
 .cx-team-architecture__tree-toggle {
-  flex: none;
+  position: absolute;
+  top: 22px;
+  left: calc(50% + 6px);
+  z-index: 2;
+  display: grid;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, currentColor 34%, transparent);
+  border-radius: 50%;
+  background: var(--cx-surface, Canvas);
+  color: inherit;
+  font-size: 0.62rem;
+  line-height: 1;
+}
+
+.cx-team-architecture__tree-toggle[aria-expanded='true'] {
+  border-color: color-mix(in srgb, var(--cx-primary, currentColor) 65%, transparent);
+  background: var(--cx-primary, currentColor);
+  color: var(--cx-primary-text, Canvas);
 }
 
 .cx-team-architecture__avatar {
@@ -304,11 +291,13 @@
 
 .cx-team-architecture__entity-main {
   display: grid;
-  width: max-content;
-  max-width: 146px;
-  align-content: center;
-  gap: 1px;
+  width: fit-content;
   min-width: 0;
+  max-width: 112px;
+  align-content: center;
+  justify-items: center;
+  gap: 1px;
+  text-align: center;
 }
 
 .cx-team-architecture__entity-title {
@@ -547,11 +536,11 @@
 }
 
 .cx-team-architecture__relationship-parent-row > .cx-team-architecture__branch:first-child::after {
-  left: 20px;
+  left: 50%;
 }
 
 .cx-team-architecture__relationship-parent-row > .cx-team-architecture__branch:last-child::after {
-  right: calc(100% - 20px);
+  right: 50%;
 }
 
 .cx-team-architecture__relationship-parent-row > .cx-team-architecture__branch:only-child::after {

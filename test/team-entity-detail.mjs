@@ -287,12 +287,17 @@ test('reuses one compact member card with full Host HoverCard details across bot
   const viewportRule = css.match(/\.cx-team-architecture__tree-viewport \{([^}]*)\}/u)?.[1] ?? '';
   const nameRule = css.match(/\.cx-team-architecture__entity-title \{([^}]*)\}/u)?.[1] ?? '';
   const titleRule = css.match(/\.cx-team-architecture__entity-identity \{([^}]*)\}/u)?.[1] ?? '';
+  const nodeSeatRule = css.match(/\.cx-team-architecture__node-seat \{([^}]*)\}/u)?.[1] ?? '';
+  const toggleRule = css.match(/\.cx-team-architecture__tree-toggle \{([^}]*)\}/u)?.[1] ?? '';
   const connectorRule = css.match(
     /\.cx-team-architecture__node-seat\[data-has-children='true'\]::after \{([^}]*)\}/u,
   )?.[1] ?? '';
   assert.match(entityRule, /width: fit-content;/u);
-  assert.match(entityRule, /max-width: 190px;/u);
-  assert.match(entityRule, /height: 48px;/u);
+  assert.match(entityRule, /max-width: 120px;/u);
+  assert.match(entityRule, /height: 72px;/u);
+  assert.match(entityRule, /grid-template-columns: minmax\(0, 1fr\);/u);
+  assert.match(entityRule, /grid-template-rows: 32px minmax\(0, 1fr\);/u);
+  assert.match(entityRule, /justify-items: center;/u);
   assert.match(entityRule, /border: 0;/u);
   assert.match(entityRule, /background: transparent;/u);
   assert.match(entityRule, /box-shadow: none;/u);
@@ -301,7 +306,21 @@ test('reuses one compact member card with full Host HoverCard details across bot
   assert.match(forestRule, /gap: 24px;/u);
   assert.match(childrenRule, /gap: 12px;/u);
   assert.match(viewportRule, /height: 100%;/u);
-  assert.match(connectorRule, /left: var\(--cx-team-avatar-center\);/u);
+  assert.match(nodeSeatRule, /width: fit-content;/u);
+  assert.match(nodeSeatRule, /max-width: 120px;/u);
+  assert.match(toggleRule, /position: absolute;/u);
+  assert.match(toggleRule, /top: 22px;/u);
+  assert.match(toggleRule, /left: calc\(50% \+ 6px\);/u);
+  assert.match(toggleRule, /width: 20px;/u);
+  assert.match(toggleRule, /height: 20px;/u);
+  assert.match(toggleRule, /border-radius: 50%;/u);
+  assert.match(connectorRule, /top: 36px;/u);
+  assert.match(connectorRule, /left: 50%;/u);
+  assert.match(connectorRule, /height: 48px;/u);
+  assert.match(page, /\{hasChildren && \([\s\S]*?className="cx-team-architecture__tree-toggle"/u);
+  assert.match(page, /onClick=\{\(\) => onToggle\(entity\.memberId\)\}/u);
+  assert.match(page, /onClick=\{\(\) => onSelect\(entity\.memberId\)\}/u);
+  assert.doesNotMatch(page, /tree-toggle[\s\S]{0,500}<Icon/u);
   for (const rule of [nameRule, titleRule]) {
     assert.match(rule, /overflow: hidden;/u);
     assert.match(rule, /min-width: 0;/u);
@@ -322,26 +341,34 @@ test('uses Host pan zoom, depth-three expansion, search reveal, and icon-leading
   assert.match(page, /\{expanded && \([\s\S]*?node\.children\.map/u);
   assert.match(page, /aria-expanded=\{hasChildren \? expanded : undefined\}/u);
   assert.match(page, /t\('tree\.expand',[\s\S]*?count: node\.children\.length/u);
-  assert.match(page, /<PanZoomCanvas[\s\S]*?fill[\s\S]*?controllerRef=\{canvas\}[\s\S]*?minScale=\{0\.3\}/u);
-  assert.match(page, /canvas\.current\?\.fitToView\(\)/u);
-  assert.match(page, /canvas\.current\?\.reset\(\)/u);
+  assert.match(
+    page,
+    /<PanZoomCanvas[\s\S]*?fill[\s\S]*?minScale=\{0\.3\}[\s\S]*?controls=\{\{ fitLabel: t\('tree\.fit'\), resetLabel: t\('tree\.reset'\) \}\}/u,
+  );
+  assert.doesNotMatch(page, /controllerRef=|canvas\.current|cx-team-architecture__tree-actions/u);
+  assert.doesNotMatch(css, /cx-team-architecture__tree-actions/u);
   assert.doesNotMatch(page, /cx-team-architecture__chart-scroll/u);
   assert.doesNotMatch(css, /cx-team-architecture__chart-scroll/u);
   assert.doesNotMatch(css, /100vh|calc\([^)]*vh|\.cxr-|data-cordisx-page/u);
 
+  assert.match(page, /<FilterToolbar[\s\S]*?search=\{[\s\S]*?<SearchField/u);
+  assert.match(page, /<SearchField[\s\S]*?aria-label=\{t\('search\.label'\)\}[\s\S]*?onChange=\{setQuery\}/u);
   for (const icon of ['role', 'session', 'relationship']) {
     assert.match(
       page,
       new RegExp(`density="compact"[\\s\\S]*?prefixIcon=\\{<Icon name="${icon}" aria-hidden="true" \\/>\\}`),
     );
   }
-  assert.doesNotMatch(css, /cx-team-architecture__filter/u);
+  assert.doesNotMatch(css, /cx-team-architecture__(?:filter|controls|search)|caret/u);
+  assert.doesNotMatch(page, /onWheel=|onPointerDown=|onPointerMove=|onPointerUp=/u);
+  assert.doesNotMatch(css, /user-select/u);
 
   const rootRule = css.match(/\.cx-team-architecture:not\(\[data-detail-tab\]\) \{([^}]*)\}/u)?.[1] ?? '';
   const groupsRule = css.match(/\.cx-team-architecture__groups \{([^}]*)\}/u)?.[1] ?? '';
   const canvasRule = css.match(/\.cx-team-architecture__tree-canvas \{([^}]*)\}/u)?.[1] ?? '';
   const viewportRule = css.match(/\.cx-team-architecture__tree-viewport \{([^}]*)\}/u)?.[1] ?? '';
   assert.doesNotMatch(viewportRule, /overflow/u);
+  assert.match(canvasRule, /grid-template-rows: minmax\(0, 1fr\);/u);
   for (const rule of [rootRule, groupsRule, canvasRule, viewportRule]) {
     assert.match(rule, /height: 100%;/u);
     assert.match(rule, /min-height: 0;/u);

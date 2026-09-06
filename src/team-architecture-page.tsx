@@ -13,12 +13,13 @@ import {
   AgentAvatar,
   Button,
   EmptyState,
+  FilterToolbar,
   HorizontalSplitPane,
   HoverCard,
   Icon,
   MarkdownViewer,
   PanZoomCanvas,
-  type PanZoomCanvasHandle,
+  SearchField,
   Select,
   Stack,
   Text,
@@ -327,8 +328,7 @@ function TreeNodeView({
               : t('tree.expand', { label: entity.label, count: node.children.length })}
             onClick={() => onToggle(entity.memberId)}
           >
-            <Icon name={expanded ? 'folder-open' : 'folder'} aria-hidden="true" />
-            <span>{node.children.length}</span>
+            <span aria-hidden="true">{node.children.length}</span>
           </Button>
         )}
       </div>
@@ -389,7 +389,6 @@ function EntityTreeCanvas({
   const defaultExpanded = useMemo(() => expandableMemberIds(nodes, startDepth, 3), [nodes, startDepth]);
   const allExpanded = useMemo(() => expandableMemberIds(nodes, startDepth), [nodes, startDepth]);
   const [expandedMemberIds, setExpandedMemberIds] = useState<ReadonlySet<string>>(() => defaultExpanded);
-  const canvas = useRef<PanZoomCanvasHandle | null>(null);
   const effectiveExpanded = revealMatches ? allExpanded : expandedMemberIds;
   const toggle = (memberId: string) => {
     if (revealMatches) return;
@@ -415,34 +414,14 @@ function EntityTreeCanvas({
   );
   return (
     <div className="cx-team-architecture__tree-canvas">
-      <div className="cx-team-architecture__tree-actions">
-        <Button
-          type="button"
-          variant="ghost"
-          title={t('tree.fit')}
-          aria-label={t('tree.fit')}
-          onClick={() => canvas.current?.fitToView()}
-        >
-          <Icon name="relationship" aria-hidden="true" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          title={t('tree.reset')}
-          aria-label={t('tree.reset')}
-          onClick={() => canvas.current?.reset()}
-        >
-          <Icon name="host:reset" aria-hidden="true" />
-        </Button>
-      </div>
       <PanZoomCanvas
         fill
         className="cx-team-architecture__tree-viewport"
         aria-label={ariaLabel}
-        controllerRef={canvas}
         initialScale={1}
         minScale={0.3}
         maxScale={2.5}
+        controls={{ fitLabel: t('tree.fit'), resetLabel: t('tree.reset') }}
       >
         {parents.length === 0
           ? (
@@ -883,54 +862,59 @@ function TeamArchitectureRoot({
   };
   return (
     <div className="cx-team-architecture">
-      <div className="cx-team-architecture__controls">
-        <label className="cx-team-architecture__search">
-          <input
-            type="search"
+      <FilterToolbar
+        aria-label={t('tree.heading')}
+        search={
+          <SearchField
             aria-label={t('search.label')}
             value={query}
             placeholder={t('search.placeholder')}
-            onChange={event => setQuery(event.target.value)}
+            onChange={setQuery}
           />
-        </label>
-        <Select
-          aria-label={t('filter.role')}
-          density="compact"
-          prefixIcon={<Icon name="role" aria-hidden="true" />}
-          value={role}
-          options={[
-            { value: 'all', label: t('filter.role.all') },
-            { value: 'leader', label: t('filter.role.leader') },
-            { value: 'member', label: t('filter.role.member') },
-          ]}
-          onChange={selectRole}
-        />
-        <Select
-          aria-label={t('filter.session')}
-          density="compact"
-          prefixIcon={<Icon name="session" aria-hidden="true" />}
-          value={session}
-          options={[
-            { value: 'all', label: t('filter.session.all') },
-            { value: 'active', label: t('filter.session.active') },
-            { value: 'without-active', label: t('filter.session.without-active') },
-          ]}
-          onChange={selectSession}
-        />
-        <Select
-          aria-label={t('filter.relationship')}
-          density="compact"
-          prefixIcon={<Icon name="relationship" aria-hidden="true" />}
-          value={relationship}
-          options={[
-            { value: 'all', label: t('filter.relationship.all') },
-            { value: 'root', label: t('filter.relationship.root') },
-            { value: 'reports-to', label: t('filter.relationship.reports-to') },
-            { value: 'unestablished', label: t('filter.relationship.unestablished') },
-          ]}
-          onChange={selectRelationship}
-        />
-      </div>
+        }
+        filters={[
+          <Select
+            key="role"
+            aria-label={t('filter.role')}
+            density="compact"
+            prefixIcon={<Icon name="role" aria-hidden="true" />}
+            value={role}
+            options={[
+              { value: 'all', label: t('filter.role.all') },
+              { value: 'leader', label: t('filter.role.leader') },
+              { value: 'member', label: t('filter.role.member') },
+            ]}
+            onChange={selectRole}
+          />,
+          <Select
+            key="session"
+            aria-label={t('filter.session')}
+            density="compact"
+            prefixIcon={<Icon name="session" aria-hidden="true" />}
+            value={session}
+            options={[
+              { value: 'all', label: t('filter.session.all') },
+              { value: 'active', label: t('filter.session.active') },
+              { value: 'without-active', label: t('filter.session.without-active') },
+            ]}
+            onChange={selectSession}
+          />,
+          <Select
+            key="relationship"
+            aria-label={t('filter.relationship')}
+            density="compact"
+            prefixIcon={<Icon name="relationship" aria-hidden="true" />}
+            value={relationship}
+            options={[
+              { value: 'all', label: t('filter.relationship.all') },
+              { value: 'root', label: t('filter.relationship.root') },
+              { value: 'reports-to', label: t('filter.relationship.reports-to') },
+              { value: 'unestablished', label: t('filter.relationship.unestablished') },
+            ]}
+            onChange={selectRelationship}
+          />,
+        ]}
+      />
       {model.matchedCount === 0
         ? <EmptyState title={t('tree.empty.title')} description={t('tree.empty.description')} />
         : (

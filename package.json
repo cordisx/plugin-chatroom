@@ -42,7 +42,7 @@
     "@vitejs/plugin-react": "6.1.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
-    "cordisx": "github:cordisx/cordisx#4dcda57da1f8318c9971300ea467120cec170895",
+    "cordisx": "github:cordisx/cordisx#ef600598a355a24cf52eb7b2e2f5303801b09988",
     "dprint": "0.57.1",
     "esbuild": "^0.28.2",
     "react": "19.2.8",
