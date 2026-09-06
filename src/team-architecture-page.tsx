@@ -494,7 +494,7 @@ function EntityDetail({ entity, entities, tab, t }: {
                     </Fact>
                     <Fact label={t('detail.session.status')}>{session.status}</Fact>
                     <Fact label={t('detail.session.target')}>
-                      <code>{session.detailsUrl.target}: {session.detailsUrl.url}</code>
+                      <span className="cx-team-architecture__muted">{t('detail.unavailable')}</span>
                     </Fact>
                   </dl>
                 </li>

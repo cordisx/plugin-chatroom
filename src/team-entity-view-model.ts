@@ -1,4 +1,5 @@
 import { agentAvatarForDefinition, type AgentDefinition, type AgentDefinitionIdentity } from './agent-definition.js';
+import type { AgentDetailReference } from '@cordisx/protocol/agents/v1';
 import type { ChatroomRoomRegistry, Room, RoomRun, StoredRoomRunDetailsUrl } from './room.js';
 import type { ChatroomAgentConfiguration } from './agent-definition.js';
 
@@ -21,6 +22,12 @@ export interface TeamEntityActiveSession {
   readonly runTitle: string;
   readonly status: RoomRun['status'];
   readonly detailsUrl: StoredRoomRunDetailsUrl;
+  /**
+   * Present only when a future public Host detail-action seam supplies the
+   * exact Host-issued reference for this active Session. Never infer it from
+   * a title, URL, current Agent, or mutable entity record.
+   */
+  readonly detail?: AgentDetailReference;
 }
 
 export interface TeamEntityDeclaredCapabilities {

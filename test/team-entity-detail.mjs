@@ -172,3 +172,15 @@ test('uses only public Host selection and sanitized Markdown primitives in a car
   );
   assert.doesNotMatch(css, /cx-team-architecture__prompt-section/u);
 });
+
+test('keeps active Session detail navigation unavailable until a public Host action exists', async () => {
+  const [viewModel, page] = await Promise.all([
+    readFile(new URL('../src/team-entity-view-model.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/team-architecture-page.tsx', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(viewModel, /readonly detail\?: AgentDetailReference;/u);
+  assert.match(viewModel, /Never infer it from[\s\S]*?URL, current Agent, or mutable entity record/u);
+  assert.match(page, /<Fact label=\{t\('detail\.session\.target'\)\}>[\s\S]*?t\('detail\.unavailable'\)/u);
+  assert.doesNotMatch(page, /session\.detailsUrl\.url/u);
+});
