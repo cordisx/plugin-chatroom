@@ -1,7 +1,8 @@
-const member = (memberId, label, agentId, reportsToMemberId, role = 'member') =>
+const member = (memberId, label, title, agentId, reportsToMemberId, role = 'member') =>
   Object.freeze({
     memberId,
     label,
+    title,
     definition: Object.freeze({ agentId, revision: 'chatroom-internal-v1' }),
     role,
     attentionPolicy: role === 'leader' ? 'ambient' : 'mention-only',
@@ -9,7 +10,7 @@ const member = (memberId, label, agentId, reportsToMemberId, role = 'member') =>
     relatedMemberIds: Object.freeze([]),
   });
 
-const derivedDefinition = (memberId, label, parentAgentId) =>
+const derivedDefinition = (memberId, title, parentAgentId) =>
   Object.freeze({
     $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-definition.v1.schema.json',
     contract: 'cordisx.agent-definition/v1',
@@ -18,8 +19,8 @@ const derivedDefinition = (memberId, label, parentAgentId) =>
       agentId: `chatroom.playground.${memberId}`,
       revision: 'chatroom-internal-v1',
     }),
-    name: label,
-    description: `${label} member for the Playground complex team.`,
+    name: title,
+    description: `${title} member for the Playground complex team.`,
     extends: Object.freeze([{ agentId: parentAgentId, revision: 'chatroom-internal-v1' }]),
     inherit: Object.freeze({
       promptSections: 'append',
@@ -33,33 +34,33 @@ const derivedDefinition = (memberId, label, parentAgentId) =>
   });
 
 const derivedMembers = Object.freeze([
-  ['product-research', 'Product Research', 'chatroom.reviewer', 'reviewer'],
-  ['product-design', 'Product Design', 'chatroom.documentation', 'product-research'],
-  ['compliance', 'Compliance', 'chatroom.reviewer', 'reviewer'],
-  ['localization', 'Localization', 'chatroom.documentation', 'documentation'],
-  ['knowledge-base', 'Knowledge Base', 'chatroom.documentation', 'documentation'],
-  ['frontend', 'Frontend', 'chatroom.integrator', 'integrator'],
-  ['design-system', 'Design System', 'chatroom.documentation', 'frontend'],
-  ['backend', 'Backend', 'chatroom.integrator', 'integrator'],
-  ['api-platform', 'API Platform', 'chatroom.integrator', 'backend'],
-  ['data-platform', 'Data Platform', 'chatroom.integrator', 'backend'],
-  ['infrastructure', 'Infrastructure', 'chatroom.integrator', 'integrator'],
-  ['automation', 'Automation', 'chatroom.qa', 'qa'],
-  ['release-validation', 'Release Validation', 'chatroom.qa', 'qa'],
+  ['product-research', 'Taylor Xu', 'Product Research', 'chatroom.reviewer', 'reviewer'],
+  ['product-design', 'Quinn Zhao', 'Product Design', 'chatroom.documentation', 'product-research'],
+  ['compliance', 'Reese Sun', 'Compliance', 'chatroom.reviewer', 'reviewer'],
+  ['localization', 'Parker Liu', 'Localization', 'chatroom.documentation', 'documentation'],
+  ['knowledge-base', 'Sydney Gu', 'Knowledge Base', 'chatroom.documentation', 'documentation'],
+  ['frontend', 'Cameron He', 'Frontend', 'chatroom.integrator', 'integrator'],
+  ['design-system', 'Drew Tang', 'Design System', 'chatroom.documentation', 'frontend'],
+  ['backend', 'Rowan Zhou', 'Backend', 'chatroom.integrator', 'integrator'],
+  ['api-platform', 'Blake Yang', 'API Platform', 'chatroom.integrator', 'backend'],
+  ['data-platform', 'Sage Han', 'Data Platform', 'chatroom.integrator', 'backend'],
+  ['infrastructure', 'Alex Gao', 'Infrastructure', 'chatroom.integrator', 'integrator'],
+  ['automation', 'Jamie Luo', 'Automation', 'chatroom.qa', 'qa'],
+  ['release-validation', 'Robin Fang', 'Release Validation', 'chatroom.qa', 'qa'],
 ]);
 
 export const PLAYGROUND_COMPLEX_TEAM_DEFINITIONS = Object.freeze(
-  derivedMembers.map(([memberId, label, parentAgentId]) => derivedDefinition(memberId, label, parentAgentId)),
+  derivedMembers.map(([memberId, _label, title, parentAgentId]) => derivedDefinition(memberId, title, parentAgentId)),
 );
 
 /** Playground-only complex organization. Production defaults remain five members. */
 export const PLAYGROUND_COMPLEX_TEAM_MEMBERS = Object.freeze([
-  member('leader', 'Lead', 'chatroom.generalist', undefined, 'leader'),
-  member('reviewer', 'Reviewer', 'chatroom.reviewer', 'leader'),
-  member('integrator', 'Integrator', 'chatroom.integrator', 'leader'),
-  member('documentation', 'Documentation', 'chatroom.documentation', 'reviewer'),
-  member('qa', 'QA', 'chatroom.qa', 'integrator'),
-  ...derivedMembers.map(([memberId, label, _parentAgentId, reportsToMemberId]) =>
-    member(memberId, label, `chatroom.playground.${memberId}`, reportsToMemberId)
+  member('leader', 'Avery Chen', 'Team Lead', 'chatroom.generalist', undefined, 'leader'),
+  member('reviewer', 'Riley Park', 'Reviewer', 'chatroom.reviewer', 'leader'),
+  member('integrator', 'Morgan Lee', 'Integrator', 'chatroom.integrator', 'leader'),
+  member('documentation', 'Casey Wu', 'Documentation', 'chatroom.documentation', 'reviewer'),
+  member('qa', 'Jordan Lin', 'QA', 'chatroom.qa', 'integrator'),
+  ...derivedMembers.map(([memberId, label, title, _parentAgentId, reportsToMemberId]) =>
+    member(memberId, label, title, `chatroom.playground.${memberId}`, reportsToMemberId)
   ),
 ]);

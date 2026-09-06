@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { CHATROOM_DEFAULT_AGENT_CONFIGURATION, parseChatroomAgentConfiguration } from '../dist/agent-definition.js';
 import {
+  buildTeamArchitectureViewModel,
   projectTeamEntities,
   teamEntityLocalHierarchy,
   teamEntityPromptSources,
@@ -27,6 +28,9 @@ test('keeps the complex organization Playground-only with 18 members and at leas
   assert.equal(CHATROOM_DEFAULT_AGENT_CONFIGURATION.members.length, 5);
   const configuration = complexConfiguration();
   assert.equal(configuration.members.length, 18);
+  assert.equal(new Set(configuration.members.map(member => member.label)).size, 18);
+  assert.equal(configuration.members.find(member => member.memberId === 'leader')?.label, 'Avery Chen');
+  assert.equal(configuration.members.find(member => member.memberId === 'leader')?.title, 'Team Lead');
   const byId = new Map(configuration.members.map(value => [value.memberId, value]));
   const depth = memberId => {
     let current = byId.get(memberId);
@@ -50,9 +54,9 @@ test('groups prompt sources in upstream-then-current order with friendly definit
   assert.equal(sources.every(source => !source.label.includes('chatroom-internal-v1')), true);
 });
 
-const flattenSubtreeLabels = node => [
-  node.entity.label,
-  ...node.children.flatMap(flattenSubtreeLabels),
+const flattenSubtreeMemberIds = node => [
+  node.entity.memberId,
+  ...node.children.flatMap(flattenSubtreeMemberIds),
 ];
 
 test('projects direct parents and the complete scoped descendant tree without siblings', () => {
@@ -60,32 +64,32 @@ test('projects direct parents and the complete scoped descendant tree without si
   const backend = entities.find(entity => entity.memberId === 'backend');
   assert.ok(backend);
   const backendHierarchy = teamEntityLocalHierarchy(backend, entities);
-  assert.deepEqual(backendHierarchy.parents.map(entity => entity.label), ['Integrator']);
-  assert.deepEqual(flattenSubtreeLabels(backendHierarchy.subtree), [
-    'Backend',
-    'API Platform',
-    'Data Platform',
+  assert.deepEqual(backendHierarchy.parents.map(entity => entity.memberId), ['integrator']);
+  assert.deepEqual(flattenSubtreeMemberIds(backendHierarchy.subtree), [
+    'backend',
+    'api-platform',
+    'data-platform',
   ]);
 
   const integrator = entities.find(entity => entity.memberId === 'integrator');
   assert.ok(integrator);
   const integratorHierarchy = teamEntityLocalHierarchy(integrator, entities);
-  assert.deepEqual(integratorHierarchy.parents.map(entity => entity.label), ['Lead']);
-  assert.deepEqual(flattenSubtreeLabels(integratorHierarchy.subtree), [
-    'Integrator',
-    'Backend',
-    'API Platform',
-    'Data Platform',
-    'Frontend',
-    'Design System',
-    'Infrastructure',
-    'QA',
-    'Automation',
-    'Release Validation',
+  assert.deepEqual(integratorHierarchy.parents.map(entity => entity.memberId), ['leader']);
+  assert.deepEqual(flattenSubtreeMemberIds(integratorHierarchy.subtree), [
+    'integrator',
+    'backend',
+    'api-platform',
+    'data-platform',
+    'frontend',
+    'design-system',
+    'infrastructure',
+    'qa',
+    'automation',
+    'release-validation',
   ]);
   assert.equal(
-    flattenSubtreeLabels(integratorHierarchy.subtree).some(label =>
-      ['Reviewer', 'Documentation', 'Product Research', 'Product Design'].includes(label)
+    flattenSubtreeMemberIds(integratorHierarchy.subtree).some(memberId =>
+      ['reviewer', 'documentation', 'product-research', 'product-design'].includes(memberId)
     ),
     false,
   );
@@ -107,8 +111,25 @@ test('projects direct parents and the complete scoped descendant tree without si
     teamEntityLocalHierarchy(frontend, multiParentEntities).parents.map(entity => entity.memberId),
     ['integrator', 'backend'],
   );
-  assert.deepEqual(flattenSubtreeLabels(teamEntityLocalHierarchy(frontend, multiParentEntities).subtree), [
-    'Frontend',
-    'Design System',
+  assert.deepEqual(flattenSubtreeMemberIds(teamEntityLocalHierarchy(frontend, multiParentEntities).subtree), [
+    'frontend',
+    'design-system',
   ]);
+});
+
+test('projects and searches chosen member names separately from optional job titles', () => {
+  const configuration = complexConfiguration();
+  const entities = projectTeamEntities(configuration, []);
+  const leader = entities.find(entity => entity.memberId === 'leader');
+  assert.equal(leader?.label, 'Avery Chen');
+  assert.equal(leader?.title, 'Team Lead');
+  const titleSearch = buildTeamArchitectureViewModel(
+    { configuration, rooms: [] },
+    { query: 'Team Lead' },
+  );
+  assert.deepEqual([...titleSearch.matchedMemberIds], ['leader']);
+
+  const legacy = projectTeamEntities(CHATROOM_DEFAULT_AGENT_CONFIGURATION, []);
+  assert.equal(legacy.every(entity => entity.title === undefined), true);
+  assert.equal(legacy[0].label, CHATROOM_DEFAULT_AGENT_CONFIGURATION.members[0].label);
 });

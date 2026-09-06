@@ -77,6 +77,7 @@ export interface TeamEntityViewModel {
   /** Stable organization-node identity. Never substitute a title or participant id. */
   readonly memberId: string;
   readonly label: string;
+  readonly title?: string;
   readonly entityType: 'agent-member';
   readonly role: 'leader' | 'member';
   readonly attentionPolicy: 'ambient' | 'mention-only';
@@ -326,6 +327,7 @@ export function projectTeamEntities(
     return Object.freeze({
       memberId: member.memberId,
       label: member.label,
+      ...(member.title === undefined ? {} : { title: member.title }),
       entityType: 'agent-member' as const,
       role: member.role,
       attentionPolicy: member.attentionPolicy,
@@ -365,6 +367,7 @@ const searchableTextFor = (entity: TeamEntityViewModel): string =>
   [
     entity.memberId,
     entity.label,
+    entity.title,
     entity.definitionIdentity.agentId,
     entity.definitionIdentity.revision,
     entity.definitionName,

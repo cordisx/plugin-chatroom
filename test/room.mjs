@@ -83,6 +83,7 @@ test('expands seed leaders through descendants and related members into a frozen
       {
         memberId: 'child',
         label: 'Child',
+        title: 'Reviewer',
         definition: reviewer,
         role: 'member',
         attentionPolicy: 'mention-only',
@@ -102,6 +103,7 @@ test('expands seed leaders through descendants and related members into a frozen
   ]);
   configuration.members[1].label = 'Changed later';
   assert.equal(snapshot[1].label, 'Child');
+  assert.equal(snapshot[1].title, 'Reviewer');
   assert.equal(Object.isFrozen(snapshot), true);
   assert.equal(Object.isFrozen(snapshot[1].avatar), true);
 });
