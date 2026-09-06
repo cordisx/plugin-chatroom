@@ -180,17 +180,26 @@ test('fails the Manager subject and summary closed when a member identity is sta
   }
 });
 
-test('uses only public Host selection and sanitized Markdown primitives in a cardless responsive detail body', async () => {
-  const [page, css] = await Promise.all([
+test('uses public Host avatars and Markdown with cardless responsive prompt and relationship workspaces', async () => {
+  const [page, css, navigation] = await Promise.all([
     readFile(new URL('../src/team-architecture-page.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../src/team-architecture-page.css', import.meta.url), 'utf8'),
+    readFile(new URL('../src/team-architecture-navigation.ts', import.meta.url), 'utf8'),
   ]);
 
-  assert.match(page, /import \{ Button, EmptyState, MarkdownViewer, Select, SelectionRail \} from 'cordisx\/ui';/u);
+  assert.match(page, /import \{ AgentAvatar, Button, EmptyState, MarkdownViewer, Select \} from 'cordisx\/ui';/u);
   assert.doesNotMatch(page, /from ['"](?:tdesign-react|react-markdown|rehype-|remark-)/u);
-  assert.match(page, /const sections = entity\.declaredCapabilities\.promptSections;/u);
-  assert.match(page, /<SelectionRail[\s\S]*?options=\{sections\.map\([\s\S]*?layout="responsive"/u);
-  assert.match(page, /<MarkdownViewer[\s\S]*?source=\{selected\.text\}/u);
+  assert.match(page, /teamEntityPromptSources\(entity, entities\)/u);
+  assert.match(page, /role="tree"/u);
+  assert.match(page, /role="treeitem"/u);
+  assert.match(page, /<MarkdownViewer[\s\S]*?source=\{selected\.section\.text\}/u);
+  assert.match(page, /teamEntityLocalHierarchy\(entity, entities\)/u);
+  assert.match(
+    page,
+    /<AgentAvatar participant=\{\{ id: entity\.memberId, name: entity\.label, avatar: entity\.avatar \}\} \/>/u,
+  );
+  assert.match(navigation, /先继承上游提示词，再追加当前定义/u);
+  assert.match(navigation, /Use upstream prompts first, then append this definition/u);
   assert.doesNotMatch(page, /<h3/u);
   assert.doesNotMatch(page, /cx-team-architecture__detail-(?:heading|eyebrow)/u);
 

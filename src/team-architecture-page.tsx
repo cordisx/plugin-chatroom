@@ -1,10 +1,12 @@
 import { Fragment, type ReactNode, useMemo, useState, useSyncExternalStore } from 'cordisx/react';
 import { defineReactPage } from 'cordisx/react';
-import { Button, EmptyState, MarkdownViewer, Select, SelectionRail } from 'cordisx/ui';
+import { AgentAvatar, Button, EmptyState, MarkdownViewer, Select } from 'cordisx/ui';
 import type { CordisXLocalizationSeat, CordisXReactPageProps } from 'cordisx/contracts';
 import {
   buildTeamArchitectureViewModel,
   type TeamArchitectureDataSource,
+  teamEntityLocalHierarchy,
+  teamEntityPromptSources,
   type TeamEntityRelationshipFilter,
   type TeamEntityRoleFilter,
   type TeamEntitySessionFilter,
@@ -77,7 +79,10 @@ export type TeamArchitectureMessages = {
   'detail.prompts': undefined;
   'detail.prompts.note': undefined;
   'detail.prompt-inherit': undefined;
+  'detail.prompt-inherit.append': undefined;
+  'detail.prompt-inherit.replace': undefined;
   'detail.prompt-upstream': undefined;
+  'detail.prompt-current': undefined;
   'detail.prompt-section.id': undefined;
   'detail.prompt-section.provenance': undefined;
   'detail.provenance.direct': undefined;
@@ -182,14 +187,6 @@ interface TreeNodeViewProps {
   readonly t: Translate;
 }
 
-function avatarInitials(label: string): string {
-  const characters = Array.from(label.trim());
-  if (characters.length === 0) return '?';
-  const words = label.trim().split(/\s+/u);
-  if (words.length > 1) return words.slice(0, 2).map(word => Array.from(word)[0]).join('').toLocaleUpperCase();
-  return characters.slice(0, 2).join('').toLocaleUpperCase();
-}
-
 function TreeNodeView({ node, onSelect, t }: TreeNodeViewProps) {
   const entity = node.entity;
   const hasChildren = node.children.length > 0;
@@ -207,7 +204,7 @@ function TreeNodeView({ node, onSelect, t }: TreeNodeViewProps) {
           aria-label={t('entity.open', { label: entity.label })}
         >
           <span className="cx-team-architecture__avatar" aria-hidden="true">
-            {avatarInitials(entity.label)}
+            <AgentAvatar participant={{ id: entity.memberId, name: entity.label, avatar: entity.avatar }} />
           </span>
           <span className="cx-team-architecture__entity-main">
             <span className="cx-team-architecture__entity-title">{entity.label}</span>
@@ -241,28 +238,6 @@ function TreeNodeView({ node, onSelect, t }: TreeNodeViewProps) {
   );
 }
 
-function EntityReferenceList({
-  memberIds,
-  entities,
-  empty,
-}: {
-  readonly memberIds: readonly string[];
-  readonly entities: ReadonlyMap<string, TeamEntityViewModel>;
-  readonly empty: string;
-}) {
-  if (memberIds.length === 0) return <span className="cx-team-architecture__muted">{empty}</span>;
-  return (
-    <ul className="cx-team-architecture__references">
-      {memberIds.map(memberId => (
-        <li key={memberId}>
-          <span>{entities.get(memberId)?.label ?? memberId}</span>
-          <code>{memberId}</code>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 function detailTabLabel(tab: TeamEntityDetailTab, t: Translate): string {
   if (tab === 'overview') return t('detail.tab.overview');
   if (tab === 'prompts') return t('detail.tab.prompts');
@@ -271,63 +246,168 @@ function detailTabLabel(tab: TeamEntityDetailTab, t: Translate): string {
   return t('detail.tab.sessions');
 }
 
-function PromptWorkspace({ entity, t }: {
+function PromptWorkspace({ entity, entities, t }: {
   readonly entity: TeamEntityViewModel;
+  readonly entities: readonly TeamEntityViewModel[];
   readonly t: Translate;
 }) {
-  const sections = entity.declaredCapabilities.promptSections;
-  const [selectedId, setSelectedId] = useState(sections[0]?.sectionId ?? '');
-  const selected = sections.find(section => section.sectionId === selectedId) ?? sections[0];
+  const sourceModels = teamEntityPromptSources(entity, entities);
+  const sources = sourceModels.map(source => ({
+    id: `${source.identity.agentId}@${source.identity.revision}`,
+    label: source.label,
+    provenance: t(source.kind === 'current' ? 'detail.prompt-current' : 'detail.prompt-upstream'),
+    sections: source.promptSections,
+  }));
+  const upstreamSources = sources.slice(0, -1);
+  const currentSource = sources.at(-1)!;
+  const entries = sources.flatMap(source => source.sections.map(section => ({ source, section })));
+  const initial = currentSource.sections[0] === undefined
+    ? entries[0]
+    : { source: currentSource, section: currentSource.sections[0] };
+  const initialId = initial === undefined ? '' : `${initial.source.id}:${initial.section.sectionId}`;
+  const [selectedId, setSelectedId] = useState(initialId);
+  const selected = entries.find(entry => `${entry.source.id}:${entry.section.sectionId}` === selectedId)
+    ?? entries[0];
   if (selected === undefined) {
     return <EmptyState title={t('detail.none')} />;
   }
-  const upstream = entity.extendsDefinitions.map(identity => `${identity.agentId}@${identity.revision}`);
+  const inheritance = entity.declaredCapabilities.inheritance?.promptSections;
+  const inheritanceLabel = inheritance === 'append'
+    ? t('detail.prompt-inherit.append')
+    : inheritance === 'replace'
+    ? t('detail.prompt-inherit.replace')
+    : t('detail.unavailable');
   return (
     <section className="cx-team-architecture__section" aria-label={t('detail.tab.prompts')}>
       <div className="cx-team-architecture__prompt-metadata">
         <span>
-          <strong>{t('detail.prompt-inherit')}</strong>{' '}
-          <code>{entity.declaredCapabilities.inheritance?.promptSections ?? t('detail.unavailable')}</code>
+          <strong>{t('detail.prompt-inherit')}</strong> {inheritanceLabel}
         </span>
         <span>
-          <strong>{t('detail.prompt-upstream')}</strong> {upstream.length === 0
+          <strong>{t('detail.prompt-upstream')}</strong> {upstreamSources.length === 0
             ? <span className="cx-team-architecture__muted">{t('detail.none')}</span>
-            : upstream.map((identity, index) => (
-              <Fragment key={identity}>
+            : upstreamSources.map((source, index) => (
+              <Fragment key={source.id}>
                 {index === 0 ? null : ', '}
-                <code>{identity}</code>
+                <span>{source.label}</span>
               </Fragment>
             ))}
         </span>
       </div>
       <div className="cx-team-architecture__prompt-workspace">
-        <SelectionRail
-          className="cx-team-architecture__prompt-selector"
-          aria-label={t('detail.prompts')}
-          value={selected.sectionId}
-          options={sections.map(section => ({
-            value: section.sectionId,
-            label: promptKindLabel(section.kind, t),
-            description: (
-              <span>
-                <code>{section.sectionId}</code> · {t('detail.provenance.direct')}
-              </span>
-            ),
-            controls: 'team-entity-prompt-content',
-          }))}
-          onChange={setSelectedId}
-          layout="responsive"
-        />
+        <nav className="cx-team-architecture__prompt-selector" aria-label={t('detail.prompts')}>
+          <div className="cx-team-architecture__prompt-tree" role="tree">
+            {sources.map(source => (
+              <div className="cx-team-architecture__prompt-source" key={source.id} role="treeitem" aria-expanded="true">
+                <span className="cx-team-architecture__prompt-source-label">
+                  <span aria-hidden="true">▾</span>
+                  <strong>{source.label}</strong>
+                  <small>{source.provenance}</small>
+                </span>
+                <div role="group">
+                  {source.sections.map(section => {
+                    const id = `${source.id}:${section.sectionId}`;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        role="treeitem"
+                        aria-selected={id === selectedId}
+                        aria-controls="team-entity-prompt-content"
+                        onClick={() => setSelectedId(id)}
+                      >
+                        <span aria-hidden="true">└</span>
+                        <span>{promptKindLabel(section.kind, t)}</span>
+                        <code>{section.sectionId}</code>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </nav>
         <div
           id="team-entity-prompt-content"
           className="cx-team-architecture__prompt-content"
           role="tabpanel"
-          aria-label={`${promptKindLabel(selected.kind, t)} · ${selected.sectionId}`}
+          aria-label={`${promptKindLabel(selected.section.kind, t)} · ${selected.section.sectionId}`}
         >
           <MarkdownViewer
-            aria-label={`${promptKindLabel(selected.kind, t)} · ${selected.sectionId}`}
-            source={selected.text}
+            aria-label={`${promptKindLabel(selected.section.kind, t)} · ${selected.section.sectionId}`}
+            source={selected.section.text}
           />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function RelationshipEntityCard({ entity, current, onSelect, t }: {
+  readonly entity: TeamEntityViewModel;
+  readonly current?: boolean;
+  readonly onSelect: (memberId: string) => void;
+  readonly t: Translate;
+}) {
+  const content = (
+    <>
+      <span className="cx-team-architecture__relationship-avatar" aria-hidden="true">
+        <AgentAvatar participant={{ id: entity.memberId, name: entity.label, avatar: entity.avatar }} />
+      </span>
+      <span>
+        <strong>{entity.label}</strong>
+        <small>{roleLabel(entity, t)}</small>
+      </span>
+    </>
+  );
+  return current
+    ? <div className="cx-team-architecture__relationship-card" data-current="true">{content}</div>
+    : (
+      <button
+        type="button"
+        className="cx-team-architecture__relationship-card"
+        onClick={() => onSelect(entity.memberId)}
+        aria-label={t('entity.open', { label: entity.label })}
+      >
+        {content}
+      </button>
+    );
+}
+
+function RelationshipHierarchy({ entity, entities, onSelect, t }: {
+  readonly entity: TeamEntityViewModel;
+  readonly entities: readonly TeamEntityViewModel[];
+  readonly onSelect: (memberId: string) => void;
+  readonly t: Translate;
+}) {
+  const { parents, children } = teamEntityLocalHierarchy(entity, entities);
+  return (
+    <section className="cx-team-architecture__section" aria-label={t('detail.tab.relationships')}>
+      <div className="cx-team-architecture__relationship-map" role="group" aria-label={t('detail.relationships')}>
+        <div className="cx-team-architecture__relationship-level" data-level="parents">
+          <span className="cx-team-architecture__relationship-level-label">{t('detail.manager')}</span>
+          <div>
+            {parents.length === 0
+              ? <span className="cx-team-architecture__muted">{t('entity.relationship.root')}</span>
+              : parents.map(parent => (
+                <RelationshipEntityCard key={parent.memberId} entity={parent} onSelect={onSelect} t={t} />
+              ))}
+          </div>
+        </div>
+        <span className="cx-team-architecture__relationship-connector" aria-hidden="true" />
+        <div className="cx-team-architecture__relationship-level" data-level="current">
+          <RelationshipEntityCard entity={entity} current onSelect={onSelect} t={t} />
+        </div>
+        <span className="cx-team-architecture__relationship-connector" aria-hidden="true" />
+        <div className="cx-team-architecture__relationship-level" data-level="children">
+          <span className="cx-team-architecture__relationship-level-label">{t('detail.direct-reports')}</span>
+          <div>
+            {children.length === 0
+              ? <span className="cx-team-architecture__muted">{t('detail.none')}</span>
+              : children.map(child => (
+                <RelationshipEntityCard key={child.memberId} entity={child} onSelect={onSelect} t={t} />
+              ))}
+          </div>
         </div>
       </div>
     </section>
@@ -365,16 +445,14 @@ function SessionDetailTarget({ session, source, t }: {
   );
 }
 
-function EntityDetail({ entity, entities, tab, source, t }: {
+function EntityDetail({ entity, entities, tab, source, onSelect, t }: {
   readonly entity: TeamEntityViewModel;
   readonly entities: readonly TeamEntityViewModel[];
   readonly tab: TeamEntityDetailTab;
   readonly source: TeamArchitectureDataSource;
+  readonly onSelect: (memberId: string) => void;
   readonly t: Translate;
 }) {
-  const byId = useMemo(() => new Map(entities.map(candidate => [candidate.memberId, candidate])), [entities]);
-  const managerId = entity.relationships.reportsToMemberId;
-  const manager = managerId === undefined ? undefined : byId.get(managerId);
   const capabilities = entity.declaredCapabilities;
   const runtime = [
     capabilities.runtime.adapterId,
@@ -422,54 +500,12 @@ function EntityDetail({ entity, entities, tab, source, t }: {
       <PromptWorkspace
         key={`${entity.definitionIdentity.agentId}@${entity.definitionIdentity.revision}`}
         entity={entity}
+        entities={entities}
         t={t}
       />
     );
   } else if (tab === 'relationships') {
-    panel = (
-      <section className="cx-team-architecture__section" aria-label={t('detail.tab.relationships')}>
-        <dl className="cx-team-architecture__facts">
-          <Fact label={t('detail.manager')}>
-            {entity.relationships.kind === 'unestablished'
-              ? <span className="cx-team-architecture__warning">{t('detail.unestablished')}</span>
-              : managerId === undefined
-              ? t('entity.relationship.root')
-              : (
-                <Fragment>
-                  <span>{manager?.label ?? managerId}</span> <code>{managerId}</code>
-                </Fragment>
-              )}
-          </Fact>
-          <Fact label={t('detail.direct-reports')}>
-            <EntityReferenceList
-              memberIds={entity.relationships.directReportMemberIds}
-              entities={byId}
-              empty={t('detail.none')}
-            />
-          </Fact>
-          <Fact label={t('detail.related')}>
-            <EntityReferenceList
-              memberIds={entity.relationships.relatedMemberIds}
-              entities={byId}
-              empty={t('detail.none')}
-            />
-          </Fact>
-          <Fact label={t('detail.definition-inheritance')}>
-            {entity.extendsDefinitions.length === 0
-              ? <span className="cx-team-architecture__muted">{t('detail.none')}</span>
-              : (
-                <ul className="cx-team-architecture__references">
-                  {entity.extendsDefinitions.map(identity => (
-                    <li key={`${identity.agentId}@${identity.revision}`}>
-                      <code>{identity.agentId}@{identity.revision}</code>
-                    </li>
-                  ))}
-                </ul>
-              )}
-          </Fact>
-        </dl>
-      </section>
-    );
+    panel = <RelationshipHierarchy entity={entity} entities={entities} onSelect={onSelect} t={t} />;
   } else if (tab === 'capabilities') {
     panel = (
       <section className="cx-team-architecture__section" aria-label={t('detail.tab.capabilities')}>
@@ -710,7 +746,18 @@ function TeamArchitecturePage({ source, detailRouteIds, routeId, params, navigat
       <div className="cx-team-architecture">
         {entity === undefined || tab === undefined
           ? <EmptyState title={t('detail.missing.title')} description={t('detail.missing.description')} />
-          : <EntityDetail entity={entity} entities={entities} tab={tab} source={source} t={t} />}
+          : (
+            <EntityDetail
+              entity={entity}
+              entities={entities}
+              tab={tab}
+              source={source}
+              onSelect={targetMemberId => {
+                void navigation.navigate({ id: detailRouteIds.overview, params: { memberId: targetMemberId } });
+              }}
+              t={t}
+            />
+          )}
       </div>
     );
   }

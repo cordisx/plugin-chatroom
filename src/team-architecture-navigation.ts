@@ -399,7 +399,10 @@ const zhCNMessages: TeamArchitectureMessageCatalog = Object.freeze({
   'detail.prompts.note':
     '按 AgentDefinition 中的来源顺序展示直接声明；当前没有权威 effective resolver 或逐项继承来源，因此不会推导或暗示继承后的有效提示词。',
   'detail.prompt-inherit': '提示词继承模式',
+  'detail.prompt-inherit.append': '先继承上游提示词，再追加当前定义',
+  'detail.prompt-inherit.replace': '仅使用当前定义',
   'detail.prompt-upstream': '上游定义',
+  'detail.prompt-current': '当前定义',
   'detail.prompt-section.id': '分区 ID',
   'detail.prompt-section.provenance': '来源',
   'detail.provenance.direct': '直接声明',
@@ -502,7 +505,10 @@ const enMessages: TeamArchitectureMessageCatalog = Object.freeze({
   'detail.prompts.note':
     'Direct declarations are shown in AgentDefinition source order. No authoritative effective resolver or per-item inheritance provenance is available, so effective inherited prompts are neither inferred nor implied.',
   'detail.prompt-inherit': 'Prompt inheritance mode',
+  'detail.prompt-inherit.append': 'Use upstream prompts first, then append this definition',
+  'detail.prompt-inherit.replace': 'Use only this definition',
   'detail.prompt-upstream': 'Upstream definitions',
+  'detail.prompt-current': 'Current definition',
   'detail.prompt-section.id': 'Section ID',
   'detail.prompt-section.provenance': 'Provenance',
   'detail.provenance.direct': 'Direct declaration',

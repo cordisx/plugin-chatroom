@@ -250,6 +250,12 @@
   letter-spacing: 0.02em;
 }
 
+.cx-team-architecture__avatar > .cxr-ui-agent-avatar,
+.cx-team-architecture__avatar .cxa-avatar {
+  width: 100%;
+  height: 100%;
+}
+
 .cx-team-architecture__entity-main {
   display: grid;
   align-content: center;
@@ -367,6 +373,170 @@
 .cx-team-architecture__prompt-selector,
 .cx-team-architecture__prompt-content {
   min-width: 0;
+}
+
+.cx-team-architecture__prompt-selector {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, currentColor 13%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, currentColor 2.5%, transparent);
+}
+
+.cx-team-architecture__prompt-tree,
+.cx-team-architecture__prompt-source,
+.cx-team-architecture__prompt-source > [role='group'] {
+  display: grid;
+}
+
+.cx-team-architecture__prompt-tree {
+  gap: 8px;
+  padding: 8px;
+}
+
+.cx-team-architecture__prompt-source {
+  gap: 4px;
+}
+
+.cx-team-architecture__prompt-source-label {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: center;
+  gap: 2px 6px;
+  padding: 7px 8px 5px;
+}
+
+.cx-team-architecture__prompt-source-label small {
+  grid-column: 2;
+  color: color-mix(in srgb, currentColor 58%, transparent);
+}
+
+.cx-team-architecture__prompt-source button {
+  appearance: none;
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 2px 6px;
+  padding: 8px 9px 8px 22px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cx-team-architecture__prompt-source button:hover,
+.cx-team-architecture__prompt-source button[aria-selected='true'] {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.cx-team-architecture__prompt-source button:focus-visible {
+  outline: 2px solid color-mix(in srgb, currentColor 78%, transparent);
+  outline-offset: -2px;
+}
+
+.cx-team-architecture__prompt-source button code {
+  grid-column: 2;
+  overflow: hidden;
+  color: color-mix(in srgb, currentColor 58%, transparent);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cx-team-architecture__relationship-map {
+  display: grid;
+  min-height: 430px;
+  place-content: center;
+  justify-items: center;
+  padding: 28px;
+  border-radius: 12px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, currentColor 2.5%, transparent) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(color-mix(in srgb, currentColor 2.5%, transparent) 1px, transparent 1px) 0 0 / 24px 24px,
+    color-mix(in srgb, currentColor 1.5%, transparent);
+}
+
+.cx-team-architecture__relationship-level {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.cx-team-architecture__relationship-level > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+}
+
+.cx-team-architecture__relationship-level-label {
+  color: color-mix(in srgb, currentColor 58%, transparent);
+  font-size: 0.74rem;
+  font-weight: 650;
+}
+
+.cx-team-architecture__relationship-connector {
+  width: 1px;
+  height: 28px;
+  border-left: 1.5px solid color-mix(in srgb, currentColor 32%, transparent);
+}
+
+.cx-team-architecture__relationship-card {
+  appearance: none;
+  display: grid;
+  width: 220px;
+  min-height: 74px;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, currentColor 3%, transparent);
+  box-shadow: 0 8px 22px color-mix(in srgb, #000 7%, transparent);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.cx-team-architecture__relationship-card {
+  cursor: pointer;
+}
+
+button.cx-team-architecture__relationship-card:hover {
+  border-color: color-mix(in srgb, currentColor 36%, transparent);
+  transform: translateY(-1px);
+}
+
+.cx-team-architecture__relationship-card[data-current='true'] {
+  border-color: color-mix(in srgb, var(--cx-primary, currentColor) 58%, transparent);
+  background: color-mix(in srgb, var(--cx-primary, currentColor) 9%, transparent);
+}
+
+.cx-team-architecture__relationship-card > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.cx-team-architecture__relationship-card small {
+  color: color-mix(in srgb, currentColor 58%, transparent);
+}
+
+.cx-team-architecture__relationship-avatar {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  overflow: hidden;
+  border-radius: 50%;
+}
+
+.cx-team-architecture__relationship-avatar > .cxr-ui-agent-avatar {
+  width: 100%;
+  height: 100%;
 }
 
 .cx-team-architecture__tokens,
