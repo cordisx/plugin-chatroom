@@ -2,6 +2,7 @@ import {
   CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V1,
   CORDISX_PAGE_SCHEMA_V3,
   CORDISX_ROUTE_SCHEMA_V2,
+  CORDISX_SURFACE_CONTRIBUTION_SCHEMA_V9,
   type CordisXI18n,
   type CordisXManagerContentNavigationDeclarationV1,
   type CordisXPageMetadataV3,
@@ -95,12 +96,15 @@ export function registerTalentMarket(
       context.pages.register(talentMarketPage, defineReactPage<TalentMarketMessages>(TalentMarketPage)),
       context.routes.register(talentMarketRoute),
       context.slots.register({
+        $schema: CORDISX_SURFACE_CONTRIBUTION_SCHEMA_V9,
+        schemaVersion: 9,
         name: 'manager.settings.navigation-items',
         id: TALENT_MARKET_NAVIGATION_ID,
         group: 'after-settings',
         order: 240,
       }, {
         route: { id: TALENT_MARKET_ROUTE_ID },
+        navigationGroup: { id: 'resources' },
       }),
     );
   } catch (error) {

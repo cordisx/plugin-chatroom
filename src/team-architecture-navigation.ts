@@ -4,6 +4,7 @@ import {
   CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V3,
   CORDISX_PAGE_SCHEMA_V3,
   CORDISX_ROUTE_SCHEMA_V2,
+  CORDISX_SURFACE_CONTRIBUTION_SCHEMA_V9,
   type CordisXI18n,
   type CordisXLocaleCatalog,
   type CordisXManagerContentNavigationDeclarationV1,
@@ -592,13 +593,21 @@ export function registerTeamArchitectureManagerContributions(
       .map(page => context.pages.register(page, pageMount)));
     disposers.push(...TEAM_ARCHITECTURE_ROUTES.map(route => context.routes.register(route)));
     disposers.push(context.slots.inject('manager.settings.navigation-items', () =>
-      context.slots.register({
-        name: 'manager.settings.navigation-items',
-        id: 'team-architecture',
-        group: 'after-settings',
-        order: 200,
-        disabled: Object.freeze({ value: false }),
-      }, Object.freeze({ route: Object.freeze({ id: TEAM_ARCHITECTURE_ROUTE_ID }) }))));
+      context.slots.register(
+        {
+          $schema: CORDISX_SURFACE_CONTRIBUTION_SCHEMA_V9,
+          schemaVersion: 9,
+          name: 'manager.settings.navigation-items',
+          id: 'team-architecture',
+          group: 'after-settings',
+          order: 200,
+          disabled: Object.freeze({ value: false }),
+        },
+        Object.freeze({
+          route: Object.freeze({ id: TEAM_ARCHITECTURE_ROUTE_ID }),
+          navigationGroup: Object.freeze({ id: 'collaboration' as const }),
+        }),
+      )));
   } catch (error) {
     for (const dispose of disposers.reverse()) void dispose();
     throw error;
