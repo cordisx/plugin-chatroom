@@ -9,7 +9,7 @@ import {
   useSyncExternalStore,
 } from 'cordisx/react';
 import { defineReactPage } from 'cordisx/react';
-import { AgentAvatar, Button, EmptyState, MarkdownViewer, Select } from 'cordisx/ui';
+import { AgentAvatar, Button, EmptyState, Icon, MarkdownViewer, Select } from 'cordisx/ui';
 import type { CordisXLocalizationSeat, CordisXReactPageProps } from 'cordisx/contracts';
 import {
   buildTeamArchitectureViewModel,
@@ -360,29 +360,11 @@ function PromptWorkspace({ entity, entities, t }: {
       setSelectedId(focusId);
     }
   };
-  const inheritance = entity.declaredCapabilities.inheritance?.promptSections;
-  const inheritanceLabel = inheritance === 'append'
-    ? t('detail.prompt-inherit.append')
-    : inheritance === 'replace'
-    ? t('detail.prompt-inherit.replace')
-    : t('detail.unavailable');
   return (
-    <section className="cx-team-architecture__section" aria-label={t('detail.tab.prompts')}>
-      <div className="cx-team-architecture__prompt-metadata">
-        <span>
-          <strong>{t('detail.prompt-inherit')}</strong> {inheritanceLabel}
-        </span>
-        <span>
-          <strong>{t('detail.prompt-upstream')}</strong> {sourceModels.length <= 1
-            ? <span className="cx-team-architecture__muted">{t('detail.none')}</span>
-            : sourceModels.slice(0, -1).map((source, index) => (
-              <Fragment key={`${source.identity.agentId}@${source.identity.revision}`}>
-                {index === 0 ? null : ', '}
-                <span>{source.label}</span>
-              </Fragment>
-            ))}
-        </span>
-      </div>
+    <section
+      className="cx-team-architecture__section cx-team-architecture__prompt-section"
+      aria-label={t('detail.tab.prompts')}
+    >
       <div className="cx-team-architecture__prompt-workspace">
         <nav className="cx-team-architecture__prompt-selector" aria-label={t('detail.prompts')}>
           <div className="cx-team-architecture__prompt-tree" role="tree" onKeyDown={onTreeKeyDown}>
@@ -396,41 +378,56 @@ function PromptWorkspace({ entity, entities, t }: {
                   type="button"
                   role="treeitem"
                   aria-expanded={expandedKinds.has(node.kind)}
+                  aria-controls={`team-prompt-group-${node.kind}`}
+                  aria-level={1}
                   tabIndex={focusId === node.id ? 0 : -1}
                   onFocus={() => setFocusId(node.id)}
                   onClick={() => toggleKind(node.kind)}
                 >
-                  {promptKindLabel(node.kind, t)}
+                  <span
+                    className="cx-team-architecture__prompt-chevron"
+                    data-expanded={expandedKinds.has(node.kind) ? 'true' : 'false'}
+                    aria-hidden="true"
+                  />
+                  <Icon className="cx-team-architecture__prompt-icon" name="host:folder" aria-hidden="true" />
+                  <span className="cx-team-architecture__prompt-row-label">{promptKindLabel(node.kind, t)}</span>
                 </button>
-                {!expandedKinds.has(node.kind) ? null : (
-                  <div role="group">
-                    {node.sources.map(source => (
-                      <button
-                        ref={element => {
-                          if (element === null) itemRefs.current.delete(source.id);
-                          else itemRefs.current.set(source.id, element);
-                        }}
-                        key={source.id}
-                        type="button"
-                        role="treeitem"
-                        aria-selected={source.id === selectedId}
-                        aria-controls="team-entity-prompt-content"
-                        tabIndex={focusId === source.id ? 0 : -1}
-                        onFocus={() => setFocusId(source.id)}
-                        onClick={() => setSelectedId(source.id)}
-                      >
-                        <span>
+                <div
+                  id={`team-prompt-group-${node.kind}`}
+                  role="group"
+                  hidden={!expandedKinds.has(node.kind)}
+                >
+                  {node.sources.map(source => (
+                    <button
+                      ref={element => {
+                        if (element === null) itemRefs.current.delete(source.id);
+                        else itemRefs.current.set(source.id, element);
+                      }}
+                      key={source.id}
+                      type="button"
+                      role="treeitem"
+                      aria-selected={source.id === selectedId}
+                      aria-controls="team-entity-prompt-content"
+                      aria-level={2}
+                      data-unconfigured={source.sections.length === 0 ? 'true' : undefined}
+                      tabIndex={focusId === source.id ? 0 : -1}
+                      onFocus={() => setFocusId(source.id)}
+                      onClick={() => setSelectedId(source.id)}
+                    >
+                      <span className="cx-team-architecture__prompt-row-main">
+                        <Icon className="cx-team-architecture__prompt-icon" name="host:files" aria-hidden="true" />
+                        <span className="cx-team-architecture__prompt-row-label">
                           {source.source.kind === 'current'
                             ? t('detail.prompt-self', { label: entity.label })
                             : source.source.label}
                         </span>
-                        {source.sections.length === 0
-                          ? <small>{t('detail.prompt-unconfigured')}</small>
-                          : <small>{source.source.label}</small>}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                      </span>
+                      {source.sections.length === 0
+                        ? <small>{t('detail.prompt-unconfigured')}</small>
+                        : null}
+                    </button>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -827,7 +824,7 @@ function TeamArchitecturePage({ source, detailRouteIds, routeId, params, navigat
     const entity = entities.find(candidate => candidate.memberId === memberId);
     const tab = detailTabForRoute(routeId, detailRouteIds);
     content = (
-      <div className="cx-team-architecture">
+      <div className="cx-team-architecture" data-detail-tab={tab}>
         {entity === undefined || tab === undefined
           ? <EmptyState title={t('detail.missing.title')} description={t('detail.missing.description')} />
           : (

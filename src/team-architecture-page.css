@@ -90,6 +90,14 @@
   min-width: 0;
 }
 
+.cx-team-architecture[data-detail-tab='prompts'],
+.cx-team-architecture[data-detail-tab='prompts'] .cx-team-architecture__detail,
+.cx-team-architecture__detail-panel[data-detail-tab='prompts'] {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .cx-team-architecture__chart,
 .cx-team-architecture__unestablished {
   min-width: 0;
@@ -352,32 +360,35 @@
   min-width: 0;
 }
 
-.cx-team-architecture__prompt-metadata {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 18px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent);
-  color: color-mix(in srgb, currentColor 68%, transparent);
-  font-size: 0.78rem;
+.cx-team-architecture__prompt-section {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .cx-team-architecture__prompt-workspace {
   display: grid;
+  height: 100%;
+  min-height: 0;
   min-width: 0;
   grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
-  align-items: start;
+  grid-template-rows: minmax(0, 1fr);
   gap: 0;
+  overflow: hidden;
 }
 
 .cx-team-architecture__prompt-selector,
 .cx-team-architecture__prompt-content {
+  min-height: 0;
   min-width: 0;
+  overscroll-behavior: contain;
 }
 
 .cx-team-architecture__prompt-selector {
-  padding-right: 18px;
+  overflow-y: auto;
+  padding-right: 8px;
   border-right: 1px solid color-mix(in srgb, currentColor 13%, transparent);
+  scrollbar-gutter: stable;
 }
 
 .cx-team-architecture__prompt-tree,
@@ -387,24 +398,29 @@
 }
 
 .cx-team-architecture__prompt-tree {
-  gap: 5px;
+  gap: 0;
+  padding: 4px 0;
 }
 
 .cx-team-architecture__prompt-kind {
-  gap: 3px;
+  gap: 0;
 }
 
 .cx-team-architecture__prompt-kind > [role='group'] {
   position: relative;
-  gap: 2px;
-  margin-left: 12px;
-  padding-left: 16px;
+  gap: 0;
+  margin-left: 13px;
+  padding-left: 13px;
+}
+
+.cx-team-architecture__prompt-kind > [role='group'][hidden] {
+  display: none;
 }
 
 .cx-team-architecture__prompt-kind > [role='group']::before {
   position: absolute;
   top: 0;
-  bottom: 12px;
+  bottom: 13px;
   left: 0;
   border-left: 1px solid color-mix(in srgb, currentColor 22%, transparent);
   content: '';
@@ -413,16 +429,20 @@
 .cx-team-architecture__prompt-kind button {
   appearance: none;
   position: relative;
-  display: grid;
+  display: flex;
   width: 100%;
+  min-height: 26px;
   min-width: 0;
-  gap: 2px;
-  padding: 7px 9px;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 4px;
   background: transparent;
   color: inherit;
   font: inherit;
+  font-size: 0.8rem;
+  line-height: 20px;
   text-align: left;
   cursor: pointer;
 }
@@ -431,18 +451,58 @@
   font-weight: 650;
 }
 
+.cx-team-architecture__prompt-chevron {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  opacity: 0.72;
+  transform: rotate(-45deg);
+  transform-origin: center;
+  transition: transform 120ms ease;
+}
+
+.cx-team-architecture__prompt-chevron[data-expanded='true'] {
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+.cx-team-architecture__prompt-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.cx-team-architecture__prompt-row-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 5px;
+}
+
+.cx-team-architecture__prompt-row-label {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .cx-team-architecture__prompt-kind > [role='group'] > button::before {
   position: absolute;
   top: 50%;
   right: 100%;
-  width: 16px;
+  width: 13px;
   border-top: 1px solid color-mix(in srgb, currentColor 22%, transparent);
   content: '';
 }
 
-.cx-team-architecture__prompt-kind button:hover,
+.cx-team-architecture__prompt-kind button:hover {
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
 .cx-team-architecture__prompt-kind button[aria-selected='true'] {
-  background: color-mix(in srgb, currentColor 8%, transparent);
+  background: color-mix(in srgb, var(--cx-primary, currentColor) 12%, transparent);
 }
 
 .cx-team-architecture__prompt-kind button:focus-visible {
@@ -451,11 +511,20 @@
 }
 
 .cx-team-architecture__prompt-kind button small {
+  flex: none;
   color: color-mix(in srgb, currentColor 58%, transparent);
+  font-size: 0.68rem;
+}
+
+.cx-team-architecture__prompt-kind button[data-unconfigured='true']:not([aria-selected='true']) {
+  color: color-mix(in srgb, currentColor 68%, transparent);
 }
 
 .cx-team-architecture__prompt-content {
+  overflow: auto;
   padding-left: 18px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .cx-team-architecture__prompt-document {
@@ -555,17 +624,17 @@
 
   .cx-team-architecture__prompt-workspace {
     grid-template-columns: 1fr;
+    grid-template-rows: minmax(120px, 2fr) minmax(180px, 3fr);
   }
 
   .cx-team-architecture__prompt-selector {
     padding-right: 0;
-    padding-bottom: 16px;
     border-right: 0;
     border-bottom: 1px solid color-mix(in srgb, currentColor 13%, transparent);
   }
 
   .cx-team-architecture__prompt-content {
-    padding-top: 16px;
+    padding-top: 12px;
     padding-left: 0;
   }
 
@@ -578,5 +647,9 @@
 @media (prefers-reduced-motion: reduce) {
   .cx-team-architecture * {
     scroll-behavior: auto !important;
+  }
+
+  .cx-team-architecture__prompt-chevron {
+    transition: none;
   }
 }
