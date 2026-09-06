@@ -24,7 +24,14 @@ const hostSharedImports = new Set([
 
 const artifact = JSON.parse(await readRuntime('./artifact.json'));
 const files = new Map(artifact.files.map(file => [file.path, file]));
-const page = artifact.files.find(file => file.kind === 'module' && file.path.includes('chatroom-page-'));
+const page = artifact.files.find(file =>
+  file.kind === 'module'
+  && file.path.includes('chatroom-page-')
+  && !file.path.includes('chatroom-page-loader-')
+);
+const pageLoader = artifact.files.find(
+  file => file.kind === 'module' && file.path.includes('chatroom-page-loader-'),
+);
 const renderer = artifact.files.find(file => file.kind === 'module' && file.path.includes('avatar-renderer-'));
 
 test('emits page and Avatar renderer as nested immutable runtime chunks', async () => {
@@ -33,6 +40,7 @@ test('emits page and Avatar renderer as nested immutable runtime chunks', async 
   assert.equal(artifact.format, 'browser-esm-graph');
   assert.deepEqual(artifact.initialStyles, []);
   assert.ok(page);
+  assert.ok(pageLoader);
   assert.ok(renderer);
 
   const staticClosure = new Set();
@@ -48,7 +56,8 @@ test('emits page and Avatar renderer as nested immutable runtime chunks', async 
     ...new Set([...staticClosure]
       .flatMap(path => files.get(path).dynamicImports)),
   ];
-  assert.deepEqual(initialDynamicImports, [page.path]);
+  assert.deepEqual(initialDynamicImports, [pageLoader.path]);
+  assert.deepEqual(pageLoader.dynamicImports, [page.path]);
   assert.deepEqual(page.dynamicImports, [renderer.path]);
   assert.equal(page.styles.length, 1);
   assert.equal(renderer.styles.length, 1);
