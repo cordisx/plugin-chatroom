@@ -1,0 +1,55 @@
+name: Shared quality configuration
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  configuration:
+    runs-on: ubuntu-latest
+    env:
+      POLICY_REF: c63c2e8c2ba7e11502934a52ad2ce3734e804cdc
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts
+      - name: Install the exact shared audit provider
+        run: |
+          git init --quiet "$RUNNER_TEMP/quality-policy"
+          git -C "$RUNNER_TEMP/quality-policy" remote add origin https://github.com/cordisx/cordisxmono.git
+          git -C "$RUNNER_TEMP/quality-policy" fetch --depth=1 origin "$POLICY_REF"
+          git -C "$RUNNER_TEMP/quality-policy" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/quality-policy" rev-parse HEAD)" = "$POLICY_REF"
+          npm --prefix "$RUNNER_TEMP/quality-policy" ci --ignore-scripts
+      - name: Check effective configuration and tracked file coverage
+        run: >-
+          node "$RUNNER_TEMP/quality-policy/scripts/check-quality.mjs"
+          --repo "$GITHUB_WORKSPACE" --profile typescript
+          --policy-root "$RUNNER_TEMP/quality-policy" --policy-ref "$POLICY_REF"
+          --json > "$RUNNER_TEMP/quality-consumption.json"
+      - name: Enforce the source limit on newly added PR files
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: npm run lint:staged -- --diff "$BASE_SHA...$HEAD_SHA" --diff-filter=A
+      - name: Report full-source lint separately from configuration coverage
+        continue-on-error: true
+        run: npm run --silent lint:source -- --format json --output-file "$RUNNER_TEMP/source-lint.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quality-results
+          path: |
+            ${{ runner.temp }}/quality-consumption.json
+            ${{ runner.temp }}/source-lint.json
+          if-no-files-found: warn

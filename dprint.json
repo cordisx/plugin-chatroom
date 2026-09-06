@@ -1,17 +1,5 @@
 {
   "$schema": "https://dprint.dev/schemas/v0.json",
-  "indentWidth": 2,
-  "newLineKind": "lf",
-  "typescript": {
-    "module.sortImportDeclarations": "maintain",
-    "module.sortExportDeclarations": "maintain",
-    "quoteStyle": "preferSingle",
-    "jsx.quoteStyle": "preferDouble",
-    "semiColons": "always"
-  },
-  "markdown": {
-    "textWrap": "maintain"
-  },
   "includes": [
     "**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,json,jsonc,md}"
   ],
@@ -25,9 +13,9 @@
     "runtime-manifest.json",
     "cordisx-package.json"
   ],
-  "plugins": [
-    "npm:@dprint/typescript@0.96.1",
-    "npm:@dprint/json@0.23.0",
-    "npm:@dprint/markdown@0.23.3"
-  ]
+  "extends": "https://raw.githubusercontent.com/cordisx/cordisxmono/c63c2e8c2ba7e11502934a52ad2ce3734e804cdc/tooling/quality/dprint/code.json",
+  "typescript": {
+    "jsx.quoteStyle": "preferDouble",
+    "semiColons": "always"
+  }
 }
