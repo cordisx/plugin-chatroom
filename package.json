@@ -16,6 +16,7 @@
   ],
   "scripts": {
     "build": "node scripts/clean-build-output.mjs && tsc -p tsconfig.json && vite build --config vite.config.mjs && node scripts/verify-runtime-bundle.mjs && node scripts/copy-build-assets.mjs",
+    "check:fast": "npm run lint:staged && npm run typecheck && npm run build && npm test",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test test/*.mjs",
     "check": "npm run typecheck && npm run build && npm test",

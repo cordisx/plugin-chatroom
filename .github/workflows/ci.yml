@@ -2,22 +2,164 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
-      - 'codex/**'
+    branches: [main]
   pull_request:
 
 permissions:
   contents: read
 
 jobs:
+  scope:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.scope.outputs.docs_only }}
+      full: ${{ steps.scope.outputs.full }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git diff --name-only --diff-filter=ACMRT "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed-files"
+          docs_only=true
+          full=false
+          while IFS= read -r file; do
+            case "$file" in
+              *.md|*.markdown) ;;
+              *) docs_only=false ;;
+            esac
+            case "$file" in
+              AGENTS.md|.agents/*|package.json|package-lock.json|cordisx-package.json|runtime-manifest.json|tsconfig.json|vite.config.mjs|.github/*|scripts/*|entities/*)
+                full=true
+                ;;
+            esac
+          done < "$RUNNER_TEMP/changed-files"
+          test -s "$RUNNER_TEMP/changed-files" || full=true
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          echo "full=$full" >> "$GITHUB_OUTPUT"
+          {
+            echo '### Chatroom pull-request scope'
+            echo
+            echo "- base: \`$BASE_SHA\`"
+            echo "- head: \`$HEAD_SHA\`"
+            echo "- docs-only: \`$docs_only\`"
+            echo "- full gate: \`$full\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   check:
+    if: always() && (github.event_name == 'push' || needs.scope.outputs.full == 'true')
+    needs: scope
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run check
+      - name: Run the complete owner gate
+        run: |
+          start=$SECONDS
+          npm run check
+          elapsed=$((SECONDS - start))
+          echo "Complete Chatroom gate: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
+
+  typecheck:
+    if: github.event_name == 'pull_request' && needs.scope.outputs.full != 'true' && needs.scope.outputs.docs_only != 'true'
+    needs: scope
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - id: result-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ci-results/typecheck.json
+          key: chatroom-pr-typecheck-v1-${{ github.event.pull_request.base.sha }}-${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v7
+        if: steps.result-cache.outputs.cache-hit != 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.result-cache.outputs.cache-hit != 'true'
+        run: npm ci --ignore-scripts --allow-git=root
+      - name: Typecheck the plugin
+        if: steps.result-cache.outputs.cache-hit != 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          start=$SECONDS
+          npm run typecheck
+          elapsed=$((SECONDS - start))
+          mkdir -p .ci-results
+          printf '{"base":"%s","head":"%s","phase":"typecheck","seconds":%s,"cache":false}\n' "$BASE_SHA" "$HEAD_SHA" "$elapsed" > .ci-results/typecheck.json
+      - uses: actions/cache/save@v4
+        if: steps.result-cache.outputs.cache-hit != 'true'
+        with:
+          path: .ci-results/typecheck.json
+          key: chatroom-pr-typecheck-v1-${{ github.event.pull_request.base.sha }}-${{ github.event.pull_request.head.sha }}
+      - name: Report result metadata
+        run: |
+          echo '### Chatroom typecheck' >> "$GITHUB_STEP_SUMMARY"
+          if [[ '${{ steps.result-cache.outputs.cache-hit }}' == 'true' ]]; then
+            echo '- exact-SHA cache: `hit`' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '- exact-SHA cache: `miss`' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          sed 's/^/  `/' .ci-results/typecheck.json | sed 's/$/`/' >> "$GITHUB_STEP_SUMMARY"
+
+  build-test:
+    if: github.event_name == 'pull_request' && needs.scope.outputs.full != 'true' && needs.scope.outputs.docs_only != 'true'
+    needs: scope
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - id: result-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ci-results/build-test.json
+          key: chatroom-pr-build-test-v1-${{ github.event.pull_request.base.sha }}-${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v7
+        if: steps.result-cache.outputs.cache-hit != 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.result-cache.outputs.cache-hit != 'true'
+        run: npm ci --ignore-scripts --allow-git=root
+      - name: Build, then run tests against the build
+        if: steps.result-cache.outputs.cache-hit != 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          start=$SECONDS
+          npm run build
+          npm test
+          elapsed=$((SECONDS - start))
+          mkdir -p .ci-results
+          printf '{"base":"%s","head":"%s","phase":"build-test","seconds":%s,"cache":false}\n' "$BASE_SHA" "$HEAD_SHA" "$elapsed" > .ci-results/build-test.json
+      - uses: actions/cache/save@v4
+        if: steps.result-cache.outputs.cache-hit != 'true'
+        with:
+          path: .ci-results/build-test.json
+          key: chatroom-pr-build-test-v1-${{ github.event.pull_request.base.sha }}-${{ github.event.pull_request.head.sha }}
+      - name: Report result metadata
+        run: |
+          echo '### Chatroom build and test' >> "$GITHUB_STEP_SUMMARY"
+          if [[ '${{ steps.result-cache.outputs.cache-hit }}' == 'true' ]]; then
+            echo '- exact-SHA cache: `hit`' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '- exact-SHA cache: `miss`' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          sed 's/^/  `/' .ci-results/build-test.json | sed 's/$/`/' >> "$GITHUB_STEP_SUMMARY"

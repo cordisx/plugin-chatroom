@@ -25,8 +25,11 @@
 ## Delivery
 
 - Keep `main` releasable and use `codex/` branches for feature work.
-- Add focused tests for observable behavior and run `npm run check` before a
-  checkpoint commit.
+- Add focused tests for observable behavior. Use `npm run check:fast` for the
+  development loop; dependency, package manifest, build configuration,
+  generated entity, and release changes retain the complete `npm run check`.
+  Chatroom's Node tests consume built output, so CI parallelizes typecheck from
+  the serial build-then-test chain instead of guessing a fragile test mapping.
 - Do not claim fixture behavior is a live agent or Connector integration.
 - Validate user-visible plugin work through CordisX local-dev and the real
   `app://-/index.html` renderer; a standalone HTTP page is not valid evidence.
