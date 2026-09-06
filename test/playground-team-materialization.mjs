@@ -5,13 +5,20 @@ import { CHATROOM_DEFAULT_AGENT_CONFIGURATION } from '../dist/agent-definition.j
 import { configurationFromEntitySnapshot } from '../dist/entity-registry-configuration.js';
 import { chatroomAgentConfigurationFromRuntimeConfig } from '../dist/runtime-config.js';
 import { projectTeamEntities } from '../dist/team-entity-view-model.js';
-import { PLAYGROUND_COMPLEX_TEAM_MEMBERS } from './fixtures/playground-complex-team.mjs';
+import {
+  PLAYGROUND_COMPLEX_TEAM_DEFINITIONS,
+  PLAYGROUND_COMPLEX_TEAM_MEMBERS,
+} from './fixtures/playground-complex-team.mjs';
 import { materializePlaygroundTeamProfile } from './fixtures/playground-profile-config.mjs';
 
 const team = {
   ...CHATROOM_DEFAULT_AGENT_CONFIGURATION,
   seedLeaderIds: ['leader'],
   members: PLAYGROUND_COMPLEX_TEAM_MEMBERS,
+  definitions: [
+    ...CHATROOM_DEFAULT_AGENT_CONFIGURATION.definitions,
+    ...PLAYGROUND_COMPLEX_TEAM_DEFINITIONS,
+  ],
 };
 
 const entitySnapshot = () => {
@@ -21,13 +28,13 @@ const entitySnapshot = () => {
     pluginId: 'chatroom',
     pluginGeneration: 1,
   };
-  const revisionByAgentId = new Map(CHATROOM_DEFAULT_AGENT_CONFIGURATION.definitions.map((definition, index) => [
+  const revisionByAgentId = new Map(team.definitions.map((definition, index) => [
     definition.identity.agentId,
     `sha256:${String(index + 1).repeat(64)}`,
   ]));
   return {
     binding,
-    entities: CHATROOM_DEFAULT_AGENT_CONFIGURATION.definitions.map(definition => {
+    entities: team.definitions.map(definition => {
       const revision = revisionByAgentId.get(definition.identity.agentId);
       const rebound = {
         ...definition,
@@ -73,6 +80,7 @@ test('materializes the 18-member team through Host profile precedence and the ap
   const rebound = configurationFromEntitySnapshot(configured, entitySnapshot());
   const entities = projectTeamEntities(rebound, []);
   assert.equal(entities.length, 18);
+  assert.equal(new Set(rebound.members.map(member => member.definition.agentId)).size, 18);
   const byId = new Map(entities.map(entity => [entity.memberId, entity]));
   const depth = memberId => {
     let current = byId.get(memberId);

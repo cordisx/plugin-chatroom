@@ -7,13 +7,20 @@ import {
   teamEntityLocalHierarchy,
   teamEntityPromptSources,
 } from '../dist/team-entity-view-model.js';
-import { PLAYGROUND_COMPLEX_TEAM_MEMBERS } from './fixtures/playground-complex-team.mjs';
+import {
+  PLAYGROUND_COMPLEX_TEAM_DEFINITIONS,
+  PLAYGROUND_COMPLEX_TEAM_MEMBERS,
+} from './fixtures/playground-complex-team.mjs';
 
 const complexConfiguration = () =>
   parseChatroomAgentConfiguration({
     ...CHATROOM_DEFAULT_AGENT_CONFIGURATION,
     seedLeaderIds: ['leader'],
     members: PLAYGROUND_COMPLEX_TEAM_MEMBERS,
+    definitions: [
+      ...CHATROOM_DEFAULT_AGENT_CONFIGURATION.definitions,
+      ...PLAYGROUND_COMPLEX_TEAM_DEFINITIONS,
+    ],
   });
 
 test('keeps the complex organization Playground-only with 18 members and at least four levels', () => {

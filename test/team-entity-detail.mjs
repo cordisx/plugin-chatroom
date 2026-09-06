@@ -4,6 +4,10 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 import typescript from 'typescript';
+import {
+  PLAYGROUND_COMPLEX_TEAM_DEFINITIONS,
+  PLAYGROUND_COMPLEX_TEAM_MEMBERS,
+} from './fixtures/playground-complex-team.mjs';
 
 const sourceFiles = ['engagement-config', 'agent-definition', 'team-architecture-navigation'];
 
@@ -45,6 +49,29 @@ function resolveExactOverview(declarations, identity) {
     && declaration.subject.identity.revision === identity.revision
   );
 }
+
+test('registers all 18 Playground members as unique exact Manager definition subjects', async () => {
+  const modules = await importCurrentNavigation();
+  try {
+    const configuration = modules.agentDefinition.parseChatroomAgentConfiguration({
+      ...modules.agentDefinition.CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+      seedLeaderIds: ['leader'],
+      members: PLAYGROUND_COMPLEX_TEAM_MEMBERS,
+      definitions: [
+        ...modules.agentDefinition.CHATROOM_DEFAULT_AGENT_CONFIGURATION.definitions,
+        ...PLAYGROUND_COMPLEX_TEAM_DEFINITIONS,
+      ],
+    });
+    const declarations = modules.navigation.teamArchitectureManagerContentDeclarations({ configuration });
+    const subjects = declarations.flatMap(declaration =>
+      declaration.subject?.kind === 'agent-definition' ? [declaration.subject.identity] : []
+    );
+    assert.equal(subjects.length, 18);
+    assert.equal(new Set(subjects.map(identity => `${identity.agentId}@${identity.revision}`)).size, 18);
+  } finally {
+    await rm(modules.directory, { recursive: true, force: true });
+  }
+});
 
 test('declares exact Agent identities and one stable Host record summary across all five tabs', async () => {
   const modules = await importCurrentNavigation();

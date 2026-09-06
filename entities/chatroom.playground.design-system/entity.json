@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-file.v1.schema.json",
+  "contract": "cordisx.entity-file/v1",
+  "schemaVersion": 1,
+  "agentId": "chatroom.playground.design-system",
+  "name": "Design System",
+  "description": "Documents reusable design-system decisions for the Playground team.",
+  "extends": [
+    {
+      "agentId": "chatroom.documentation",
+      "revision": "sha256:64e5a6f1268a792380318e419520c7bdea9695ead0a0d08dfc30565b9273d045"
+    }
+  ],
+  "inherit": {
+    "promptSections": "append",
+    "rules": "append",
+    "skills": "append",
+    "tools": "merge",
+    "mcpServers": "merge",
+    "runtimeDefaults": "merge",
+    "avatar": "inherit"
+  }
+}

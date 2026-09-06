@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -93,10 +93,13 @@ const materializeTemplate = declaration => {
     promptFiles.push({ path: relativePath, content: text });
     promptByPath.set(section.source.path, text);
   }
-  const actualPromptFiles = readdirSync(path.join(entityRoot, 'prompts'))
-    .filter(name => name.endsWith('.md'))
-    .sort()
-    .map(name => `prompts/${name}`);
+  const promptRoot = path.join(entityRoot, 'prompts');
+  const actualPromptFiles = existsSync(promptRoot)
+    ? readdirSync(promptRoot)
+      .filter(name => name.endsWith('.md'))
+      .sort()
+      .map(name => `prompts/${name}`)
+    : [];
   assert.deepEqual(
     [...new Set(promptFiles.map(file => file.path))].sort(),
     actualPromptFiles,
@@ -125,20 +128,33 @@ const materializeTemplate = declaration => {
   };
 };
 
-test('package v8 declares five schema-valid entity templates with exact framed digests', () => {
+test('package v8 declares unique schema-valid production and Playground entity templates', () => {
   validate('plugin-package.v8.schema.json', packageManifest);
   const runtimeManifest = JSON.parse(readFileSync(
     path.join(repositoryRoot, packageManifest.runtimeManifest.path),
     'utf8',
   ));
   validate('plugin-manifest.v8.schema.json', runtimeManifest);
-  assert.equal(packageManifest.entityTemplates.length, 5);
+  assert.equal(packageManifest.entityTemplates.length, 18);
   assert.deepEqual(packageManifest.entityTemplates.map(item => item.agentId), [
     'chatroom.generalist',
     'chatroom.reviewer',
     'chatroom.integrator',
     'chatroom.documentation',
     'chatroom.qa',
+    'chatroom.playground.product-research',
+    'chatroom.playground.product-design',
+    'chatroom.playground.compliance',
+    'chatroom.playground.localization',
+    'chatroom.playground.knowledge-base',
+    'chatroom.playground.frontend',
+    'chatroom.playground.design-system',
+    'chatroom.playground.backend',
+    'chatroom.playground.api-platform',
+    'chatroom.playground.data-platform',
+    'chatroom.playground.infrastructure',
+    'chatroom.playground.automation',
+    'chatroom.playground.release-validation',
   ]);
   for (const declaration of packageManifest.entityTemplates) {
     validate('entity-template-declaration.v1.schema.json', declaration);
@@ -160,7 +176,13 @@ test('templates preserve every accepted definition field while revision becomes 
   for (const declaration of packageManifest.entityTemplates) {
     const { definition } = materializeTemplate(declaration);
     const legacy = legacyDefinitions.get(declaration.agentId);
-    assert.ok(legacy);
+    if (legacy === undefined) {
+      assert.match(definition.identity.agentId, /^chatroom\.playground\./u);
+      assert.equal(definition.extends?.length, 1);
+      assert.equal(definition.extends[0].revision, digestByAgentId.get(definition.extends[0].agentId));
+      assert.equal(definition.inherit.avatar, 'inherit');
+      continue;
+    }
     const expected = {
       ...legacy,
       identity: { agentId: legacy.identity.agentId, revision: declaration.digest },
@@ -184,7 +206,10 @@ test('package pins the exact Protocol bootstrap-route and Host runtime releases 
     packageJson.devDependencies['@cordisx/protocol'],
     'github:cordisx/cordisx-protocol#703a3d03f1b533c4d54bf51e5c8818b53bdda4f5',
   );
-  assert.equal(packageJson.devDependencies.cordisx, 'github:cordisx/cordisx#998673a98339bcdf6975044ca045f7278981400a');
+  assert.equal(
+    packageJson.devDependencies.cordisx,
+    'github:cordisx/cordisx#8a597dd3828eb4b1256d3466e1f8493ac47c40dd',
+  );
   assert.equal(packageJson.main, packageManifest.entry);
   assert.equal(packageManifest.entry, './dist/runtime/chatroom.js');
   assert.equal(
@@ -216,6 +241,7 @@ test('built package entry delegates only through the declared runtime graph', ()
     artifact.files.filter(file =>
       file.kind === 'module'
       && file.path.includes('chatroom-page-')
+      && !file.path.includes('chatroom-page-loader-')
     ).length,
     1,
   );

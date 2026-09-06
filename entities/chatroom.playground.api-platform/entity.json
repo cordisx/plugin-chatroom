@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-file.v1.schema.json",
+  "contract": "cordisx.entity-file/v1",
+  "schemaVersion": 1,
+  "agentId": "chatroom.playground.api-platform",
+  "name": "API Platform",
+  "description": "Coordinates API platform implementation for the Playground team.",
+  "extends": [
+    {
+      "agentId": "chatroom.integrator",
+      "revision": "sha256:cf89bc7dc1406f57369a29cfda1ad0bd826ea84f02b845a0660d36f7d269004b"
+    }
+  ],
+  "inherit": {
+    "promptSections": "append",
+    "rules": "append",
+    "skills": "append",
+    "tools": "merge",
+    "mcpServers": "merge",
+    "runtimeDefaults": "merge",
+    "avatar": "inherit"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-file.v1.schema.json",
+  "contract": "cordisx.entity-file/v1",
+  "schemaVersion": 1,
+  "agentId": "chatroom.playground.product-research",
+  "name": "Product Research",
+  "description": "Investigates product questions for the Playground team.",
+  "extends": [
+    {
+      "agentId": "chatroom.reviewer",
+      "revision": "sha256:5c52ac24a8eb4592c0919336fbc804bd117741c22b108af030c83b8ef590512d"
+    }
+  ],
+  "inherit": {
+    "promptSections": "append",
+    "rules": "append",
+    "skills": "append",
+    "tools": "merge",
+    "mcpServers": "merge",
+    "runtimeDefaults": "merge",
+    "avatar": "inherit"
+  }
+}
