@@ -85,6 +85,13 @@ test('declares exact Agent identities and one stable Host record summary across 
         [member.memberId, member.memberId, member.memberId, member.memberId, member.memberId],
         [member.memberId, member.memberId, member.memberId, member.memberId, member.memberId],
       ]);
+      assert.deepEqual(memberDetails.map(declaration => declaration.tabs.map(tab => tab.icon)), [
+        ['host:info', 'host:files', 'host:hierarchy', 'host:layers', 'host:history'],
+        ['host:info', 'host:files', 'host:hierarchy', 'host:layers', 'host:history'],
+        ['host:info', 'host:files', 'host:hierarchy', 'host:layers', 'host:history'],
+        ['host:info', 'host:files', 'host:hierarchy', 'host:layers', 'host:history'],
+        ['host:info', 'host:files', 'host:hierarchy', 'host:layers', 'host:history'],
+      ]);
 
       const [overview, ...otherTabs] = memberDetails;
       assert.deepEqual(overview.subject, { kind: 'agent-definition', identity: member.definition });

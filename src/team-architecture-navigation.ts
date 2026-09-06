@@ -152,6 +152,7 @@ function detailTabs(memberId: string): NonNullable<CordisXManagerContentNavigati
       id: 'overview' satisfies TeamEntityDetailTab,
       route: Object.freeze({ id: TEAM_ARCHITECTURE_DETAIL_ROUTE_ID, params: Object.freeze({ memberId }) }),
       label: message('detail.tab.overview', '概览'),
+      icon: 'host:info',
     }),
     Object.freeze({
       id: 'prompts' satisfies TeamEntityDetailTab,
@@ -160,6 +161,7 @@ function detailTabs(memberId: string): NonNullable<CordisXManagerContentNavigati
         params: Object.freeze({ memberId }),
       }),
       label: message('detail.tab.prompts', '提示词'),
+      icon: 'host:files',
     }),
     Object.freeze({
       id: 'relationships' satisfies TeamEntityDetailTab,
@@ -168,6 +170,7 @@ function detailTabs(memberId: string): NonNullable<CordisXManagerContentNavigati
         params: Object.freeze({ memberId }),
       }),
       label: message('detail.tab.relationships', '关系'),
+      icon: 'host:hierarchy',
     }),
     Object.freeze({
       id: 'capabilities' satisfies TeamEntityDetailTab,
@@ -176,6 +179,7 @@ function detailTabs(memberId: string): NonNullable<CordisXManagerContentNavigati
         params: Object.freeze({ memberId }),
       }),
       label: message('detail.tab.capabilities', '能力'),
+      icon: 'host:layers',
     }),
     Object.freeze({
       id: 'sessions' satisfies TeamEntityDetailTab,
@@ -184,6 +188,7 @@ function detailTabs(memberId: string): NonNullable<CordisXManagerContentNavigati
         params: Object.freeze({ memberId }),
       }),
       label: message('detail.tab.sessions', '会话'),
+      icon: 'host:history',
     }),
   ]);
 }
