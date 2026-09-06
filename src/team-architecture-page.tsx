@@ -436,6 +436,7 @@ function EntityTreeCanvas({
         </Button>
       </div>
       <PanZoomCanvas
+        fill
         className="cx-team-architecture__tree-viewport"
         aria-label={ariaLabel}
         controllerRef={canvas}

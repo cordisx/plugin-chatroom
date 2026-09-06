@@ -322,11 +322,12 @@ test('uses Host pan zoom, depth-three expansion, search reveal, and icon-leading
   assert.match(page, /\{expanded && \([\s\S]*?node\.children\.map/u);
   assert.match(page, /aria-expanded=\{hasChildren \? expanded : undefined\}/u);
   assert.match(page, /t\('tree\.expand',[\s\S]*?count: node\.children\.length/u);
-  assert.match(page, /<PanZoomCanvas[\s\S]*?controllerRef=\{canvas\}[\s\S]*?minScale=\{0\.3\}/u);
+  assert.match(page, /<PanZoomCanvas[\s\S]*?fill[\s\S]*?controllerRef=\{canvas\}[\s\S]*?minScale=\{0\.3\}/u);
   assert.match(page, /canvas\.current\?\.fitToView\(\)/u);
   assert.match(page, /canvas\.current\?\.reset\(\)/u);
   assert.doesNotMatch(page, /cx-team-architecture__chart-scroll/u);
   assert.doesNotMatch(css, /cx-team-architecture__chart-scroll/u);
+  assert.doesNotMatch(css, /100vh|calc\([^)]*vh|\.cxr-|data-cordisx-page/u);
 
   for (const icon of ['role', 'session', 'relationship']) {
     assert.match(
