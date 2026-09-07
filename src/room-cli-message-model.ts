@@ -20,7 +20,7 @@ export interface RoomCliMessage extends ChatroomCliScope {
 
 export const MAX_ROOM_CLI_MESSAGES = 4096;
 export const MAX_CLI_TEXT_LENGTH = 16000;
-export const CLI_OPERATION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+export const CLI_OPERATION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 export function sameCliSender(left: ChatroomCliScope, right: ChatroomCliScope): boolean {
   return left.roomId === right.roomId && left.participantId === right.participantId

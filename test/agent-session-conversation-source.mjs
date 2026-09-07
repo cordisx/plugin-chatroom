@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { ChatroomAgentSessionConversationSource, v3BindingFor } from '../dist/agent-session-conversation-source.js';
-import { ChatroomAgentSessionConversationSourceV7 } from '../dist/agent-session-conversation-source-v7.js';
+import { ChatroomAgentSessionConversationSourceV10 } from '../dist/agent-session-conversation-source-v10.js';
 
 const binding = {
   bindingId: 'binding-one',
@@ -137,6 +137,7 @@ function sessionProjection(itemOverride, admissionAppendAnchors) {
   let currentRuns;
   let currentAdmissionAppendAnchors = admissionAppendAnchors;
   return {
+    rooms: { get: () => undefined },
     async hydrateRoom() {},
     subscribeProjection(next) {
       listener = next;
@@ -641,7 +642,7 @@ test('Shell v7 keeps the complete A3/B1 Room timeline when Reviewer approval is 
     }],
     items: [user3, intro, pending],
   });
-  const source = new ChatroomAgentSessionConversationSourceV7(
+  const source = new ChatroomAgentSessionConversationSourceV10(
     binding,
     domainSource([delegation]),
     projection,
@@ -728,7 +729,7 @@ test('Shell v7 keeps the complete A3/B1 Room timeline when Reviewer approval is 
     items: [user3, intro, { ...denied, state: 'denied', actions: [] }, user1, leadReply],
     admissionAppendAnchors: [{ itemId: 'user-1-v7', appendAfterItemId: 'approval-v7' }],
   });
-  const cold = new ChatroomAgentSessionConversationSourceV7(
+  const cold = new ChatroomAgentSessionConversationSourceV10(
     binding,
     domainSource([delegation]),
     coldProjection,

@@ -1,3 +1,4 @@
+import { roomCliShellMessages } from './room-cli-message-shell.js';
 import type {
   AgentConversationItem as AgentConversationItemV3,
   AgentConversationShellBinding as AgentConversationShellBindingV3,
@@ -15,7 +16,7 @@ import type {
   AgentConversationShellSubscription,
   AgentConversationShellSubscriptionClosed,
   AgentConversationShellUpdate,
-} from '@cordisx/protocol/agent-conversation-shell/v7';
+} from '@cordisx/protocol/agent-conversation-shell/v10';
 
 import type { ChatroomAgentSessionController } from './agent-session-controller.js';
 import type { ProjectedItem } from './agent-session-projection.js';
@@ -37,7 +38,7 @@ const closeEnvelope = (
     code,
   });
 
-class V7Stream {
+class V10Stream {
   private cursor: number;
   private terminal?: AgentConversationShellSubscriptionClosed;
   private readonly updates: AgentConversationShellUpdate[] = [];
@@ -205,11 +206,11 @@ function applyAdmissionAppendAnchors(
 }
 
 /**
- * Atomic Shell-v7 adapter around the accepted Chatroom domain source. Domain
+ * Atomic Shell-v10 adapter around the accepted Chatroom domain source. Domain
  * state/copy stays unchanged; only execution facts are replaced by the
  * SessionEvent projector.
  */
-export class ChatroomAgentSessionConversationSourceV7 implements AgentConversationShellSource {
+export class ChatroomAgentSessionConversationSourceV10 implements AgentConversationShellSource {
   private disposed = false;
   private sequence = 500;
   private subscriptions = 0;
@@ -217,7 +218,7 @@ export class ChatroomAgentSessionConversationSourceV7 implements AgentConversati
   private roomId?: string;
   private refreshRevision = 0;
   private refreshTail: Promise<void> = Promise.resolve();
-  private readonly streams = new Set<V7Stream>();
+  private readonly streams = new Set<V10Stream>();
   private readonly ready: Promise<void>;
   private unsubscribeDomain?: () => void;
   private readonly unsubscribeProjection: () => void;
@@ -238,7 +239,7 @@ export class ChatroomAgentSessionConversationSourceV7 implements AgentConversati
   async snapshot(): Promise<AgentConversationShellSnapshot> {
     await this.ready;
     await this.refreshTail;
-    if (this.snapshotValue === undefined) throw new Error('Chatroom Shell v7 source is unavailable.');
+    if (this.snapshotValue === undefined) throw new Error('Chatroom Shell v10 source is unavailable.');
     return this.snapshotValue;
   }
 
@@ -256,8 +257,8 @@ export class ChatroomAgentSessionConversationSourceV7 implements AgentConversati
       afterSequence,
       snapshotSequence: snapshot.snapshotSequence,
     };
-    let stream!: V7Stream;
-    stream = new V7Stream(subscription, () => this.streams.delete(stream));
+    let stream!: V10Stream;
+    stream = new V10Stream(subscription, () => this.streams.delete(stream));
     this.streams.add(stream);
     return {
       result: { type: 'subscribe', status: 'accepted', code: 'allowed', subscription },
@@ -396,7 +397,9 @@ export class ChatroomAgentSessionConversationSourceV7 implements AgentConversati
         ? { ...common, multiParticipant: true, participantPresentation: domain.selection.participantPresentation }
         : { ...common, multiParticipant: false, participantPresentation: 'none' };
     }
+    const committedRoom = roomId === undefined ? undefined : this.sessions.rooms.get(roomId);
     const mergedItems = [
+      ...(committedRoom === undefined ? [] : roomCliShellMessages(committedRoom)),
       ...domain.items.flatMap(item => {
         const mapped = domainItem(item, sessionByRun);
         return mapped === undefined ? [] : [mapped];

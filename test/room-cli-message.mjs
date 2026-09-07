@@ -68,3 +68,23 @@ test('CLI parser preserves exact text and rejects duplicate arguments and self-d
   assert.throws(() => parseChatroomArguments([...prefix, '--text', 'changed']));
   assert.throws(() => parseChatroomArguments(['send', '--operation', 'op-3', '--text', 'hello']));
 });
+
+test('completed CLI run with no report exposes a warning, cleared by a real report without inventing a reply', async () => {
+  const { roomCliReportStatus } = await import('../dist/room-cli-report-status.js');
+  const { store, scope, send } = fixture();
+  const original = store.rooms.get(scope.roomId);
+  const room = createRoom({ ...original, runs: original.runs.map(run => ({ ...run, collaborationMode: 'cli' })) });
+  await store.upsert(room);
+  const started = Date.now() - 1000;
+  const events = [
+    { seq: 1, type: 'turn/start', time: started, data: { turn: 1 } },
+    { seq: 2, type: 'turn/end', time: started + 500, data: { turn: 1, reason: { kind: 'completed' } } },
+  ];
+  assert.equal(roomCliReportStatus(room, room.runs[0], events, () => 3).state, 'warning');
+  assert.equal(room.cliMessages, undefined);
+  assert.equal(roomCliReportStatus(original, original.runs[0], events, () => 3), undefined);
+  await send(scope, { operationId: 'report-after-end', text: 'Completed the assigned work.' });
+  const updated = store.rooms.get(scope.roomId);
+  assert.equal(roomCliReportStatus(updated, updated.runs[0], events, () => 3), undefined);
+  store.dispose();
+});

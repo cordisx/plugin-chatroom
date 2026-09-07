@@ -421,7 +421,10 @@ export class ChatroomAgentSessionRuntimeController extends ChatroomAgentSessionA
         const projection = projector.project(page);
         await this.observe({ roomId, runId, page, projection });
         for (const listener of this.projectionListeners) listener(roomId);
-        if (page.phase === 'live' && this.owners.has(key)) {
+        if (
+          page.phase === 'live' && this.owners.has(key)
+          && this.requireRun(currentRoom, runId).collaborationMode !== 'cli'
+        ) {
           for (const event of page.events) {
             if (event.type === 'assistant/message') {
               await this.dispatchAgentMentions(roomId, runId, event.seq, event.data.message.content);

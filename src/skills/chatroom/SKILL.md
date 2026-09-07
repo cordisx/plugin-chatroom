@@ -36,7 +36,8 @@ binding and installed invocation, report the missing capability; do not
 substitute a mock, direct file edit, network endpoint, or another assistant
 response for a successful Room send.
 
-Choose a fresh operation ID for each new message. If the call fails with an
+Choose a fresh operation ID for each new message (1–128 letters, digits, dots,
+underscores, or hyphens; begin with a letter or digit). If the call fails with an
 unknown delivery outcome, retry the exact operation ID and exact text. A replay
 receipt means the existing message was found; never create another operation
 just to retry. Reusing an operation with different text is a conflict.

@@ -34,6 +34,7 @@ export abstract class ChatroomAgentSessionProjectionController extends ChatroomA
     if (room === undefined) return { activeRuns: [], items: [] };
     const projectors = room.runs.flatMap(run => {
       const projector = this.projectors.get(runKey(roomId, run.runId));
+      projector?.updateDomain(room, run);
       return projector === undefined ? [] : [projector];
     });
     const linkedByItemId = new Map<string, {

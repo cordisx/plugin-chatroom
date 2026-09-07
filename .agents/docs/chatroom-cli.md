@@ -27,7 +27,11 @@ record collection rejects at capacity instead of forgetting old operation IDs.
 Only successfully bound CLI-mode runs suppress ordinary assistant messages in
 Room projection. Their native execution history, lifecycle, errors, and approval
 facts remain intact. Initial binding failure marks the existing member presence
-failed and prevents task submission. CLI errors never fabricate a Room report.
+failed and prevents task submission. CLI errors never fabricate a Room report. After an observed turn ends, the
+projection shows an unreported warning if the run has no CLI message timestamped
+since that turn began. A later real report clears this derived warning. This
+reports an absence of a Room update; it does not guess a CLI failure cause.
+CLI-mode assistant mentions also do not trigger automatic cross-member sends.
 
 ## Current integration boundaries
 
@@ -36,11 +40,12 @@ Session, bind tools, then allow the first task. Revoked CLI-bound resume remains
 fail closed until the Host supplies a supported two-phase rebind path. Ordinary
 unbound Agent resume remains independent of that limitation.
 
-The actual Host Shell uses `ChatroomAgentSessionConversationSourceV7` registered
-through `registerSourceV9`. Its predecessor source type only accepts SessionEvent
+The actual Host Shell uses `ChatroomAgentSessionConversationSourceV10` registered
+through `registerSourceV10`. Its predecessor source type only accepts SessionEvent
 or acknowledgement messages; do not forge an event sequence or acknowledgement
-to display a CLI fact. The public source extension and real CDP/native integration are required
-before declaring this consumer ready. `test/real-cli-room.mjs` exercises the
+to display a CLI fact. The v10 `plugin-command` source expresses the original Room message ID,
+identity, operation, and sequence without inventing a SessionEvent. Real
+CDP/native integration is still required before declaring this consumer ready. `test/real-cli-room.mjs` exercises the
 installed Host authority, resource deployment, executable CLI subprocess,
 socket, renderer service, Room handler and Host document persistence. Its
 explicitly substituted CDP wire and Agent ownership source limit that evidence

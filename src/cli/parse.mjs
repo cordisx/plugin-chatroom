@@ -18,7 +18,7 @@ export function parseChatroomArguments(args) {
   }
   if (
     command !== 'send' || !values.get('--binding')
-    || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(values.get('--operation') ?? '')
+    || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(values.get('--operation') ?? '')
     || !values.get('--text')?.trim() || values.get('--text').length > 16000
     || values.has('--room') && !values.get('--room')
   ) throw new Error(`Invalid input. Usage: ${usage}`);
