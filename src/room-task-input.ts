@@ -1,5 +1,6 @@
 import type { AgentTaskContext } from '@cordisx/protocol/agent-task/v1';
-import { type ChatroomCliScope, CLI_OPERATION_PATTERN, MAX_CLI_TEXT_LENGTH } from './room-cli-message-model.js';
+import type { RoomTaskSource } from './room-task-model.js';
+import { CLI_OPERATION_PATTERN, MAX_CLI_TEXT_LENGTH } from './room-cli-message-model.js';
 
 export interface ChatroomDelegateInput {
   readonly action: 'delegate';
@@ -10,6 +11,10 @@ export interface ChatroomDelegateInput {
   readonly cwd?: string;
   readonly projectId?: string;
 }
+export interface ChatroomTaskStartInput extends Omit<ChatroomDelegateInput, 'action'> {
+  readonly action: 'start';
+  readonly roomId: string;
+}
 export interface ChatroomTaskQueryInput {
   readonly action: 'query';
   readonly operationId: string;
@@ -19,9 +24,11 @@ const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 const nonempty = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
 
-export function isTaskInput(value: unknown): value is ChatroomDelegateInput | ChatroomTaskQueryInput {
+export function isTaskInput(
+  value: unknown,
+): value is ChatroomDelegateInput | ChatroomTaskQueryInput | ChatroomTaskStartInput {
   if (
-    !record(value) || !['delegate', 'query'].includes(String(value.action))
+    !record(value) || !['delegate', 'query', 'start'].includes(String(value.action))
     || typeof value.operationId !== 'string' || !CLI_OPERATION_PATTERN.test(value.operationId)
     || value.roomId !== undefined && !nonempty(value.roomId)
   ) return false;
@@ -36,10 +43,14 @@ export function isTaskInput(value: unknown): value is ChatroomDelegateInput | Ch
 }
 
 /** An explicit selector must never fall back after Host validation fails. */
-export function taskContext(input: ChatroomDelegateInput, source: ChatroomCliScope): AgentTaskContext {
+export function taskContext(
+  input: ChatroomDelegateInput | ChatroomTaskStartInput,
+  source: RoomTaskSource,
+): AgentTaskContext {
   if (input.projectId !== undefined) {
     return { kind: 'project', projectId: input.projectId, ...(input.cwd === undefined ? {} : { cwd: input.cwd }) };
   }
   if (input.cwd !== undefined) return { kind: 'directory', cwd: input.cwd };
+  if ('kind' in source) throw new Error('context-required');
   return { kind: 'inherit', sessionId: source.sessionId };
 }

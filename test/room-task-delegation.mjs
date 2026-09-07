@@ -240,3 +240,64 @@ test('CLI delegate/query parse the same binding and forbid report identity and u
     operationId: 'op',
   });
 });
+
+test('Leader startup requires explicit new-task context, binds before submission, then delegates through its own authenticated Session', async () => {
+  let room = createRoom({ id: 'leader-start', title: 'First real task' });
+  const store = DurableChatroomRoomStore.memory([room]);
+  const requests = [];
+  const handler = new ChatroomTaskHandler(store, {
+    async createAndSubmit(request) {
+      requests.push(request);
+      return {
+        ...accepted(request),
+        task: {
+          ...accepted(request).task,
+          sessionId: requests.length === 1 ? 'leader-start-session' : 'child-session',
+        },
+      };
+    },
+  });
+  const input = {
+    action: 'start',
+    roomId: room.id,
+    to: 'leader',
+    operationId: 'leader-op',
+    text: 'Delegate a review.',
+  };
+  assert.equal((await handler.start(input)).code, 'context-required');
+  assert.equal(store.rooms.get(room.id).runs.length, 0);
+  assert.equal((await handler.start({ ...input, cwd: '/project' })).status, 'accepted');
+  room = store.rooms.get(room.id);
+  assert.equal(room.runs.length, 1);
+  assert.deepEqual(room.runs[0].delegation.source, { kind: 'room', roomId: room.id });
+  const scope = { ...requests[0].tool.scope, sessionId: 'leader-start-session' };
+  assert.equal((await handler.handle(scope, { ...input, cwd: '/project' })).code, 'invalid-input');
+  assert.equal(
+    (await handler.handle(scope, { action: 'delegate', operationId: 'child-op', to: 'reviewer', text: 'Review.' }))
+      .status,
+    'accepted',
+  );
+  assert.deepEqual(requests[1].context, { kind: 'inherit', sessionId: 'leader-start-session' });
+  assert.equal(store.rooms.get(room.id).runs.length, 2);
+  assert.deepEqual(requests[0].context, { kind: 'directory', cwd: '/project' });
+  assert.match(requests[0].text, /"availableTargets":\[/);
+  store.dispose();
+});
+
+test('public Room preparation uses configured membership and persists no Session or acknowledgement', async () => {
+  const { createRoomTaskBootstrap } = await import('../dist/room-task-bootstrap.js');
+  const { CHATROOM_DEFAULT_AGENT_CONFIGURATION } = await import('../dist/agent-definition.js');
+  const store = DurableChatroomRoomStore.memory([]);
+  const prepare = createRoomTaskBootstrap(store, CHATROOM_DEFAULT_AGENT_CONFIGURATION);
+  const input = { roomId: 'prepared-room', title: 'Prepared' };
+  const results = await Promise.all([prepare(input), prepare(input)]);
+  assert.deepEqual(results.map(value => value.disposition).sort(), ['created', 'replayed']);
+  const room = store.rooms.get(input.roomId);
+  assert.equal(room.runs.length, 0);
+  assert.equal(room.acknowledgements.length, 0);
+  assert.equal(room.items.length, 0);
+  assert.equal(room.memberships.length, CHATROOM_DEFAULT_AGENT_CONFIGURATION.members.length);
+  assert.equal((await prepare({ ...input, title: 'Changed' })).code, 'operation-conflict');
+  assert.equal((await prepare({ ...input, caller: 'fake' })).code, 'invalid-input');
+  store.dispose();
+});

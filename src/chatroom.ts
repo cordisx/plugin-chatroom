@@ -1,3 +1,4 @@
+import { createRoomTaskBootstrap } from './room-task-bootstrap.js';
 import type { AgentTasks } from '@cordisx/protocol/agent-task/v1';
 import { ChatroomCliBindings } from './room-cli-bindings.js';
 import type { AgentTools } from '@cordisx/protocol/agent-tools/v1';
@@ -52,6 +53,8 @@ import {
 } from './playground-room-simulation-bridge.js';
 
 export type ChatroomMessages = {
+  'task.start': undefined;
+  'room.prepare': undefined;
   'navigation.title': undefined;
   'navigation.description': undefined;
   'navigation.rooms': undefined;
@@ -232,9 +235,18 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     entitySnapshot,
   );
   const roomStore = await DurableChatroomRoomStore.openOwnerDocuments(ctx.documents);
+  const prepareRoom = createRoomTaskBootstrap(roomStore, agent);
+  ctx.commands.register(
+    { id: 'room.prepare', title: message('room.prepare', 'Prepare Room'), public: true },
+    command => prepareRoom(command.arguments, command.signal),
+  );
   const agentTools: AgentTools | undefined = ctx.reflect.get('agentTools', false);
   const agentTasks: AgentTasks | undefined = ctx.reflect.get('agentTasks', false);
   const collaboration = new ChatroomCliBindings(agentTools, roomStore, ctx.settings, agentTasks);
+  ctx.commands.register(
+    { id: 'task.start', title: message('task.start', 'Start Leader task'), public: true },
+    command => collaboration.startTask(command.arguments, command.signal),
+  );
   ctx.effect(() => () => {
     void collaboration.dispose();
   }, 'chatroom.cli-tools');
@@ -256,6 +268,8 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     locale: 'en',
     default: true,
     messages: {
+      'task.start': 'Start Leader task',
+      'room.prepare': 'Prepare Room',
       'navigation.title': 'New room',
       'navigation.description': 'Start a new collaboration room.',
       'navigation.rooms': 'Rooms',
@@ -336,6 +350,8 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     namespace: 'chatroom',
     locale: 'zh-CN',
     messages: {
+      'task.start': '启动 Leader 任务',
+      'room.prepare': '准备房间',
       'navigation.title': '新建房间',
       'navigation.description': '开始一个新的协作房间。',
       'navigation.rooms': '房间',

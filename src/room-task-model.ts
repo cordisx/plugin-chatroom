@@ -3,10 +3,12 @@ import type { Room, RoomRun } from './room-model.js';
 import { type ChatroomCliScope, CLI_OPERATION_PATTERN, sameCliSender } from './room-cli-message-model.js';
 
 /** Business correlation on the existing Run. Runtime observations are never persisted here. */
+export type RoomTaskSource = ChatroomCliScope | { readonly kind: 'room'; readonly roomId: string; };
+
 export interface RoomTaskDelegation {
   readonly operationId: string;
   readonly text: string;
-  readonly source: ChatroomCliScope;
+  readonly source: RoomTaskSource;
   readonly request: AgentTaskCreateRequest;
   readonly result?: AgentTaskCreateResult;
 }
@@ -33,10 +35,12 @@ export function freezeTaskDelegation(value: RoomTaskDelegation): RoomTaskDelegat
   return freeze(JSON.parse(JSON.stringify(value))) as RoomTaskDelegation;
 }
 
-export function taskForSource(room: Room, source: ChatroomCliScope, operationId: string): RoomRun | undefined {
+export function taskForSource(room: Room, source: RoomTaskSource, operationId: string): RoomRun | undefined {
   return room.runs.find(run =>
     run.delegation?.operationId === operationId
-    && sameCliSender(run.delegation.source, source)
+    && ('kind' in source || 'kind' in run.delegation.source
+      ? canonicalTaskValue(run.delegation.source) === canonicalTaskValue(source)
+      : sameCliSender(run.delegation.source, source))
   );
 }
 
@@ -46,8 +50,20 @@ export function taskScopeMatchesRun(room: Room, run: RoomRun, scope: ChatroomCli
   return task !== undefined && scope.taskOperationId === task.request.operationId
     && member?.definition.agentId === task.request.definition.agentId
     && member.definition.revision === task.request.definition.revision
-    && member.reportsToMemberId === task.source.memberId
+    && ('kind' in task.source || member.reportsToMemberId === task.source.memberId)
     && (run.sessionId === undefined || run.sessionId === scope.sessionId);
+}
+
+function validContext(task: RoomTaskDelegation): boolean {
+  const context = task.request.context;
+  const absolute = (value: unknown): value is string =>
+    typeof value === 'string' && value.startsWith('/') && !value.includes('\0');
+  if (context?.kind === 'directory') return absolute(context.cwd);
+  if (context?.kind === 'project') {
+    return typeof context.projectId === 'string' && context.projectId.trim() !== ''
+      && (context.cwd === undefined || absolute(context.cwd));
+  }
+  return context?.kind === 'inherit' && !('kind' in task.source) && context.sessionId === task.source.sessionId;
 }
 
 /** Validate persisted joins on hydration as well as every business mutation. */
@@ -57,8 +73,11 @@ export function validateRoomTasks(room: Pick<Room, 'id' | 'memberships' | 'runs'
   for (const run of room.runs) {
     const task = run.delegation;
     if (task === undefined) continue;
-    const sourceRun = room.runs.find(value => value.runId === task.source.runId);
-    const sourceMember = room.memberships.find(value => value.memberId === task.source.memberId);
+    const source = task.source;
+    const sourceRun = 'kind' in source ? undefined : room.runs.find(value => value.runId === source.runId);
+    const sourceMember = 'kind' in source
+      ? undefined
+      : room.memberships.find(value => value.memberId === source.memberId);
     const member = room.memberships.find(value => value.memberId === run.memberId);
     const request = task.request;
     const key = canonicalTaskValue([task.source, task.operationId]);
@@ -66,9 +85,12 @@ export function validateRoomTasks(room: Pick<Room, 'id' | 'memberships' | 'runs'
     keys.add(key);
     hostOperations.add(request.operationId);
     if (
-      !CLI_OPERATION_PATTERN.test(task.operationId) || !CLI_OPERATION_PATTERN.test(request.operationId)
-      || task.source.roomId !== room.id || sourceRun?.memberId !== task.source.memberId
-      || sourceRun.sessionId !== task.source.sessionId || sourceMember?.participantId !== task.source.participantId
+      !validContext(task) || !CLI_OPERATION_PATTERN.test(task.operationId)
+      || !CLI_OPERATION_PATTERN.test(request.operationId)
+      || source.roomId !== room.id || ('kind' in source
+        ? source.kind !== 'room'
+        : sourceRun?.memberId !== source.memberId || sourceRun.sessionId !== source.sessionId
+          || sourceMember?.participantId !== source.participantId)
       || member?.definition.agentId !== request.definition.agentId
       || member.definition.revision !== request.definition.revision
       || request.tool.commandId !== 'send' || canonicalTaskValue(request.tool.scope) !== canonicalTaskValue({

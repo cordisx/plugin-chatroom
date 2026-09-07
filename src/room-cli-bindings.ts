@@ -26,6 +26,7 @@ function scopeFromBinding(sessionId: string, value: unknown): ChatroomCliScope |
 /** Plugin lifecycle adapter over the versioned Host service and the already-open Room store. */
 export class ChatroomCliBindings implements ChatroomRunCollaboration {
   private disposed = false;
+  private readonly taskHandler: ChatroomTaskHandler;
   private readonly bindings = new Map<string, { scope: ChatroomCliScope; handle: AgentToolBindingHandle; }>();
   private readonly unsubscribe: () => void;
   private readonly unwatch: () => void;
@@ -38,18 +39,23 @@ export class ChatroomCliBindings implements ChatroomRunCollaboration {
     tasks?: AgentTasks,
   ) {
     const send = createChatroomCliMessageHandler(store);
-    const taskHandler = new ChatroomTaskHandler(store, tasks);
+    this.taskHandler = new ChatroomTaskHandler(store, tasks);
     this.unregister = tools?.register({ id: 'send' }, async ({ binding, input, signal }): Promise<JsonValue> => {
       if (this.disposed || !this.enabled() || signal.aborted) return { status: 'rejected', code: 'unavailable' };
       const scope = scopeFromBinding(binding.sessionId, binding.scope);
       if (scope === undefined) return { status: 'rejected', code: 'unauthorized' };
       if (input !== null && typeof input === 'object' && !Array.isArray(input) && 'action' in input) {
-        return await taskHandler.handle(scope, input, signal);
+        return await this.taskHandler.handle(scope, input, signal);
       }
       return await send(scope, input, signal);
     });
     this.unsubscribe = store.rooms.subscribe(() => this.revokeInvalid());
     this.unwatch = settings.watch(() => this.revokeInvalid());
+  }
+
+  async startTask(input: unknown, signal?: AbortSignal): Promise<JsonValue> {
+    if (this.disposed || !this.enabled()) return { status: 'rejected', code: 'unavailable' };
+    return await this.taskHandler.start(input, signal);
   }
 
   enabled(): boolean {

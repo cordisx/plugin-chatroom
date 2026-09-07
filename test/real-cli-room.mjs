@@ -71,13 +71,16 @@ test('real CLI process commits one authenticated Room report through Host docume
     bridge,
     principal,
     active: () => active,
-    ownsSession: sessionId => sessionId === 'session-simulated-agent',
+    ownsSession: sessionId => ['session-simulated-agent', 'session-simulated-child'].includes(sessionId),
   });
   let store;
   let bindings;
   let shell;
   let sessionController;
   let domain;
+  let childToolBinding;
+  let taskRequest;
+  let taskCreates = 0;
   try {
     store = await DurableChatroomRoomStore.openOwnerDocuments(documents);
     let room = createRoom({ id: 'room-real-cli', title: 'Real CLI integration' });
@@ -116,7 +119,53 @@ test('real CLI process commits one authenticated Room report through Host docume
       'enter',
     );
     await shell.snapshot();
-    bindings = new ChatroomCliBindings(service, store, { get: () => ({ cliReporting: true }), watch: () => () => {} });
+    const taskResult = request => ({
+      status: 'accepted',
+      operationId: request.operationId,
+      disposition: 'created',
+      task: {
+        sessionId: 'session-simulated-child',
+        messageId: 'child-first-input',
+        context: { cwd: '/controlled-test-context' },
+        detail: { kind: 'host', ref: 'controlled-detail' },
+      },
+    });
+    bindings = new ChatroomCliBindings(service, store, { get: () => ({ cliReporting: true }), watch: () => () => {} }, {
+      async createAndSubmit(request) {
+        taskCreates += 1;
+        taskRequest = request;
+        assert.equal(store.rooms.get(room.id).runs.filter(run => run.delegation).length, 1);
+        childToolBinding = await service.bind({
+          commandId: request.tool.commandId,
+          sessionId: 'session-simulated-child',
+          scope: request.tool.scope,
+        });
+        const childCommand = (await getAgentToolSetup('session-simulated-child')).commands[0];
+        const childArgs = [
+          ...childCommand.argv.slice(1),
+          'send',
+          '--operation',
+          'child-early',
+          '--text',
+          'Child result via real CLI.',
+        ];
+        const report = JSON.parse((await promisify(execFile)(childCommand.argv[0], childArgs)).stdout);
+        assert.equal(report.status, 'accepted');
+        assert.equal(
+          (JSON.parse((await promisify(execFile)(childCommand.argv[0], childArgs)).stdout)).disposition,
+          'replayed',
+        );
+        return taskResult(request);
+      },
+      async query(request) {
+        assert.equal(request.operationId, taskRequest.operationId);
+        return {
+          status: 'found',
+          result: taskResult(taskRequest),
+          execution: { status: 'unavailable', code: 'host-unavailable' },
+        };
+      },
+    });
     await bindings.ensureBound(room, room.runs[0]);
     const setup = await getAgentToolSetup('session-simulated-agent');
     assert.match(setup.skills[0].content, /Actively report/);
@@ -164,12 +213,51 @@ test('real CLI process commits one authenticated Room report through Host docume
     });
     assert.equal(store.rooms.get(room.id).cliMessages.length, 1);
     unsubscribe();
+    const delegateArgs = [
+      ...command.argv.slice(1),
+      'delegate',
+      '--operation',
+      'delegate-real-cli',
+      '--to',
+      'reviewer',
+      '--text',
+      'Review using the child CLI.',
+      '--cwd',
+      '/controlled-test-context',
+    ];
+    const delegated = JSON.parse((await promisify(execFile)(command.argv[0], delegateArgs)).stdout);
+    assert.equal(delegated.status, 'accepted');
+    assert.equal(delegated.task.sessionId, 'session-simulated-child');
+    assert.equal(taskCreates, 1);
+    const queried = JSON.parse(
+      (await promisify(execFile)(command.argv[0], [
+        ...command.argv.slice(1),
+        'query',
+        '--operation',
+        'delegate-real-cli',
+      ])).stdout,
+    );
+    assert.equal(queried.status, 'found');
+    assert.equal(queried.execution.status, 'unavailable');
+    assert.equal(queried.reports.length, 1);
+    assert.equal(queried.reports[0].text, 'Child result via real CLI.');
+    assert.equal(queried.reports[0].runId, delegated.runId);
+    assert.equal(store.rooms.get(room.id).runs.length, 2);
+    await assert.rejects(
+      promisify(execFile)(command.argv[0], [...delegateArgs.slice(0, -1), '/changed-context']),
+      error => {
+        assert.equal(JSON.parse(error.stdout).code, 'operation-conflict');
+        return true;
+      },
+    );
+    assert.equal(taskCreates, 1);
     await bindings.revoke('session-simulated-agent');
     await assert.rejects(promisify(execFile)(command.argv[0], argv));
   } finally {
     shell?.dispose();
     await sessionController?.dispose();
     domain?.dispose();
+    await childToolBinding?.revoke();
     await bindings?.dispose();
     service.dispose();
     store?.dispose();

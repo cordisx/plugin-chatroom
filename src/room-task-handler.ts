@@ -3,10 +3,11 @@ import type { JsonValue } from '@cordisx/protocol/sessions/v1';
 import { addRoomRun, createRoom, type Room, type RoomRun } from './room.js';
 import { ChatroomRoomStoreError, type DurableChatroomRoomStore } from './room-store.js';
 import { type ChatroomCliScope, cliScopeMatchesRoom } from './room-cli-message-model.js';
-import { canonicalTaskValue, taskForSource } from './room-task-model.js';
+import { canonicalTaskValue, type RoomTaskSource, taskForSource } from './room-task-model.js';
 import {
   type ChatroomDelegateInput,
   type ChatroomTaskQueryInput,
+  type ChatroomTaskStartInput,
   isTaskInput,
   taskContext,
 } from './room-task-input.js';
@@ -20,7 +21,7 @@ export class ChatroomTaskHandler {
   constructor(private readonly store: DurableChatroomRoomStore, private readonly tasks: AgentTasks | undefined) {}
 
   async handle(scope: ChatroomCliScope, value: unknown, signal?: AbortSignal): Promise<JsonValue> {
-    if (!isTaskInput(value)) return rejected('invalid-input');
+    if (!isTaskInput(value) || value.action === 'start') return rejected('invalid-input');
     if (value.roomId !== undefined && value.roomId !== scope.roomId) return rejected('unauthorized');
     if (!this.authorized(scope) || signal?.aborted) return rejected('stale-binding');
     if (this.tasks === undefined) return rejected('unsupported');
@@ -31,20 +32,40 @@ export class ChatroomTaskHandler {
     }
   }
 
-  private authorized(scope: ChatroomCliScope): Room | undefined {
+  /** User command entry. It accepts explicit new-task context, never a asserted CLI caller. */
+  async start(value: unknown, signal?: AbortSignal): Promise<JsonValue> {
+    if (!isTaskInput(value) || value.action !== 'start' || !value.roomId) return rejected('invalid-input');
+    if (value.cwd === undefined && value.projectId === undefined) return rejected('context-required');
+    if (this.tasks === undefined) return rejected('unsupported');
+    if (signal?.aborted) return rejected('unavailable');
+    try {
+      return await this.delegate({ kind: 'room', roomId: value.roomId }, value, signal);
+    } catch {
+      return rejected('unavailable');
+    }
+  }
+
+  private authorized(scope: RoomTaskSource): Room | undefined {
     const room = this.store.rooms.get(scope.roomId);
-    return room !== undefined && cliScopeMatchesRoom(room, scope) ? room : undefined;
+    return room !== undefined && !room.archived && ('kind' in scope || cliScopeMatchesRoom(room, scope))
+      ? room
+      : undefined;
   }
 
-  private targetAllowed(room: Room, scope: ChatroomCliScope, memberId: string): boolean {
+  private targetAllowed(room: Room, scope: RoomTaskSource, memberId: string): boolean {
     const target = room.memberships.find(value => value.memberId === memberId);
-    return target !== undefined && target.memberId !== scope.memberId && target.reportsToMemberId === scope.memberId;
+    return target !== undefined && ('kind' in scope
+      ? target.role === 'leader'
+      : target.memberId !== scope.memberId && target.reportsToMemberId === scope.memberId);
   }
 
-  private async prepare(scope: ChatroomCliScope, input: ChatroomDelegateInput): Promise<RoomRun | string> {
+  private async prepare(
+    scope: RoomTaskSource,
+    input: ChatroomDelegateInput | ChatroomTaskStartInput,
+  ): Promise<RoomRun | string> {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const document = this.store.document(scope.roomId);
-      if (document === undefined || !cliScopeMatchesRoom(document.room, scope)) return 'stale-binding';
+      if (document === undefined || !this.authorized(scope)) return 'stale-binding';
       if (!this.targetAllowed(document.room, scope, input.to)) return 'unauthorized';
       const context = taskContext(input, scope);
       const member = document.room.memberships.find(value => value.memberId === input.to)!;
@@ -81,7 +102,7 @@ export class ChatroomTaskHandler {
                 label: member.label,
                 role: member.role,
                 runId,
-                reportsToMemberId: scope.memberId,
+                reportsToMemberId: member.reportsToMemberId,
                 availableTargets: document.room.memberships.filter(value => value.reportsToMemberId === member.memberId)
                   .map(value => ({ memberId: value.memberId, label: value.label })),
               }),
@@ -113,8 +134,8 @@ export class ChatroomTaskHandler {
   }
 
   private async delegate(
-    scope: ChatroomCliScope,
-    input: ChatroomDelegateInput,
+    scope: RoomTaskSource,
+    input: ChatroomDelegateInput | ChatroomTaskStartInput,
     signal?: AbortSignal,
   ): Promise<JsonValue> {
     const prepared = await this.prepare(scope, input);
@@ -137,7 +158,10 @@ export class ChatroomTaskHandler {
       if (this.pending.get(task.request.operationId) === operation) this.pending.delete(task.request.operationId);
     }
     const saved = await this.retainResult(scope.roomId, prepared.runId, result);
-    if (!this.authorized(scope)) return rejected('stale-binding');
+    const current = this.authorized(scope);
+    if (current === undefined || !this.targetAllowed(current, scope, prepared.memberId)) {
+      return rejected('stale-binding');
+    }
     return saved
       ? json({
         ...result,
@@ -161,7 +185,8 @@ export class ChatroomTaskHandler {
     if (observation.status === 'found' && !await this.retainResult(room.id, run.runId, observation.result)) {
       return rejected('reconciliation-required');
     }
-    if (!this.authorized(scope)) return rejected('stale-binding');
+    const current = this.authorized(scope);
+    if (current === undefined || !this.targetAllowed(current, scope, run.memberId)) return rejected('stale-binding');
     return json({
       ...observation,
       operationId: input.operationId,
@@ -183,7 +208,10 @@ export class ChatroomTaskHandler {
       const sessionId = result.status === 'accepted' ? result.task.sessionId : result.sessionId;
       if (run.sessionId !== undefined && sessionId !== undefined && run.sessionId !== sessionId) return false;
       // An early authenticated report can attach the Session, but cannot prove first-input acceptance.
-      if (run.delegation.result?.status === 'accepted' && result.status !== 'accepted') return false;
+      if (
+        run.delegation.result?.status === 'accepted' && (result.status !== 'accepted'
+          || canonicalTaskValue(run.delegation.result.task) !== canonicalTaskValue(result.task))
+      ) return false;
       try {
         await this.store.compareAndSwap(
           document.revision,

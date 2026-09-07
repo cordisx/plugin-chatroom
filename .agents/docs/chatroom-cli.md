@@ -70,18 +70,18 @@ Other unavailable CLI targets report a target error instead of falling through
 to the legacy retire-and-create path. Testing the recovery helper alone misses
 this earlier UI routing decision.
 
-The actual Host Shell uses `ChatroomAgentSessionConversationSourceV11` registered
-through `registerSourceV11`. Its predecessor source type only accepts SessionEvent
-or acknowledgement messages; do not forge an event sequence or acknowledgement
-to display a CLI fact. The v10 `plugin-command` source expresses the original Room message ID,
-identity, operation, and sequence without inventing a SessionEvent.
-Shell v11 additionally uses `room-user-message` for a persisted human submission
-with an exact accepted admission link when no verified Session projection covers
-it. This preserves its original Room message ID, text, timestamp, and sequence;
-`sent` means the submission was accepted, not that an Agent completed execution.
-The original Room document is never rewritten for this display. Real Session
-replay takes precedence using its validated Room item association, and known
-surface replacements fence superseded history. Matching text is not a dedupe key.
+The retained Host Shell adapter uses `ChatroomAgentSessionConversationSourceV10`
+registered through `registerSourceV10`. Its `plugin-command` message source
+expresses a CLI report's original Room message ID, identity, operation and
+sequence without inventing a SessionEvent. Shell 11/12 experimental adapters are
+not required by this delivery.
+
+`unprojectedAdmittedHumanMessages` exposes persisted human submissions with an
+exact accepted admission link when no verified Session projection covers them.
+The plugin page can display those original Room facts. Real Session replay
+retains precedence using validated Room item associations; surface replacements
+fence superseded history. Matching text is not a dedupe key. The Shell 10 adapter
+does not relabel these facts as SessionEvents to display them.
 
 Room IDs are local to the owner home/profile/source. Two homes containing
 `room-1` can reference different Sessions and different real replies; restoring
@@ -108,3 +108,48 @@ alone does not validate the user's Host Shell experience.
 - CLI scripts and Skill resources need valid package-integrity coverage. Never
   relabel Node scripts as browser modules or Markdown as an image to satisfy an
   older artifact schema.
+
+## New tasks and authenticated delegation
+
+For a new Room, first call the public plugin command `chatroom.room.prepare`
+with `{roomId, title}`. It uses the configured Entity membership graph and
+persists an empty Room without creating a Session, acknowledgement or input.
+Identical preparation reuses the Room; a conflicting title fails. This avoids
+starting a legacy composer Session merely to obtain a Room ID.
+
+The public plugin command `chatroom.task.start` then starts a Leader task in the
+prepared or existing Room. Its arguments are `{action: "start", roomId, to, operationId,
+text, cwd}`; `to` is an existing Leader member ID. A Host `projectId` may replace
+or accompany `cwd`. The command requires explicit context and CLI reporting
+configuration. Missing context returns `context-required` before creating a
+Run or Session. It creates a fresh Run and calls `agentTasks.createAndSubmit`
+once, so the Leader's own Session has a persisted directory before it delegates.
+Existing Room Sessions and their directories remain unchanged.
+
+The authenticated CLI accepts `delegate --operation <id> --to <direct-report>
+--text <assignment> [--cwd <absolute-directory>] [--project <Host-project-id>]`
+and `query --operation <id>` through the same `send` tool command. No caller,
+Session or member identity parameter is accepted. Explicit context wins; absent
+context inherits the authenticated caller's current Session through the Host.
+A missing directory never falls back to the Host process directory. The Host
+validates existence, project resolution, definition and runtime support.
+
+`RoomRun.delegation` retains assignment text, source identity, caller operation,
+exact Host request and create result in the existing Room document. Each new
+operation creates a new Run; concurrent equal requests share the Host operation.
+Changed target/text/context with the same caller operation returns a conflict.
+The Run and trusted operation scope are persisted before first execution; an
+early authenticated child report may attach its Session to that pending Run.
+The report cannot mark creation accepted or runtime execution completed.
+
+Create or submit uncertainty retains the same operation and known partial
+Session. Query performs no creation, submission or resume. Its `execution` is
+an immediate Host observation and is separate from Agent `reports`; persisted
+`projectRoomTasks(room)` projections intentionally contain no runtime status.
+The controller refuses continuation of an unaccepted delegation until the Host
+reconciles it. Automatic Leader notification is not provided.
+
+Focused tests include actual CLI subprocesses and Host tool authentication with
+a controlled task provider. They do not prove a real native child Session. Real
+Leader execution, native cwd metadata, definition/Skill deployment and restart
+acceptance require the coordinated isolated native run.
