@@ -192,7 +192,7 @@ export function registerProjectionReplayTests(harness) {
       approval.itemId,
       success.itemId,
     ]);
-    assert.equal(first.activeRuns[0].lifecycle.phase, 'active');
+    assert.deepEqual(first.activeRuns, [], 'completed replay without a live Agent has no current runtime status');
     assert.equal(harness.creates.length, 0);
     assert.equal(harness.resumes.length, 0);
     assert.equal(controller.ownerHandleCount, 0, 'Page hydration never claims Agent mutation ownership');

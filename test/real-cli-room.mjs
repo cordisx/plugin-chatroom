@@ -155,6 +155,7 @@ test('real CLI process commits one authenticated Room report through Host docume
     });
     await bindings.ensureBound(room, room.runs[0]);
     const setup = await getAgentToolSetup('session-simulated-agent');
+    assert.equal(setup.skills[0].id, 'chatroom');
     assert.match(setup.skills[0].content, /Actively report/);
     const command = setup.commands[0];
     const argv = [...command.argv.slice(1), 'send', '--operation', 'report-1', '--text', 'Accepted the assigned work.'];
