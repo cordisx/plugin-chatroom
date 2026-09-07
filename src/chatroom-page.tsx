@@ -134,9 +134,11 @@ export function ChatroomPage(
     snapshot.participants.map(participant => ({
       id: participant.participantId,
       role: participant.role,
+      mentionAlias: snapshot.room?.memberships.find(member => member.participantId === participant.participantId)
+        ?.memberId,
       name: display(participant.displayName, props.t),
       ...(participant.avatar === undefined ? {} : { avatar: participant.avatar }),
-    })), [props.t, snapshot.participants]);
+    })), [props.t, snapshot.participants, snapshot.room?.memberships]);
   const avatarFingerprint = roomAvatarFingerprint(participants);
   const capture = useMemo<ChatroomSidebarImageCapture | undefined>(() =>
     snapshot.room === undefined
@@ -155,6 +157,7 @@ export function ChatroomPage(
   }
   const roomTitle = snapshot.room?.title ?? props.t('page.title');
   const members = participants.filter(participant => participant.role === 'agent');
+  const composerMembers = members.filter(participant => participant.mentionAlias !== undefined);
   const search = memberSearch.trim().toLocaleLowerCase();
   const visibleMembers = members.filter(participant => participant.name.toLocaleLowerCase().includes(search));
   const selectedParticipant = inspector?.kind === 'identity'
@@ -257,7 +260,7 @@ export function ChatroomPage(
             t={props.t}
             onParticipantClick={openParticipant}
             onMentionParticipant={participantId => {
-              if (!members.some(participant => participant.id === participantId)) return;
+              if (!composerMembers.some(participant => participant.id === participantId)) return;
               setMentionRequest({ participantId, sequence: ++mentionSequence.current });
               setInspector(undefined);
             }}
@@ -271,7 +274,7 @@ export function ChatroomPage(
               pageComposer={props.pageComposer}
               signal={props.signal}
               t={props.t}
-              participants={members}
+              participants={composerMembers}
               mentionRequest={mentionRequest}
             />
           </div>
@@ -390,6 +393,10 @@ export function ChatroomPage(
                                 type="button"
                                 className="cx-chatroom-header__action"
                                 aria-label={props.t('members.mention', { name: participant.name })}
+                                disabled={participant.mentionAlias === undefined}
+                                title={participant.mentionAlias === undefined
+                                  ? props.t('composer.mention-unavailable')
+                                  : undefined}
                                 onClick={() => {
                                   setMentionRequest({
                                     participantId: participant.id,

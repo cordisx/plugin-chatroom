@@ -165,7 +165,7 @@ test('cold message author and reaction avatars relay persisted participant IDs a
 
 test('page opens details without active runs, filters members, returns and sends repeated mention requests', async () => {
   const snapshot = {
-    room: { id: 'room', title: 'Room' },
+    room: { id: 'room', title: 'Room', memberships: [{ participantId: 'agent', memberId: 'stable-agent-target' }] },
     missing: false,
     items: [],
     activeRuns: [],
@@ -220,6 +220,12 @@ test('page opens details without active runs, filters members, returns and sends
   assert.equal(byClass(tree, 'cx-chatroom-inspector'), undefined);
   const composer = all(tree, node => node.props?.mentionRequest !== undefined)[0];
   assert.deepEqual(composer.props.mentionRequest, { participantId: 'agent', sequence: 1 });
+  assert.equal(composer.props.participants[0].mentionAlias, 'stable-agent-target');
+  assert.equal(
+    composer.props.participants[0].name,
+    'Agent',
+    'canonical mention target does not replace the display name',
+  );
   all(tree, node => node.type === 'button' && node.props['aria-label'] === 'members.title')[0].props.onClick();
   tree = render();
   all(tree, node => node.props?.['aria-label'] === 'members.close')[0].props.onClick();
