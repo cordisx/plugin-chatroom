@@ -1,3 +1,4 @@
+import { freezeRoomCliMessages } from './room-cli-message-model.js';
 import { cloneAgentAvatarRef, createGeneratedAgentAvatarRef } from '@cordisx/protocol/agent-avatar/v1';
 import type { AgentConversationItem } from '@cordisx/protocol/agent-conversation-shell/v3';
 import { CHATROOM_DEFAULT_AGENT_CONFIGURATION } from './agent-definition.js';
@@ -809,6 +810,8 @@ export function createRoom(input: CreateRoomInput): Room {
   ) {
     throw new Error('Playground Agent approval decision collides with another Room operation.');
   }
+  const cliMessages = freezeRoomCliMessages(input.cliMessages);
+  if (cliMessages.some(message => message.roomId !== input.id)) throw new Error('CLI message Room mismatch.');
   return Object.freeze({
     id: input.id,
     title: input.title,
@@ -823,6 +826,7 @@ export function createRoom(input: CreateRoomInput): Room {
     outbox,
     approvalDecisions,
     ...(admissionMessageLinks.length === 0 ? {} : { admissionMessageLinks }),
+    ...(cliMessages.length === 0 ? {} : { cliMessages }),
     ...(playgroundAgentEgresses.length === 0 ? {} : { playgroundAgentEgresses }),
     ...(playgroundAgentApprovals.length === 0 ? {} : { playgroundAgentApprovals }),
     timelineSequence,
