@@ -1,0 +1,31 @@
+export const chatroomComposerEn = {
+  'composer.label': 'Message',
+  'composer.placeholder': 'Message the room, or @ a member…',
+  'composer.members': 'Mention a member',
+  'composer.no-members': 'No matching members',
+  'composer.mention-unavailable': 'This member cannot be mentioned yet.',
+  'composer.too-long': 'The message is too long to add a mention.',
+  'composer.send': 'Send',
+  'composer.sending': 'Sending…',
+  'composer.sent': 'Message sent',
+  'composer.send-failed': 'The message was not sent successfully. Your draft is preserved.',
+  'composer.unavailable': 'Sending is unavailable on this page.',
+  'composer.shortcut.enter': 'Enter to send · Shift+Enter for a new line',
+  'composer.shortcut.mod-enter': '⌘/Ctrl+Enter to send · Shift+Enter for a new line',
+} as const;
+
+export const chatroomComposerZhCN = {
+  'composer.label': '消息',
+  'composer.placeholder': '发送消息，或 @ 一位成员…',
+  'composer.members': '@ 成员',
+  'composer.no-members': '没有匹配的成员',
+  'composer.mention-unavailable': '暂时无法 @ 这位成员。',
+  'composer.too-long': '消息过长，无法再添加成员。',
+  'composer.send': '发送',
+  'composer.sending': '发送中…',
+  'composer.sent': '消息已发送',
+  'composer.send-failed': '消息未成功发送，草稿已保留。',
+  'composer.unavailable': '此页面暂时无法发送消息。',
+  'composer.shortcut.enter': 'Enter 发送 · Shift+Enter 换行',
+  'composer.shortcut.mod-enter': '⌘/Ctrl+Enter 发送 · Shift+Enter 换行',
+} satisfies Record<keyof typeof chatroomComposerEn, string>;
