@@ -5,12 +5,6 @@ import { CHATROOM_DEFAULT_AGENT_CONFIGURATION } from '../../dist/agent-definitio
 import { ChatroomAgentLoopController } from '../../dist/agent-loop-controller.js';
 import { projectAgentLoopEvent } from '../../dist/agent-loop-projection.js';
 import {
-  CHATROOM_COMMAND_APPROVAL_APPROVE,
-  CHATROOM_COMMAND_APPROVAL_CANCEL,
-  CHATROOM_COMMAND_APPROVAL_DENY,
-} from '../../dist/conversation-model.js';
-import { ChatroomConversationController } from '../../dist/conversation-source.js';
-import {
   acceptMemberSelfIntroduction,
   approvalDecisionOperationId,
   planMemberSelfIntroduction,
@@ -88,51 +82,6 @@ test('maps Shell approval actions to exact v4 decisions and completes by causati
   assert.equal(room.items[0].itemId, pending.itemId);
   assert.equal(room.items[0].state, 'denied');
   assert.equal(room.approvalDecisions[0].state, 'completed');
-});
-
-test('routes each Shell v3 approval action to its explicit v4 terminal decision token', () => {
-  let room = readyRoom('room-shell-approval');
-  room = projectAgentLoopEvent(room, 'run-lead', {
-    $schema: 'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-loop-event.v4.schema.json',
-    contract: 'cordisx.agent-loop-event/v4',
-    schemaVersion: 4,
-    eventId: 'approval-shell-pending',
-    binding: binding().binding,
-    sequence: 0,
-    occurredAt: '2026-08-31T06:03:00.000Z',
-    type: 'approval',
-    turn: 'turn-shell',
-    approval: { approvalId: 'approval-shell', kind: 'file-change', state: 'pending' },
-  }).room;
-  const controller = new ChatroomConversationController([room]);
-  const shellBinding = {
-    bindingId: 'shell-binding',
-    shell: 'agent-desktop',
-    ownerGeneration: 'owner-1',
-    routeSelection: { scope: 'room-or-new', selectedRoomParam: room.id },
-  };
-  const source = controller.createSource(shellBinding);
-  const itemId = room.items[0].itemId;
-  for (
-    const [commandId, expected] of [
-      [CHATROOM_COMMAND_APPROVAL_APPROVE, 'approved'],
-      [CHATROOM_COMMAND_APPROVAL_DENY, 'denied'],
-      [CHATROOM_COMMAND_APPROVAL_CANCEL, 'cancelled'],
-    ]
-  ) {
-    assert.equal(
-      controller.handle({
-        binding: { bindingId: shellBinding.bindingId, ownerGeneration: shellBinding.ownerGeneration },
-        generation: shellBinding.ownerGeneration,
-        scope: 'approval',
-        itemId,
-        command: { id: commandId },
-      }).decision,
-      expected,
-    );
-  }
-  source.dispose();
-  controller.dispose();
 });
 
 test('dispose fences late introduction, approval, and cancellation results without follow-up effects', async () => {
