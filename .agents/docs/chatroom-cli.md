@@ -39,8 +39,12 @@ unbound Agent resume remains independent of that limitation.
 The actual Host Shell uses `ChatroomAgentSessionConversationSourceV7` registered
 through `registerSourceV9`. Its predecessor source type only accepts SessionEvent
 or acknowledgement messages; do not forge an event sequence or acknowledgement
-to display a CLI fact. The public source extension and actual Host transport are
-required before declaring this consumer ready. Fallback React-page visibility
+to display a CLI fact. The public source extension and real CDP/native integration are required
+before declaring this consumer ready. `test/real-cli-room.mjs` exercises the
+installed Host authority, resource deployment, executable CLI subprocess,
+socket, renderer service, Room handler and Host document persistence. Its
+explicitly substituted CDP wire and Agent ownership source limit that evidence
+to a controlled integration; no CLI execution or Room write is mocked. Fallback React-page visibility
 alone does not validate the user's Host Shell experience.
 
 ## Avoid repeated integration failures
