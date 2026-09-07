@@ -29,8 +29,8 @@ Rooms from different sources are never merged.
 `ChatroomPageDetails` reads an exact persisted member definition through the
 public entity registry. It never starts a Session to make an avatar clickable.
 The member's one session list comes from existing Room run associations and is
-deduplicated by opaque Session identity. Matching live projections may supply a
-status; persisted `running` state alone cannot establish present activity.
+deduplicated by opaque Session identity. Only an available live Agent status observation supplies a
+status; a replayed lifecycle or persisted `running` state cannot establish present activity.
 Internal IDs and runtime loading mechanics are not labels.
 
 Session navigation resolves the existing Session through an authorized Host
@@ -44,6 +44,9 @@ operation. Updates preserve member, run and message associations. Composer
 commands retain page admission and Host-derived completion; failures preserve
 the draft. Task execution and delegation remain owned by the Agent services and
 the separate [#73](https://github.com/cordisx/plugin-chatroom/issues/73) work.
+The member's session cards show the existing task projection: assignment,
+resolved working directory when available, creation result, and Agent reports.
+A report is message content and never changes the task's runtime status.
 
 ## Styles and delivery
 

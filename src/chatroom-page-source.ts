@@ -1,3 +1,4 @@
+import type { AgentStatus } from '@cordisx/protocol/agents/v1';
 import { type ChatroomCliPageMessage, roomCliPageMessages } from './room-cli-message-page.js';
 import type {
   AgentConversationActiveRunDescriptor,
@@ -103,6 +104,7 @@ export class ChatroomPageSource {
   private readonly unsubscribeRooms: () => void;
   private readonly unsubscribeProjection: () => void;
   private readonly unsubscribeSettings: () => void;
+  private readonly observedStatuses = new Map<string, ReadonlyMap<string, AgentStatus>>();
   private readonly watchedRooms = new Set<string>();
   private readonly hydrationRevisions = new Map<string, number>();
   private readonly hydrations = new Map<string, Promise<void>>();
@@ -147,7 +149,10 @@ export class ChatroomPageSource {
           ? model.selection.participants.map(participant => Object.freeze({ ...participant }))
           : [],
       ),
-      activeRuns: Object.freeze([...projection.activeRuns]),
+      activeRuns: Object.freeze(projection.activeRuns.flatMap(run => {
+        const phase = this.observedStatuses.get(room?.id ?? '')?.get(run.sessionId);
+        return phase === undefined ? [] : [{ ...run, lifecycle: { phase } }];
+      })),
       items: chronologicalItems([
         ...domainItems,
         ...projection.items,
@@ -171,6 +176,21 @@ export class ChatroomPageSource {
       do {
         revision = this.hydrationRevisions.get(roomId) ?? 0;
         await this.sessions.hydrateRoom(roomId);
+        const statuses = new Map<string, AgentStatus>();
+        for (const run of this.conversation.rooms.get(roomId)?.runs ?? []) {
+          if (run.sessionId === undefined) continue;
+          try {
+            const agent = await this.sessions.getObservedAgent(roomId, run.runId);
+            if (agent?.id === run.sessionId && agent.status?.status === 'available') {
+              statuses.set(run.sessionId, agent.status.value);
+            }
+          } catch {
+            // An unavailable runtime remains unknown; replay is not live status.
+          }
+        }
+        if (!this.disposed && revision === (this.hydrationRevisions.get(roomId) ?? 0)) {
+          this.observedStatuses.set(roomId, statuses);
+        }
       } while (!this.disposed && revision !== (this.hydrationRevisions.get(roomId) ?? 0));
       if (!this.disposed) this.refresh();
     });
@@ -343,11 +363,13 @@ export class ChatroomPageSource {
     this.unsubscribeSettings();
     this.cache.clear();
     this.watchedRooms.clear();
+    this.observedStatuses.clear();
     this.hydrationRevisions.clear();
     this.listeners.clear();
   }
 
   private refreshRoom(roomId: string): void {
+    this.observedStatuses.delete(roomId);
     this.refresh();
     if (this.disposed || !this.watchedRooms.has(roomId)) return;
     this.hydrationRevisions.set(roomId, (this.hydrationRevisions.get(roomId) ?? 0) + 1);

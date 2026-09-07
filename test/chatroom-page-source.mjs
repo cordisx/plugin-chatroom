@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { ChatroomPageSource } from '../dist/chatroom-page-source.js';
-import { ChatroomRoomRegistry, createRoom } from '../dist/room.js';
+import { addRoomRun, bindRoomRunSession, ChatroomRoomRegistry, createRoom } from '../dist/room.js';
 
 function harness({ rooms = [], projection = { activeRuns: [], items: [] }, intent } = {}) {
   const registry = new ChatroomRoomRegistry(rooms);
@@ -140,4 +140,39 @@ test('detaches Room, Session, and settings listeners on disposal', async () => {
   assert.equal(run.projectionListeners.size, 0);
   assert.equal(run.settingsListeners.size, 0);
   assert.equal('submit' in run.source, false, 'page source exposes no direct Agent dispatch fallback');
+});
+
+test('member status comes from an available live Agent observation, never historical lifecycle', async () => {
+  const room = bindRoomRunSession(
+    addRoomRun(createRoom({ id: 'room-a', title: 'Room A' }), {
+      runId: 'review-run',
+      memberId: 'reviewer',
+      title: 'Reviewer',
+      status: 'creating',
+    }),
+    'review-run',
+    'session-a',
+  );
+  const descriptor = {
+    runId: 'review-run',
+    memberId: 'reviewer',
+    sessionId: 'session-a',
+    participantId: room.memberships.find(member => member.memberId === 'reviewer').participantId,
+    lifecycle: { phase: 'running' },
+  };
+  const h = harness({ rooms: [room], projection: { activeRuns: [descriptor], items: [] } });
+  let status = { status: 'unavailable', code: 'whole-agent-idle-unobservable' };
+  h.sessions.getObservedAgent = async () => ({ id: 'session-a', status });
+  assert.deepEqual(h.source.getSnapshot('room-a').activeRuns, []);
+  await h.source.hydrate('room-a');
+  assert.deepEqual(h.source.getSnapshot('room-a').activeRuns, []);
+  status = { status: 'available', value: 'idle' };
+  await h.source.hydrate('room-a');
+  assert.equal(h.source.getSnapshot('room-a').activeRuns[0].lifecycle.phase, 'idle');
+  status = { status: 'unavailable', code: 'connection-replaced' };
+  h.projectionListeners.forEach(listener => listener('room-a'));
+  assert.deepEqual(h.source.getSnapshot('room-a').activeRuns, []);
+  await h.source.hydrate('room-a');
+  assert.deepEqual(h.source.getSnapshot('room-a').activeRuns, []);
+  h.source.dispose();
 });
