@@ -8,8 +8,10 @@
 - Chatroom owns Room relationships, routing intent, message presentation, and
   collaboration timelines.
 - This package integrates as a normal CordisX plugin through its public
-  manifest, page, route, and structured navigation APIs. It never owns Host
-  page chrome or the renderer DOM.
+  manifest, page, route, and structured navigation APIs. Chatroom owns the Room
+  page DOM and presentation; Host owns the page seat and application chrome.
+  See [Room UI ownership](../docs/room-ui-ownership.md) for the boundary and
+  migration acceptance gates.
 - Session creation, execution, message transport, event streams, stopping, and
   closing are Connector responsibilities. Chatroom may call generic Connector
   operations only through an agreed contract.

@@ -8,7 +8,8 @@
   protocol repositories.
 - Connector handles are opaque: persist and relay them, but never parse,
   synthesize, or infer their contents.
-- Do not create a standalone page or direct DOM integration. The Host owns
-  plugin page chrome, routing, shared React, and lifecycle.
+- Use the public Host page mount. Chatroom owns its Room presentation and DOM;
+  Host owns application chrome, the page seat, routing, shared React, and lifecycle.
+  Do not integrate through private Host/native DOM or a standalone replacement page.
 - Read `.agents/rules/README.md` before changing this repository.
 - Read the organization [CSS ownership and maintenance rule](https://github.com/cordisx/cordisxmono/blob/main/.agents/rules/css.md) before changing CSS, stylesheet-generating code, or a style-bearing DOM contract.

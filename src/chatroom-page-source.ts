@@ -211,8 +211,8 @@ export class ChatroomPageSource {
   }
 
   /**
-   * Draft v2 handler-side fixture. The future Host page adapter alone creates
-   * this context; page React code never supplies an origin or local binding.
+   * The public Host page adapter alone creates this command context;
+   * page React code never supplies an origin or local binding.
    * It intentionally has no direct Agent send fallback.
    */
   async handlePageComposerCommand(
