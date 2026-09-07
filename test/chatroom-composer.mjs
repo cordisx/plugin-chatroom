@@ -139,7 +139,7 @@ test('shortcut policies preserve Shift+Enter and use Ctrl/Meta for Mod-Enter', (
     assert.equal(composerShouldSubmit({ ...event, ctrlKey: true }, policy), true);
     assert.equal(composerShouldSubmit({ ...event, metaKey: true }, policy), true);
     assert.equal(composerShouldSubmit({ ...event, shiftKey: true, metaKey: true }, policy), false);
-    assert.equal(composerShouldSubmit({ ...event, altKey: true }, policy), false);
+    assert.equal(composerShouldSubmit({ ...event, altKey: true }, policy), policy === 'enter');
   }
 });
 
@@ -163,7 +163,7 @@ test('only one public command executes while busy; accepted completion clears th
   assert.equal(calls.length, 1);
   assert.equal(calls[0].contract, 'cordisx.agent-page-composer-command-request/v1');
   assert.equal(calls[0].submitPayload, 'hello');
-  assert.equal(ui.input().props.disabled, true);
+  assert.equal(ui.input().props.disabled, false);
   resolve({ status: 'accepted' });
   await settle(ui);
   assert.equal(ui.input().props.value, '');
@@ -214,11 +214,11 @@ test('member menu keyboard selection inserts a leading target without sending', 
   assert.deepEqual(ui.resident.selection, [0, 4]);
 });
 
-test('mentions with spaces or ambiguous names use member ids; Escape dismisses', () => {
-  assert.equal(composerMentionToken({ id: 'a', name: 'A B' }, []), '@a');
+test('mentions with spaces or ambiguous names never infer member ids; Escape dismisses', () => {
+  assert.equal(composerMentionToken({ id: 'a', name: 'A B' }, []), undefined);
   assert.equal(
     composerMentionToken({ id: 'a', name: 'Same' }, [{ id: 'a', name: 'Same' }, { id: 'b', name: 'Same' }]),
-    '@a',
+    undefined,
   );
   const ui = mount();
   ui.change('@Ali');
@@ -248,4 +248,87 @@ test('absent adapter and aborted lifecycle disable sending; no late completion c
   assert.equal(ui.input().props.value, 'keep after abort');
   assert.equal(ui.input().props.disabled, true);
   module.hooks.cleanup();
+});
+
+test('sending keeps editing available and acceptance preserves a newer draft', async () => {
+  let resolve;
+  const ui = mount({
+    pageComposer: {
+      execute: () =>
+        new Promise(done => {
+          resolve = done;
+        }),
+    },
+  });
+  ui.change('first message');
+  ui.submit();
+  ui.render();
+  assert.equal(ui.input().props.disabled, false);
+  ui.change('next message');
+  resolve({ status: 'accepted' });
+  await settle(ui);
+  assert.equal(ui.input().props.value, 'next message');
+});
+
+test('component matches Shell codepoint validation; adapter acceptance is a test double', async () => {
+  const ui = mount();
+  const text = '😀'.repeat(65536);
+  ui.change(text);
+  ui.submit();
+  await settle(ui);
+  assert.equal(ui.calls[0].submitPayload, text);
+  ui.change(text + 'a');
+  ui.submit();
+  ui.render();
+  assert.equal(ui.calls.length, 1);
+  assert.equal(ui.input().props.value, text + 'a');
+  assert.equal(ui.find(node => node.props?.role === 'alert').props.children, 'composer.message-too-long');
+});
+
+test('attachment placeholder retains a localized unavailable label and no action', () => {
+  const ui = mount();
+  const attachment = ui.find(node => node.type === 'attachment');
+  assert.equal(attachment.props['aria-label'], 'composer.attachment-unavailable');
+  assert.equal(attachment.props.title, 'composer.attachment-unavailable');
+  assert.equal(attachment.props.onClick, undefined);
+});
+
+test('mentions consume an explicit membership alias distinct from participant id', () => {
+  const member = { id: 'participant-123', name: 'Root Agent', mentionAlias: 'root-member' };
+  assert.equal(composerMentionToken(member, [member]), '@root-member');
+  const ui = mount({ participants: [member] });
+  ui.change('help');
+  ui.props.mentionRequest = { participantId: member.id, sequence: 1 };
+  ui.render();
+  ui.render();
+  assert.equal(ui.input().props.value, '@root-member help');
+});
+
+test('unparseable members keep the draft and show an explicit unavailable error', () => {
+  const member = { id: 'participant-123', name: 'Root Agent' };
+  const ui = mount({ participants: [member] });
+  ui.change('help');
+  ui.props.mentionRequest = { participantId: member.id, sequence: 1 };
+  ui.render();
+  ui.render();
+  assert.equal(ui.input().props.value, 'help');
+  assert.equal(ui.find(node => node.props?.role === 'alert').props.children, 'composer.mention-unavailable');
+});
+
+test('a Host UTF16 admission rejection keeps the complete supplementary-character draft', async () => {
+  const ui = mount({
+    pageComposer: {
+      execute: async request => {
+        // The audited Host 5836c52 admission checks UTF16 length despite the Shell
+        // and Protocol codepoint limit. This test does not claim native acceptance.
+        return { status: request.submitPayload.length > 65536 ? 'failed' : 'accepted' };
+      },
+    },
+  });
+  const draft = '😀'.repeat(32769);
+  ui.change(draft);
+  ui.submit();
+  await settle(ui);
+  assert.equal(ui.input().props.value, draft);
+  assert.equal(ui.find(node => node.props?.role === 'alert').props.children, 'composer.send-failed');
 });
