@@ -1,5 +1,13 @@
 export const chatroomPageEnglish = {
   'members.search': 'Search members',
+  'members.resize': 'Resize details panel',
+  'timeline.actions': 'Message actions',
+  'timeline.copy-time': 'Copy timestamp',
+  'timeline.copy-message': 'Copy message',
+  'timeline.copy-unavailable': 'Copy is unavailable in this environment.',
+  'timeline.copied': 'Copied',
+  'timeline.copy-failed': 'Could not copy. Try again.',
+  'timeline.view-member': 'View member details',
   'members.empty': 'No matching Agents',
   'members.back': 'Back to members',
   'members.close': 'Close details',
@@ -13,6 +21,14 @@ export const chatroomPageEnglish = {
 
 export const chatroomPageChinese = {
   'members.search': '搜索成员',
+  'members.resize': '调整详情栏宽度',
+  'timeline.actions': '消息操作',
+  'timeline.copy-time': '复制时间',
+  'timeline.copy-message': '复制消息',
+  'timeline.copy-unavailable': '当前环境不支持复制。',
+  'timeline.copied': '已复制',
+  'timeline.copy-failed': '复制失败，请重试。',
+  'timeline.view-member': '查看成员详情',
   'members.empty': '没有匹配的 Agent',
   'members.back': '返回成员列表',
   'members.close': '关闭详情',

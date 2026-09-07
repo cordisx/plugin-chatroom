@@ -45,6 +45,9 @@ async function componentHarness(file, dependencies = {}) {
   }).outputText;
   const require = name => {
     if (name === 'cordisx/react') return react;
+    if (name === './chatroom-inspector.js') {
+      return dependencies[name] ?? { useChatroomInspector: () => ({ width: 360, narrow: false, separatorProps: {} }) };
+    }
     if (name === 'cordisx/react/jsx-runtime') return { jsx, jsxs: jsx };
     if (name === 'cordisx/ui') return { Button: 'Button', EmptyState: 'EmptyState', MarkdownViewer: 'MarkdownViewer' };
     return dependencies[name] ?? {};
@@ -271,4 +274,251 @@ test('header action prevents duplicate execution and surfaces failure without ch
   await new Promise(resolve => setImmediate(resolve));
   tree = render();
   assert.equal(byClass(tree, 'cx-chatroom-page__error').props.children, 'page.action.failed');
+});
+
+test('inspector resize clamps pointer/keyboard width and preserves it across detail pages and close', async () => {
+  const harness = await componentHarness('chatroom-inspector.ts');
+  let measure;
+  let disconnected = false;
+  let captured;
+  const releases = [];
+  const root = {
+    current: {
+      clientWidth: 900,
+      ownerDocument: {
+        defaultView: {
+          ResizeObserver: class {
+            constructor(callback) {
+              measure = callback;
+            }
+            observe() {}
+            disconnect() {
+              disconnected = true;
+            }
+          },
+        },
+      },
+    },
+  };
+  const controller = new AbortController();
+  let open = true;
+  const render = () => {
+    const result = harness.render(() => harness.exports.useChatroomInspector(root, open, controller.signal));
+    harness.flush();
+    return result;
+  };
+  render();
+  let view = render();
+  const element = {
+    setPointerCapture: id => {
+      captured = id;
+    },
+    hasPointerCapture: id => captured === id,
+    releasePointerCapture: id => {
+      releases.push(id);
+      captured = undefined;
+    },
+  };
+  const pointer = (id, x) => ({ pointerId: id, clientX: x, button: 0, currentTarget: element, preventDefault() {} });
+  view.separatorProps.onPointerDown(pointer(1, 500));
+  view.separatorProps.onPointerMove(pointer(2, 200));
+  assert.equal(render().width, 360, 'ignore unrelated pointers');
+  view.separatorProps.onPointerMove(pointer(1, 200));
+  view = render();
+  assert.equal(view.width, 558, 'container limit is 62%, below the 640px ceiling');
+  view.separatorProps.onPointerUp(pointer(1, 200));
+  assert.deepEqual(releases, [1]);
+  view.separatorProps.onKeyDown({ key: 'Home', preventDefault() {} });
+  assert.equal(render().width, 300);
+  view = render();
+  view.separatorProps.onKeyDown({ key: 'ArrowLeft', preventDefault() {} });
+  assert.equal(render().width, 324);
+  open = false;
+  render();
+  open = true;
+  assert.equal(render().width, 324, 'same panel width survives navigation and close/reopen');
+  view = render();
+  view.separatorProps.onPointerDown(pointer(3, 500));
+  root.current.clientWidth = 700;
+  measure();
+  view = render();
+  assert.equal(view.narrow, true);
+  assert.equal(view.separatorProps.tabIndex, -1);
+  assert.deepEqual(releases, [1, 3]);
+  view.separatorProps.onKeyDown({ key: 'End', preventDefault() {} });
+  assert.equal(render().width, 324, 'narrow panels do not resize');
+  root.current.clientWidth = 1200;
+  measure();
+  view = render();
+  view.separatorProps.onPointerDown(pointer(4, 500));
+  controller.abort();
+  assert.deepEqual(releases, [1, 3, 4]);
+  harness.unmount();
+  assert.equal(disconnected, true);
+});
+
+test('timeline menus offer detail/mention, keyboard dismissal and write-only copy from the clicked plugin element', async () => {
+  const harness = await componentHarness('chatroom-timeline.tsx');
+  const calls = [];
+  const copies = [];
+  let focusCount = 0;
+  const document = { defaultView: { navigator: { clipboard: { writeText: async text => copies.push(text) } } } };
+  const trigger = {
+    ownerDocument: document,
+    getBoundingClientRect: () => ({ left: 5, bottom: 20 }),
+    focus: () => focusCount++,
+  };
+  const item = {
+    kind: 'message',
+    itemId: 'copy',
+    author: { participantId: 'agent', role: 'agent', displayName: { fallback: 'Agent' } },
+    body: [{ text: { fallback: '**exact text**' } }],
+    timestamp: '2026-09-08T00:00:00Z',
+    reactions: [],
+  };
+  const props = {
+    items: [item],
+    participants: [],
+    source: {},
+    t,
+    roomId: 'room',
+    onParticipantClick: id => calls.push(['details', id]),
+    onMentionParticipant: id => calls.push(['mention', id]),
+  };
+  const render = () => {
+    const tree = harness.render(harness.exports.ChatroomTimeline, props);
+    tree.props.ref.current = {
+      ownerDocument: document,
+      clientWidth: 500,
+      clientHeight: 500,
+      getBoundingClientRect: () => ({ left: 0, top: 0 }),
+    };
+    const menu = byClass(tree, 'cx-chatroom-timeline__menu');
+    if (menu) menu.props.ref.current = { style: {}, offsetWidth: 200, offsetHeight: 150, querySelector: () => trigger };
+    harness.flush();
+    return tree;
+  };
+  render();
+  let tree = render();
+  const message = () => {
+    const element = all(tree, node => node.props?.item === item)[0];
+    return element.type(element.props);
+  };
+  const open = () => {
+    byClass(message(), 'cx-chatroom-message__actions').props.onClick({
+      currentTarget: trigger,
+      clientX: 490,
+      clientY: 490,
+      preventDefault() {},
+      stopPropagation() {},
+    });
+    tree = render();
+    return byClass(tree, 'cx-chatroom-timeline__menu');
+  };
+  let menu = open();
+  assert.equal(menu.props.ref.current.style.left, '296px');
+  all(menu, node => node.props?.children === 'timeline.view-member')[0].props.onClick();
+  assert.deepEqual(calls, [['details', 'agent']]);
+  menu = open();
+  all(menu, node => node.props?.children === 'members.mention')[0].props.onClick();
+  assert.deepEqual(calls.at(-1), ['mention', 'agent']);
+  menu = open();
+  const beforeEscape = focusCount;
+  let stopped = false;
+  menu.props.onKeyDown({
+    key: 'Escape',
+    preventDefault() {},
+    stopPropagation() {
+      stopped = true;
+    },
+  });
+  assert.equal(stopped, true);
+  assert.equal(focusCount, beforeEscape + 1);
+  assert.equal(byClass(render(), 'cx-chatroom-timeline__menu'), undefined);
+  menu = open();
+  all(menu, node => node.props?.children === 'timeline.copy-message')[0].props.onClick({ currentTarget: trigger });
+  assert.deepEqual(copies, ['**exact text**'], 'writeText is invoked synchronously within the explicit click handler');
+  await new Promise(resolve => setImmediate(resolve));
+  tree = render();
+  assert.equal(byClass(tree, 'cx-chatroom-timeline__feedback').props.children, 'timeline.copied');
+  byClass(message(), 'cx-chatroom-message__time').props.onClick({ currentTarget: trigger });
+  assert.deepEqual(copies.at(-1), item.timestamp);
+});
+
+test('timeline copying is honestly disabled when absent and reports browser permission rejection', async () => {
+  const harness = await componentHarness('chatroom-timeline.tsx');
+  const document = { defaultView: { navigator: {} } };
+  const trigger = { ownerDocument: document, getBoundingClientRect: () => ({ left: 0, bottom: 0 }), focus() {} };
+  const item = {
+    kind: 'message',
+    itemId: 'copy',
+    author: { participantId: 'human', role: 'human', displayName: { fallback: 'User' } },
+    body: [],
+    timestamp: '2026-09-08T00:00:00Z',
+    reactions: [],
+  };
+  const props = { items: [item], participants: [], source: {}, t };
+  const render = () => {
+    const tree = harness.render(harness.exports.ChatroomTimeline, props);
+    tree.props.ref.current = { ownerDocument: document };
+    harness.flush();
+    return tree;
+  };
+  let tree = render();
+  let message = all(tree, node => node.props?.item === item)[0];
+  assert.equal(byClass(message.type(message.props), 'cx-chatroom-message__time').props.disabled, true);
+  document.defaultView.navigator.clipboard = {
+    writeText: async () => {
+      throw new Error('permission denied');
+    },
+  };
+  // An explicitly injected writer is also supported; errors use the same product feedback.
+  props.copyText = text => document.defaultView.navigator.clipboard.writeText(text);
+  tree = render();
+  message = all(tree, node => node.props?.item === item)[0];
+  byClass(message.type(message.props), 'cx-chatroom-message__time').props.onClick({ currentTarget: trigger });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(byClass(render(), 'cx-chatroom-timeline__feedback').props.children, 'timeline.copy-failed');
+});
+
+test('narrow inspector contains keyboard focus, makes the header inert and respects nested Escape handling', async () => {
+  const harness = await componentHarness('chatroom-page.tsx', {
+    './avatar-fingerprint.js': { roomAvatarFingerprint: () => '' },
+    './chatroom-timeline.js': { ChatroomTimeline: 'Timeline' },
+    './chatroom-inspector.js': { useChatroomInspector: () => ({ width: 360, narrow: true, separatorProps: {} }) },
+  });
+  const props = {
+    params: {},
+    t,
+    signal: new AbortController().signal,
+    imageCache: {},
+    details: {},
+    source: {
+      subscribe: () => () => {},
+      getSnapshot: () => ({ participants: [], items: [], activeRuns: [] }),
+      hydrate: async () => {},
+    },
+  };
+  const render = () => {
+    const tree = harness.render(harness.exports.ChatroomPage, props);
+    harness.flush();
+    return tree;
+  };
+  let tree = render();
+  all(tree, node => node.type === 'Timeline')[0].props.onParticipantClick('persisted-agent');
+  tree = render();
+  assert.equal(byClass(tree, 'cx-chatroom-header').props.inert, true);
+  const panel = byClass(tree, 'cx-chatroom-inspector');
+  assert.equal(panel.props['aria-modal'], true);
+  const focused = [];
+  const first = { getClientRects: () => [1], focus: () => focused.push('first') };
+  const last = { getClientRects: () => [1], focus: () => focused.push('last') };
+  panel.props.ref.current = { querySelectorAll: () => [first, last] };
+  panel.props.onKeyDown({ key: 'Tab', target: last, preventDefault() {} });
+  panel.props.onKeyDown({ key: 'Tab', target: first, shiftKey: true, preventDefault() {} });
+  assert.deepEqual(focused, ['first', 'last']);
+  tree.props.onKeyDown({ key: 'Escape', defaultPrevented: true });
+  assert.ok(byClass(render(), 'cx-chatroom-inspector'), 'nested controls may consume Escape');
+  tree.props.onKeyDown({ key: 'Escape', defaultPrevented: false, preventDefault() {}, stopPropagation() {} });
+  assert.equal(byClass(render(), 'cx-chatroom-inspector'), undefined);
 });

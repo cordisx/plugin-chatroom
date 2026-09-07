@@ -1,4 +1,5 @@
 import {
+  type CSSProperties,
   useCallback,
   useEffect,
   useId,
@@ -22,6 +23,7 @@ import { ChatroomMemberDetails } from './chatroom-member-details.js';
 import { ChatroomRoomSettings } from './chatroom-room-settings.js';
 import { ChatroomTimeline } from './chatroom-timeline.js';
 import { ChatroomComposer } from './chatroom-composer.js';
+import { useChatroomInspector } from './chatroom-inspector.js';
 
 type Translate = CordisXReactPageProps['t'];
 
@@ -45,13 +47,19 @@ type Inspector = { readonly kind: 'members' | 'settings'; } | {
   readonly participantId: string;
 };
 
-export function ChatroomPage({ source, imageCache, details, headerActions = [], ...props }: CordisXReactPageProps & {
-  readonly source: ChatroomPageSource;
-  readonly imageCache: ChatroomSidebarImageCache;
-  readonly details?: ChatroomPageDetails;
-  readonly headerActions?: readonly ChatroomPageHeaderAction[];
-}) {
+export function ChatroomPage(
+  { source, imageCache, details, headerActions = [], copyText, ...props }: CordisXReactPageProps & {
+    readonly source: ChatroomPageSource;
+    readonly imageCache: ChatroomSidebarImageCache;
+    readonly details?: ChatroomPageDetails;
+    readonly copyText?: (text: string) => Promise<void>;
+    readonly headerActions?: readonly ChatroomPageHeaderAction[];
+  },
+) {
   const [inspector, setInspector] = useState<Inspector>();
+  const root = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLElement>(null);
+  const { width, narrow, separatorProps } = useChatroomInspector(root, inspector !== undefined, props.signal);
   const [memberSearch, setMemberSearch] = useState('');
   const [mentionRequest, setMentionRequest] = useState<{ participantId: string; sequence: number; }>();
   const [actionError, setActionError] = useState(false);
@@ -115,7 +123,7 @@ export function ChatroomPage({ source, imageCache, details, headerActions = [], 
       // Restore after the narrow layout has made the conversation visible.
       (returnFocus.current ?? membersTrigger.current)?.focus({ preventScroll: true });
     }
-  }, [inspector]);
+  }, [inspector, narrow]);
   const subscribe = useCallback((listener: () => void) => source.subscribe(listener), [source]);
   const getSnapshot = useCallback(() => source.getSnapshot(roomId), [roomId, source]);
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
@@ -157,13 +165,22 @@ export function ChatroomPage({ source, imageCache, details, headerActions = [], 
     : selectedParticipant?.name ?? props.t('members.title');
   return (
     <div
+      ref={root}
+      style={{ '--cx-chatroom-inspector-width': `${width}px` } as CSSProperties}
       className="cx-chatroom-page"
+      onKeyDown={event => {
+        if (inspector !== undefined && event.key === 'Escape' && !event.defaultPrevented) {
+          event.preventDefault();
+          event.stopPropagation();
+          closeInspector();
+        }
+      }}
       data-inspector-open={inspector !== undefined}
       onFocusCapture={event => {
         if (inspector === undefined) returnFocus.current = event.target;
       }}
     >
-      <header className="cx-chatroom-header">
+      <header className="cx-chatroom-header" inert={narrow && inspector !== undefined}>
         <button
           type="button"
           className="cx-chatroom-header__avatar"
@@ -238,6 +255,12 @@ export function ChatroomPage({ source, imageCache, details, headerActions = [], 
             source={source}
             t={props.t}
             onParticipantClick={openParticipant}
+            onMentionParticipant={participantId => {
+              if (!members.some(participant => participant.id === participantId)) return;
+              setMentionRequest({ participantId, sequence: ++mentionSequence.current });
+              setInspector(undefined);
+            }}
+            copyText={copyText}
           />
           <div className="cx-chatroom-composer-seat">
             <ChatroomComposer
@@ -254,16 +277,40 @@ export function ChatroomPage({ source, imageCache, details, headerActions = [], 
         </div>
         {inspector !== undefined && (
           <aside
+            ref={panel}
             id={inspectorId}
+            role="dialog"
+            aria-modal={narrow}
             className="cx-chatroom-inspector"
             aria-labelledby={`${inspectorId}-title`}
             onKeyDown={event => {
-              if (event.key === 'Escape' && !event.defaultPrevented) {
+              if (!narrow || event.key !== 'Tab' || event.defaultPrevented) return;
+              const controls = Array.from(
+                panel.current?.querySelectorAll<HTMLElement>(
+                  'button:not(:disabled),input:not(:disabled),textarea:not(:disabled),a[href],[tabindex="0"]',
+                ) ?? [],
+              ).filter(element => element.getClientRects().length > 0);
+              const first = controls[0];
+              const last = controls.at(-1);
+              if (first === undefined || last === undefined) {
                 event.preventDefault();
-                closeInspector();
+                inspectorHeading.current?.focus();
+                return;
+              }
+              if (event.shiftKey && (event.target === first || event.target === inspectorHeading.current)) {
+                event.preventDefault();
+                last.focus();
+              } else if (!event.shiftKey && (event.target === last || event.target === inspectorHeading.current)) {
+                event.preventDefault();
+                first.focus();
               }
             }}
           >
+            <div
+              className="cx-chatroom-inspector__resizer"
+              aria-label={props.t('members.resize')}
+              {...separatorProps}
+            />
             <header className="cx-chatroom-inspector__header">
               {inspector.kind === 'identity' && (
                 <button
