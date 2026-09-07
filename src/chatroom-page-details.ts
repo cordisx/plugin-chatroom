@@ -97,9 +97,12 @@ export class ChatroomPageDetails {
   }
 
   async openEntitySettings(room: Room, participantId: string): Promise<boolean> {
+    const expected = room.memberships.find(candidate => candidate.participantId === participantId)?.definition;
     const current = this.services.rooms.rooms.get(room.id);
     const member = current?.memberships.find(candidate => candidate.participantId === participantId);
-    return member !== undefined && this.services.entitySettings !== undefined
+    return member !== undefined && expected !== undefined
+      && member.definition.agentId === expected.agentId && member.definition.revision === expected.revision
+      && this.services.entitySettings !== undefined
       && (await this.services.entitySettings.open({ identity: member.definition })).status === 'accepted';
   }
 

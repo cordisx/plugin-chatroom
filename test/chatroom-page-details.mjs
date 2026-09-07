@@ -113,6 +113,11 @@ test('settings navigation revalidates exact current membership and never guesses
     ['get', { identity: room.memberships[0].definition }],
     ['open', { identity: room.memberships[0].definition }],
   ]);
+  rooms.set(room.id, {
+    ...room,
+    memberships: [{ ...room.memberships[0], definition: { agentId: 'entity-a', revision: 'changed' } }],
+  });
+  assert.equal(await details.openEntitySettings(room, 'person-a'), false);
   rooms.delete(room.id);
   assert.equal(await details.openEntitySettings(room, 'person-a'), false);
   assert.equal(calls.length, 2);

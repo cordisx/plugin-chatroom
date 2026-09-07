@@ -87,7 +87,7 @@ export function ChatroomRoomActions({ room, details, t, onDeleted }: {
       if (!pending.current) close();
       return;
     }
-    const controls = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not([disabled])')];
+    const controls = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not([disabled])'));
     if (controls.length === 0) return;
     const index = controls.indexOf(event.currentTarget.ownerDocument.activeElement as HTMLButtonElement);
     const next = event.key === 'Home' ? 0 : event.key === 'End'

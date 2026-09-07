@@ -6,7 +6,7 @@ import { ChatroomComposerSettings } from '../dist/composer-settings.js';
 import { ChatroomConversationController } from '../dist/conversation-source.js';
 import { createRoom } from '../dist/room.js';
 
-function harness(rooms = [], items = []) {
+function harness(rooms = [], items = [], admittedRoomItemIds = []) {
   const conversation = new ChatroomConversationController(rooms);
   const projectionListeners = new Set();
   let commitSettings;
@@ -20,7 +20,7 @@ function harness(rooms = [], items = []) {
   const sessions = {
     hydrateRoom: async () => {},
     isRunLocallyUnavailable: () => false,
-    projectionForRoom: () => ({ activeRuns: [], items }),
+    projectionForRoom: () => ({ activeRuns: [], items, admittedRoomItemIds }),
     subscribeProjection(listener) {
       projectionListeners.add(listener);
       return () => projectionListeners.delete(listener);
@@ -108,7 +108,15 @@ test('page keeps acknowledgement chronology and exact Session deduplication acro
     participants: [{ id: 'user', name: 'You', kind: 'human' }],
     items: [acknowledgement, { ...later, sequence: 2 }],
   });
-  const h = harness([room], [earlier, later]);
+  // Equality of text or IDs alone is not proof that a Room fact was admitted.
+  const unlinked = harness([room], [earlier, later]);
+  const unlinkedSource = unlinked.mount();
+  assert.equal(unlinkedSource.getSnapshot('room').items.length, 4);
+  unlinkedSource.dispose();
+  unlinked.settings.dispose();
+  unlinked.conversation.dispose();
+  // Production supplies this mapping from the exact Session event's durable Room display.
+  const h = harness([room], [earlier, later], ['session-later']);
   const source = h.mount();
   const expected = ['session-earlier', 'ack', 'session-later'];
   assert.deepEqual(source.getSnapshot('room').items.map(item => item.itemId), expected);
