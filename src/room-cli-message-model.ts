@@ -1,3 +1,4 @@
+import { taskScopeMatchesRun } from './room-task-model.js';
 import type { Room } from './room-model.js';
 
 /** Host-authenticated scope, independently rechecked against the Room on every call. */
@@ -7,6 +8,7 @@ export interface ChatroomCliScope {
   readonly memberId: string;
   readonly runId: string;
   readonly sessionId: string;
+  readonly taskOperationId?: string;
 }
 
 /** A real Room message and its durable idempotency identity in the existing Room document. */
@@ -32,7 +34,8 @@ export function cliScopeMatchesRoom(room: Room, scope: ChatroomCliScope): boolea
   const run = room.runs.find(value => value.runId === scope.runId);
   return room.id === scope.roomId && !room.archived
     && member?.participantId === scope.participantId && run?.memberId === scope.memberId
-    && run.sessionId === scope.sessionId && run.status !== 'stopped' && run.status !== 'failed';
+    && (run.delegation === undefined ? run.sessionId === scope.sessionId : taskScopeMatchesRun(room, run, scope))
+    && run.status !== 'stopped' && run.status !== 'failed';
 }
 
 export function freezeRoomCliMessages(messages: readonly RoomCliMessage[] = []): readonly RoomCliMessage[] {

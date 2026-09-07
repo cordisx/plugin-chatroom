@@ -1,3 +1,4 @@
+import { validateRoomTasks } from './room-task-model.js';
 import { freezeRoomCliMessages } from './room-cli-message-model.js';
 import { cloneAgentAvatarRef, createGeneratedAgentAvatarRef } from '@cordisx/protocol/agent-avatar/v1';
 import type { AgentConversationItem } from '@cordisx/protocol/agent-conversation-shell/v3';
@@ -92,6 +93,7 @@ export function createRoom(input: CreateRoomInput): Room {
     return freezeRun(run, member);
   }));
   if (new Set(runs.map(run => run.runId)).size !== runs.length) throw new Error('Room run ids must be unique.');
+  validateRoomTasks({ id: input.id, memberships, runs });
   const sessionIds = runs.flatMap(run => run.sessionId === undefined ? [] : [run.sessionId]);
   if (new Set(sessionIds).size !== sessionIds.length) {
     throw new Error('A Session may belong to only one Room run.');

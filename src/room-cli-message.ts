@@ -85,6 +85,11 @@ export function createChatroomCliMessageHandler(store: DurableChatroomRoomStore)
           document.revision,
           createRoom({
             ...document.room,
+            runs: document.room.runs.map(run =>
+              run.runId === scope.runId && run.sessionId === undefined
+                ? { ...run, sessionId: scope.sessionId, collaborationMode: 'cli' as const }
+                : run
+            ),
             cliMessages: [...messages, message],
             timelineSequence: message.sequence,
           }),

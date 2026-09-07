@@ -1,3 +1,5 @@
+import type { AgentTasks } from '@cordisx/protocol/agent-task/v1';
+import { ChatroomTaskHandler } from './room-task-handler.js';
 import type { JsonValue } from '@cordisx/protocol/sessions/v1';
 import type { AgentToolBindingHandle, AgentTools } from '@cordisx/protocol/agent-tools/v1';
 import type { ChatroomRunCollaboration } from './agent-session-controller-internals.js';
@@ -17,6 +19,7 @@ function scopeFromBinding(sessionId: string, value: unknown): ChatroomCliScope |
     memberId: scope.memberId as string,
     runId: scope.runId as string,
     sessionId,
+    ...(typeof scope.taskOperationId === 'string' ? { taskOperationId: scope.taskOperationId } : {}),
   };
 }
 
@@ -32,12 +35,17 @@ export class ChatroomCliBindings implements ChatroomRunCollaboration {
     private readonly tools: AgentTools | undefined,
     private readonly store: DurableChatroomRoomStore,
     private readonly settings: ChatroomSettingsService,
+    tasks?: AgentTasks,
   ) {
     const send = createChatroomCliMessageHandler(store);
+    const taskHandler = new ChatroomTaskHandler(store, tasks);
     this.unregister = tools?.register({ id: 'send' }, async ({ binding, input, signal }): Promise<JsonValue> => {
       if (this.disposed || !this.enabled() || signal.aborted) return { status: 'rejected', code: 'unavailable' };
       const scope = scopeFromBinding(binding.sessionId, binding.scope);
       if (scope === undefined) return { status: 'rejected', code: 'unauthorized' };
+      if (input !== null && typeof input === 'object' && !Array.isArray(input) && 'action' in input) {
+        return await taskHandler.handle(scope, input, signal);
+      }
       return await send(scope, input, signal);
     });
     this.unsubscribe = store.rooms.subscribe(() => this.revokeInvalid());
@@ -60,6 +68,7 @@ export class ChatroomCliBindings implements ChatroomRunCollaboration {
       memberId: member.memberId,
       runId: run.runId,
       sessionId: run.sessionId,
+      ...(run.delegation === undefined ? {} : { taskOperationId: run.delegation.request.operationId }),
     };
     if (!cliScopeMatchesRoom(room, scope)) throw new Error('Chatroom CLI binding is stale.');
     const retained = this.bindings.get(run.sessionId);

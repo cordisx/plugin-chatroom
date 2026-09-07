@@ -16,7 +16,7 @@ if (parsed !== undefined) {
       const { invokeAgentTool } = await import('cordisx/agent-tools');
       const result = await invokeAgentTool(parsed);
       process.stdout.write(`${JSON.stringify(result)}\n`);
-      if (result?.status !== 'accepted') process.exitCode = 1;
+      if (!['accepted', 'found', 'not-found'].includes(result?.status)) process.exitCode = 1;
     } catch {
       process.stderr.write(`${JSON.stringify({ status: 'rejected', code: 'unavailable' })}\n`);
       process.exitCode = 1;

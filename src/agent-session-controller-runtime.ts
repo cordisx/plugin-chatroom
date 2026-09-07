@@ -243,6 +243,9 @@ export class ChatroomAgentSessionRuntimeController extends ChatroomAgentSessionA
     const room = this.requireRoom(roomId);
     const run = this.requireRun(room, runId);
     const member = this.requireMember(room, run.memberId);
+    if (run.delegation !== undefined && run.delegation.result?.status !== 'accepted') {
+      throw new Error('Delegated task requires Host reconciliation before continuation.');
+    }
     const raw: RuntimeAcquireResult = run.sessionId !== undefined
       ? await resumeChatroomSession(this.runtime, room, run)
       : run.taskBinding !== undefined

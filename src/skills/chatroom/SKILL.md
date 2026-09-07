@@ -47,6 +47,32 @@ unavailable result honestly. Room selection, sender identity, and credential
 lifetime are enforced by the Host. Never invent member flags, inspect or expose
 credentials, reuse another run's binding, or attempt to widen its scope.
 
-Room reports provide visibility only. This first version does not implement
-member-to-member delegation, approval decisions, execution, or external chat.
-Use separately available authorized tools for those actions.
+## Delegate and follow up
+
+To assign work to a direct report in the current Room, use the same supplied
+command prefix with `delegate`. Choose an exact member ID from the assigned
+Room role context; do not guess another Room or caller identity.
+
+```sh
+cordisx-chatroom --binding /host-provided/binding.json delegate --operation review-42 --to reviewer --text 'Review the assigned change and report findings.' --cwd /absolute/existing/project
+cordisx-chatroom --binding /host-provided/binding.json query --operation review-42
+```
+
+Each new operation creates one new child task Session and submits its first
+input. `accepted` means that first submission was accepted, not that work is
+complete. Retry an uncertain call with the identical operation and arguments;
+never change the operation just to retry. Changed arguments return a conflict.
+Query is read-only and returns the Host execution observation separately from
+Agent-authored Room reports. A report never proves runtime completion.
+
+Use `--cwd` for an existing absolute directory, or `--project` for an actual
+Host project selector with optional `--cwd`. Without either, the Host resolves
+the authenticated current Leader Session context. Missing context fails with
+`context-required`; unavailable explicit context fails without falling back.
+No automatic worktree is created and existing Session directories are unchanged.
+Unsupported task creation or project selection is an explicit failure.
+
+The child uses `send` for acceptance, meaningful checkpoints, blockers and its
+result. The Leader uses `query` and the Room reports to follow up. Automatic
+Leader notifications are not provided. Approval decisions and external chat
+still require separately available authorized tools.

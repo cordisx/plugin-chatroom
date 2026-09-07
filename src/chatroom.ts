@@ -1,3 +1,4 @@
+import type { AgentTasks } from '@cordisx/protocol/agent-task/v1';
 import { ChatroomCliBindings } from './room-cli-bindings.js';
 import type { AgentTools } from '@cordisx/protocol/agent-tools/v1';
 import type { Context } from '@deepseek-ai/cordis';
@@ -232,7 +233,8 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   );
   const roomStore = await DurableChatroomRoomStore.openOwnerDocuments(ctx.documents);
   const agentTools: AgentTools | undefined = ctx.reflect.get('agentTools', false);
-  const collaboration = new ChatroomCliBindings(agentTools, roomStore, ctx.settings);
+  const agentTasks: AgentTasks | undefined = ctx.reflect.get('agentTasks', false);
+  const collaboration = new ChatroomCliBindings(agentTools, roomStore, ctx.settings, agentTasks);
   ctx.effect(() => () => {
     void collaboration.dispose();
   }, 'chatroom.cli-tools');

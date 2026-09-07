@@ -1,3 +1,4 @@
+import type { RoomTaskDelegation } from './room-task-model.js';
 import type { RoomCliMessage } from './room-cli-message-model.js';
 import { type AgentAvatarRef } from '@cordisx/protocol/agent-avatar/v1';
 import type { AgentConversationItem } from '@cordisx/protocol/agent-conversation-shell/v3';
@@ -236,6 +237,7 @@ export interface RoomMembership {
 }
 
 export interface RoomRun {
+  readonly delegation?: RoomTaskDelegation;
   /** Explicit Room reports use the authenticated CLI; assistant transcript stays private. */
   readonly collaborationMode?: 'cli-pending' | 'cli';
   readonly runId: string;
