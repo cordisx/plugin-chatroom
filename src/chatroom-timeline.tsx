@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'cordisx/react';
+import { type KeyboardEvent, type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from 'cordisx/react';
 import { Button, EmptyState, MarkdownViewer } from 'cordisx/ui';
 import type { CordisXReactPageProps } from 'cordisx/contracts';
 import { ChatroomAvatar } from './avatar.js';
@@ -10,12 +10,17 @@ const display = (value: { readonly fallback: string; }, _t: Translate): string =
 export type PageParticipant = Readonly<{
   id: string;
   name: string;
+  role?: string;
   avatar?: Parameters<typeof ChatroomAvatar>[0]['participant']['avatar'];
 }>;
 
-function ParticipantAvatar({ participant, onParticipantClick }: {
+type ActionEvent = MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>;
+type TimelineActions = { participant: PageParticipant; text?: string; trigger: HTMLElement; x: number; y: number; };
+
+function ParticipantAvatar({ participant, onParticipantClick, onOpenActions }: {
   readonly participant: PageParticipant;
   readonly onParticipantClick?: (participantId: string) => void;
+  readonly onOpenActions?: (participant: PageParticipant, event: ActionEvent, text?: string) => void;
 }) {
   return onParticipantClick === undefined
     ? <ChatroomAvatar participant={participant} />
@@ -25,28 +30,47 @@ function ParticipantAvatar({ participant, onParticipantClick }: {
         className="cx-chatroom-timeline__avatar"
         aria-label={participant.name}
         onClick={() => onParticipantClick(participant.id)}
+        onContextMenu={event => onOpenActions?.(participant, event)}
+        onKeyDown={event => {
+          if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+            onOpenActions?.(participant, event);
+          }
+        }}
       >
         <ChatroomAvatar participant={participant} />
       </button>
     );
 }
 
-function MessageItem({ item, participants, t, onParticipantClick }: {
+function MessageItem({ item, participants, t, onParticipantClick, onOpenActions, onCopy, copyAvailable }: {
   readonly item: Extract<ChatroomPageItem, { readonly kind: 'message'; }>;
   readonly participants: readonly PageParticipant[];
   readonly t: Translate;
   readonly onParticipantClick?: (participantId: string) => void;
+  readonly onOpenActions: (participant: PageParticipant, event: ActionEvent, text?: string) => void;
+  readonly onCopy: (text: string, trigger: HTMLElement) => void;
+  readonly copyAvailable: boolean;
 }) {
   const author = display(item.author.displayName, t);
   const body = item.body.map(block => display(block.text, t)).join('\n\n');
   const human = item.author.role === 'human';
+  const participant = { id: item.author.participantId, name: author, role: item.author.role };
+
   return (
-    <article className="cx-chatroom-message" data-role={item.author.role} aria-live={item.ariaLive}>
+    <article
+      className="cx-chatroom-message"
+      tabIndex={-1}
+      data-role={item.author.role}
+      aria-live={item.ariaLive}
+      onContextMenu={event => onOpenActions(participant, event, body)}
+    >
       {!human && (
         <ParticipantAvatar
           onParticipantClick={onParticipantClick}
+          onOpenActions={onOpenActions}
           participant={{
             id: item.author.participantId,
+            role: item.author.role,
             name: author,
             ...(item.author.avatar === undefined ? {} : { avatar: item.author.avatar }),
           }}
@@ -58,9 +82,27 @@ function MessageItem({ item, participants, t, onParticipantClick }: {
           <MarkdownViewer source={body} aria-label={author} />
         </div>
         <div className="cx-chatroom-message__meta">
-          <time dateTime={item.timestamp}>
-            {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </time>
+          <button
+            type="button"
+            className="cx-chatroom-message__time"
+            disabled={!copyAvailable}
+            aria-label={t('timeline.copy-time')}
+            title={copyAvailable ? item.timestamp : t('timeline.copy-unavailable')}
+            onClick={event => onCopy(item.timestamp, event.currentTarget)}
+          >
+            <time dateTime={item.timestamp}>
+              {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </time>
+          </button>
+          <button
+            type="button"
+            className="cx-chatroom-message__actions"
+            aria-label={t('timeline.actions')}
+            aria-haspopup="menu"
+            onClick={event => onOpenActions(participant, event, body)}
+          >
+            ⋯
+          </button>
           {item.deliveryState === 'failed' && <span>{t('timeline.delivery.failed')}</span>}
           {item.runState === 'running' && <span>{t('timeline.run.running')}</span>}
         </div>
@@ -73,6 +115,7 @@ function MessageItem({ item, participants, t, onParticipantClick }: {
                 <span key={reaction.reactionId} data-state={reaction.state}>
                   <ParticipantAvatar
                     onParticipantClick={onParticipantClick}
+                    onOpenActions={onOpenActions}
                     participant={actor ?? {
                       id: reaction.actorParticipantId,
                       name: reaction.actorParticipantId,
@@ -89,11 +132,12 @@ function MessageItem({ item, participants, t, onParticipantClick }: {
   );
 }
 
-function StatusItem({ item, participant, t, onParticipantClick }: {
+function StatusItem({ item, participant, t, onParticipantClick, onOpenActions }: {
   readonly item: Exclude<ChatroomPageItem, { readonly kind: 'message' | 'approval'; }>;
   readonly participant?: PageParticipant;
   readonly t: Translate;
   readonly onParticipantClick?: (participantId: string) => void;
+  readonly onOpenActions?: (participant: PageParticipant, event: ActionEvent, text?: string) => void;
 }) {
   if (item.kind === 'status') {
     return (
@@ -106,6 +150,7 @@ function StatusItem({ item, participant, t, onParticipantClick }: {
     <div className="cx-chatroom-status cx-chatroom-status--member" data-state={item.state}>
       <ParticipantAvatar
         onParticipantClick={onParticipantClick}
+        onOpenActions={onOpenActions}
         participant={participant ?? { id: item.participantId, name: item.participantId }}
       />
       <span>
@@ -152,7 +197,7 @@ function approvalAuthorityLabel(
   return participants.find(participant => participant.id === participantId)?.name ?? memberId;
 }
 
-function ApprovalItem({ item, participant, participants, roomId, source, t, onParticipantClick }: {
+function ApprovalItem({ item, participant, participants, roomId, source, t, onParticipantClick, onOpenActions }: {
   readonly item: Extract<ChatroomPageItem, { readonly kind: 'approval'; }>;
   readonly participant?: PageParticipant;
   readonly participants: readonly PageParticipant[];
@@ -160,6 +205,7 @@ function ApprovalItem({ item, participant, participants, roomId, source, t, onPa
   readonly source: ChatroomPageSource;
   readonly t: Translate;
   readonly onParticipantClick?: (participantId: string) => void;
+  readonly onOpenActions?: (participant: PageParticipant, event: ActionEvent, text?: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
@@ -184,6 +230,7 @@ function ApprovalItem({ item, participant, participants, roomId, source, t, onPa
       <header>
         <ParticipantAvatar
           onParticipantClick={onParticipantClick}
+          onOpenActions={onOpenActions}
           participant={participant ?? { id: item.participantId, name: item.participantId }}
         />
         <div>
@@ -229,14 +276,93 @@ function ApprovalItem({ item, participant, participants, roomId, source, t, onPa
   );
 }
 
-export function ChatroomTimeline({ items, participants, roomId, source, t, onParticipantClick }: {
-  readonly items: readonly ChatroomPageItem[];
-  readonly participants: readonly PageParticipant[];
-  readonly roomId?: string;
-  readonly source: ChatroomPageSource;
-  readonly t: Translate;
-  readonly onParticipantClick?: (participantId: string) => void;
-}) {
+export function ChatroomTimeline(
+  { items, participants, roomId, source, t, onParticipantClick, onMentionParticipant, copyText }: {
+    readonly items: readonly ChatroomPageItem[];
+    readonly participants: readonly PageParticipant[];
+    readonly roomId?: string;
+    readonly source: ChatroomPageSource;
+    readonly t: Translate;
+    readonly onParticipantClick?: (participantId: string) => void;
+    readonly onMentionParticipant?: (participantId: string) => void;
+    readonly copyText?: (text: string) => Promise<void>;
+  },
+) {
+  const region = useRef<HTMLDivElement>(null);
+  const menuElement = useRef<HTMLDivElement>(null);
+  const [actions, setActions] = useState<TimelineActions>();
+  const [copyStatus, setCopyStatus] = useState<'copied' | 'copy-failed'>();
+  const copying = useRef(false);
+  const [clipboardAvailable, setClipboardAvailable] = useState(false);
+  useLayoutEffect(() => {
+    setClipboardAvailable(
+      typeof region.current?.ownerDocument.defaultView?.navigator.clipboard?.writeText === 'function',
+    );
+  }, []);
+  const canCopy = copyText !== undefined || clipboardAvailable;
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const closeActions = (restore: boolean) => {
+    setActions(undefined);
+    if (restore) actions?.trigger.focus({ preventScroll: true });
+  };
+  const openActions = (participant: PageParticipant, event: ActionEvent, text?: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const bounds = region.current?.getBoundingClientRect();
+    const triggerBounds = event.currentTarget.getBoundingClientRect();
+    const x = 'clientX' in event && event.clientX > 0 ? event.clientX : triggerBounds.left;
+    const y = 'clientY' in event && event.clientY > 0 ? event.clientY : triggerBounds.bottom;
+    setActions({
+      participant,
+      text,
+      trigger: event.currentTarget,
+      x: x - (bounds?.left ?? 0),
+      y: y - (bounds?.top ?? 0),
+    });
+  };
+  useLayoutEffect(() => {
+    const menu = menuElement.current;
+    const area = region.current;
+    if (actions === undefined || menu === null || area === null) return;
+    const position = () => {
+      menu.style.left = `${Math.max(4, Math.min(actions.x, area.clientWidth - menu.offsetWidth - 4))}px`;
+      menu.style.top = `${Math.max(4, Math.min(actions.y, area.clientHeight - menu.offsetHeight - 4))}px`;
+    };
+    position();
+    (menu.querySelector<HTMLButtonElement>('button:not(:disabled)') ?? menu).focus({ preventScroll: true });
+    const Observer = area.ownerDocument.defaultView?.ResizeObserver;
+    const observer = Observer === undefined ? undefined : new Observer(position);
+    observer?.observe(area);
+    return () => observer?.disconnect();
+  }, [actions]);
+  const copy = async (text: string, trigger: HTMLElement) => {
+    if (copying.current) return;
+    // Standard browser write-only API from this plugin's explicit user event.
+    const clipboard = trigger.ownerDocument.defaultView?.navigator.clipboard;
+    const write = copyText
+      ?? (typeof clipboard?.writeText === 'function' ? (value: string) => clipboard.writeText(value) : undefined);
+    if (write === undefined) {
+      setCopyStatus('copy-failed');
+      return;
+    }
+    copying.current = true;
+    setCopyStatus(undefined);
+    closeActions(true);
+    try {
+      await write(text);
+      if (mounted.current) setCopyStatus('copied');
+    } catch {
+      if (mounted.current) setCopyStatus('copy-failed');
+    } finally {
+      copying.current = false;
+    }
+  };
   const viewport = useRef<HTMLElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const follows = useRef(true);
@@ -266,13 +392,101 @@ export function ChatroomTimeline({ items, participants, roomId, source, t, onPar
     return () => observer.disconnect();
   }, []);
   return (
-    <div className="cx-chatroom-timeline-region">
+    <div
+      ref={region}
+      className="cx-chatroom-timeline-region"
+      onPointerDown={event => {
+        if (actions !== undefined && !menuElement.current?.contains(event.target as Node)) closeActions(false);
+      }}
+    >
+      {actions !== undefined && (
+        <div
+          ref={menuElement}
+          className="cx-chatroom-timeline__menu"
+          tabIndex={-1}
+          role="menu"
+          aria-label={t('timeline.actions')}
+          onBlur={event => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) closeActions(false);
+          }}
+          onKeyDown={event => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              event.stopPropagation();
+              closeActions(true);
+              return;
+            }
+            if (event.key === 'Tab') {
+              closeActions(false);
+              return;
+            }
+            const buttons = Array.from(
+              event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'),
+            );
+            const current = buttons.indexOf(event.target as HTMLButtonElement);
+            const next = event.key === 'ArrowDown'
+              ? buttons[(current + 1) % buttons.length]
+              : event.key === 'ArrowUp'
+              ? buttons[(current - 1 + buttons.length) % buttons.length]
+              : event.key === 'Home'
+              ? buttons[0]
+              : event.key === 'End'
+              ? buttons.at(-1)
+              : undefined;
+            if (next !== undefined) {
+              event.preventDefault();
+              event.stopPropagation();
+              next.focus();
+            }
+          }}
+        >
+          {actions.text !== undefined && (
+            <button
+              type="button"
+              role="menuitem"
+              disabled={!canCopy}
+              title={!canCopy ? t('timeline.copy-unavailable') : undefined}
+              onClick={event => void copy(actions.text!, event.currentTarget)}
+            >
+              {t('timeline.copy-message')}
+            </button>
+          )}
+          {actions.participant.role !== 'human' && onParticipantClick !== undefined && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                closeActions(false);
+                onParticipantClick(actions.participant.id);
+              }}
+            >
+              {t('timeline.view-member')}
+            </button>
+          )}
+          {actions.participant.role === 'agent' && onMentionParticipant !== undefined && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                closeActions(false);
+                onMentionParticipant(actions.participant.id);
+              }}
+            >
+              {t('members.mention', { name: actions.participant.name })}
+            </button>
+          )}
+        </div>
+      )}
+      {copyStatus !== undefined && (
+        <div className="cx-chatroom-timeline__feedback" role="status">{t(`timeline.${copyStatus}`)}</div>
+      )}
       <section
         ref={viewport}
         className="cx-chatroom-timeline"
         aria-label={t('timeline.label')}
         tabIndex={0}
         onScroll={event => {
+          setActions(undefined);
           const target = event.currentTarget;
           follows.current = target.scrollHeight - target.clientHeight - target.scrollTop <= 8;
           setAway(!follows.current);
@@ -285,11 +499,14 @@ export function ChatroomTimeline({ items, participants, roomId, source, t, onPar
               item.kind === 'message'
                 ? (
                   <MessageItem
+                    onCopy={(text, trigger) => void copy(text, trigger)}
+                    copyAvailable={canCopy}
                     key={item.itemId}
                     item={item}
                     participants={participants}
                     t={t}
                     onParticipantClick={onParticipantClick}
+                    onOpenActions={openActions}
                   />
                 )
                 : item.kind === 'approval' && roomId !== undefined
@@ -303,6 +520,7 @@ export function ChatroomTimeline({ items, participants, roomId, source, t, onPar
                     source={source}
                     t={t}
                     onParticipantClick={onParticipantClick}
+                    onOpenActions={openActions}
                   />
                 )
                 : item.kind === 'approval'
@@ -316,6 +534,7 @@ export function ChatroomTimeline({ items, participants, roomId, source, t, onPar
                       : undefined}
                     t={t}
                     onParticipantClick={onParticipantClick}
+                    onOpenActions={openActions}
                   />
                 )
             )}

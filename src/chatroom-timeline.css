@@ -226,3 +226,74 @@
   font-size: 16px;
   line-height: 1;
 }
+
+.cx-chatroom-message__time,
+.cx-chatroom-message__actions {
+  padding: 0 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.cx-chatroom-message__time:disabled {
+  cursor: default;
+}
+.cx-chatroom-message__actions {
+  min-width: 22px;
+  font-size: 14px;
+}
+.cx-chatroom-message__time:focus-visible,
+.cx-chatroom-message__actions:focus-visible {
+  outline: 2px solid var(--cx-primary, currentColor);
+}
+.cx-chatroom-timeline__menu {
+  position: absolute;
+  z-index: 3;
+  display: grid;
+  width: min(220px, calc(100% - 8px));
+  max-height: calc(100% - 8px);
+  gap: 2px;
+  overflow: auto;
+  padding: 5px;
+  border: 1px solid var(--cx-chatroom-border);
+  border-radius: 10px;
+  background: var(--cx-surface, Canvas);
+  color: inherit;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 15%);
+}
+.cx-chatroom-timeline__menu > button {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: start;
+  cursor: pointer;
+}
+.cx-chatroom-timeline__menu > button:hover:not(:disabled),
+.cx-chatroom-timeline__menu > button:focus-visible {
+  outline: 2px solid var(--cx-primary, currentColor);
+  outline-offset: -2px;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+.cx-chatroom-timeline__menu > button:disabled {
+  color: var(--cx-chatroom-muted);
+  cursor: default;
+}
+.cx-chatroom-timeline__feedback {
+  position: absolute;
+  z-index: 2;
+  bottom: 12px;
+  left: 18px;
+  padding: 6px 10px;
+  border: 1px solid var(--cx-chatroom-border);
+  border-radius: 8px;
+  background: var(--cx-surface, Canvas);
+  color: inherit;
+  font-size: 12px;
+}
