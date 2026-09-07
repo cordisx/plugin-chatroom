@@ -397,3 +397,64 @@ test('a relationship revoked while task persistence yields prevents the first Ho
   assert.equal(creates, 0);
   store.dispose();
 });
+
+test('new task startup preserves the existing Room Session and uses its selected Leader identity', async () => {
+  const { store, scope } = fixture();
+  const original = store.rooms.get(scope.roomId);
+  const originalRun = original.runs[0];
+  const requests = [];
+  const handler = new ChatroomTaskHandler(store, {
+    async createAndSubmit(request) {
+      requests.push(request);
+      return accepted(request);
+    },
+  });
+  const input = { action: 'start', roomId: original.id, to: 'leader', operationId: 'new-root', text: 'New work' };
+  assert.equal((await handler.start(input)).code, 'context-required');
+  assert.equal(store.rooms.get(original.id).runs.length, 1);
+  assert.equal(requests.length, 0);
+  assert.equal((await handler.start({ ...input, to: 'reviewer', cwd: '/project' })).code, 'unauthorized');
+  assert.equal(requests.length, 0);
+  const result = await handler.start({ ...input, cwd: '/project' });
+  assert.equal(result.status, 'accepted');
+  const updated = store.rooms.get(original.id);
+  assert.deepEqual(updated.runs.find(run => run.runId === originalRun.runId), originalRun);
+  assert.deepEqual(updated.memberships, original.memberships);
+  assert.deepEqual(
+    requests[0].definition,
+    original.memberships.find(member => member.memberId === 'leader').definition,
+  );
+  assert.deepEqual(requests[0].context, { kind: 'directory', cwd: '/project' });
+  assert.equal(updated.runs.length, 2);
+  assert.equal(result.task.sessionId, 'child-session');
+  assert.equal(result.task.context.cwd, '/project');
+  store.dispose();
+});
+
+test('unsupported explicit project startup retains the attempted task and never falls back to another context', async () => {
+  const { store, scope } = fixture();
+  const requests = [];
+  const handler = new ChatroomTaskHandler(store, {
+    async createAndSubmit(request) {
+      requests.push(request);
+      return { status: 'unavailable', operationId: request.operationId, code: 'unsupported' };
+    },
+  });
+  const result = await handler.start({
+    action: 'start',
+    roomId: scope.roomId,
+    to: 'leader',
+    operationId: 'project-root',
+    text: 'New work',
+    projectId: 'p1',
+  });
+  assert.equal(result.status, 'unavailable');
+  assert.equal(result.code, 'unsupported');
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0].context, { kind: 'project', projectId: 'p1' });
+  const projected = projectRoomTasks(store.rooms.get(scope.roomId)).find(task => task.runId === result.runId);
+  assert.equal(projected.creation.code, 'unsupported');
+  assert.deepEqual(projected.context, { kind: 'project', projectId: 'p1' });
+  assert.equal(projected.sessionId, undefined);
+  store.dispose();
+});
