@@ -135,6 +135,12 @@ export class ChatroomPageSource {
       : this.sessions.projectionForRoom(room.id);
     const representedRoomItems = new Set(projection.admittedRoomItemIds ?? []);
     const domainItems = model?.items.filter(item => {
+      // A returned task creation result supersedes its old pending invitation.
+      // Keep business status untouched: it also fences routing and safe retries.
+      if (item.kind === 'member-presence' && (item.state === 'inviting' || item.state === 'creating')) {
+        const run = room?.runs.find(candidate => candidate.runId === item.runId);
+        if (run?.delegation?.result !== undefined) return false;
+      }
       if (item.kind === 'message') return !representedRoomItems.has(item.itemId);
       if (item.kind !== 'approval') return true;
       return room?.playgroundAgentApprovals?.some(approval => approval.itemId === item.itemId) === true;

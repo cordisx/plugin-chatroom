@@ -179,3 +179,58 @@ test('member status comes from an available live Agent observation, never histor
   assert.deepEqual(h.source.getSnapshot('room-a').activeRuns, []);
   h.source.dispose();
 });
+
+test('returned task creation results suppress only their own stale pending presence without changing Room facts', () => {
+  let room = createRoom({ id: 'room-a', title: 'Room A' });
+  const member = room.memberships.find(value => value.memberId === 'leader');
+  for (
+    const [runId, code] of [
+      ['denied', 'permission-denied'],
+      ['unknown', 'reconciliation-required'],
+      ['host-unavailable', 'host-unavailable'],
+      ['pending', undefined],
+    ]
+  ) {
+    const hostOperation = `host-${runId}`;
+    room = addRoomRun(room, {
+      runId,
+      memberId: member.memberId,
+      title: runId,
+      status: 'creating',
+      delegation: {
+        operationId: `caller-${runId}`,
+        text: 'Review the project',
+        source: { kind: 'room', roomId: room.id },
+        request: {
+          operationId: hostOperation,
+          definition: member.definition,
+          context: { kind: 'directory', cwd: '/project' },
+          text: 'Review the project',
+          tool: {
+            commandId: 'send',
+            scope: {
+              roomId: room.id,
+              participantId: member.participantId,
+              memberId: member.memberId,
+              runId,
+              taskOperationId: hostOperation,
+            },
+          },
+        },
+        ...(code === undefined ? {} : { result: { status: 'unavailable', operationId: hostOperation, code } }),
+      },
+    });
+  }
+  room = addRoomRun(room, { runId: 'ordinary', memberId: member.memberId, title: 'Ordinary', status: 'creating' });
+  const before = JSON.stringify(room);
+  const h = harness({ rooms: [room] });
+  const snapshot = h.source.getSnapshot(room.id);
+  assert.deepEqual(snapshot.items.filter(item => item.kind === 'member-presence').map(item => item.runId), [
+    'pending',
+    'ordinary',
+  ]);
+  assert.deepEqual(snapshot.activeRuns, []);
+  assert.equal(JSON.stringify(h.registry.get(room.id)), before);
+  assert.ok(h.registry.get(room.id).runs.every(run => run.status === 'creating' && run.presence.state === 'creating'));
+  h.source.dispose();
+});
