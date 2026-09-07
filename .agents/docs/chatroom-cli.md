@@ -122,8 +122,9 @@ prepared or existing Room. Its arguments are `{action: "start", roomId, to, oper
 text, cwd}`; `to` is an existing Leader member ID. A Host `projectId` may replace
 or accompany `cwd`. The command requires explicit context and CLI reporting
 configuration. Missing context returns `context-required` before creating a
-Run or Session. It creates a fresh Run and calls `agentTasks.createAndSubmit`
-once, so the Leader's own Session has a persisted directory before it delegates.
+Run or Session. It creates a fresh Run through required
+`agentTaskApprovals.createAndSubmit`, so the Leader's own Session has a persisted
+directory before it delegates.
 Existing Room Sessions and their directories remain unchanged.
 
 The authenticated CLI accepts `delegate --operation <id> --to <direct-report>
@@ -153,3 +154,40 @@ Focused tests include actual CLI subprocesses and Host tool authentication with
 a controlled task provider. They do not prove a real native child Session. Real
 Leader execution, native cwd metadata, definition/Skill deployment and restart
 acceptance require the coordinated isolated native run.
+
+## Required approvals and live ownership
+
+New tasks require `agentTaskApprovals` and `agentTaskOwnership` from
+[agent-task-binding/v1](https://github.com/cordisx/cordisx-protocol/blob/main/.agents/docs/agent-task/README.md).
+The plugin registers existing requester routing, authority answering and legacy
+answering functions for its `send` command. The Host binds those functions to
+the actual new Agent before its first input. No plugin callback receives a
+pre-submit execution handle. A missing binding service is unsupported, rather
+than a downgrade to creation without approvals.
+
+Root Leader tasks anchor a human approval on their own Session. Child tasks
+route to the exact source Leader Run. The existing Room approval item stays
+pending until the human accepts or rejects it. The models never approve their
+own requests. Each callback validates the frozen operation/Room/member scope,
+can attach an early Session to its Run, and clears its pending question when its
+Host signal closes. It never appends an approval event.
+
+`agentTaskOwnership.acquire` obtains the existing real handle only after the
+Host retained acceptance. Page continuation then uses its existing admission
+and observer services without creating/resuming another Agent or replacing the
+Host's already-installed tool credentials and approval registrations.
+
+CLI `recover --operation <id>` and public `chatroom.task.recover({roomId,runId})`
+are explicit attempts to repair known pre-submit approval installation in the
+same live Session. The Host rejects uncertain creation/submission and recovery
+without a valid live handle; the plugin never invents a new operation to retry.
+
+The Host configuration's `cliReporting` switch defaults to false. Enabling it
+uses the normal declared tool package and Skill. The default generalist Entity
+includes the deployed `chatroom` Skill ID and excludes external channels. It
+omits the former read/search include list: generic tool labels have no Host
+mapping to native command execution. Its children inherit these defaults even
+when collaboration is disabled. The Skill uses the current Host-provided CLI
+invocation through an actually available command execution tool. These
+definition declarations are instructions, not permission grants; native tool
+execution still passes the normal Host approval and permission checks.

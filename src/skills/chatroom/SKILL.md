@@ -21,7 +21,9 @@ Actively report acceptance of assigned work, a meaningful checkpoint, a blocker
 that needs another member, and the completed result. Keep each update concise
 and useful to the room. Perform the actual CLI call using the Host-provided
 executable and binding; writing a command in an assistant response does not
-send it. Ordinary assistant prose is not a Room message in this mode.
+send it. Use an actually available command execution tool for the supplied
+invocation and follow its normal approval flow. Ordinary assistant prose is not
+a Room message in this mode.
 
 Use the Host-provided command prefix, then append `send` and its arguments.
 For example (the binding path is supplied by the Host):
