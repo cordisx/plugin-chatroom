@@ -8,7 +8,7 @@
   "extends": [
     {
       "agentId": "chatroom.reviewer",
-      "revision": "sha256:5c52ac24a8eb4592c0919336fbc804bd117741c22b108af030c83b8ef590512d"
+      "revision": "sha256:1ff0e8023cc1eef473f45c830945eecbd07e7f6a41591827ced1013a3fbec2c4"
     }
   ],
   "inherit": {
