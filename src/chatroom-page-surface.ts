@@ -1,6 +1,6 @@
 import type {
   CordisXAgentConversationShell,
-  CordisXAgentConversationShellSourceFactoryV11,
+  CordisXAgentConversationShellSourceFactoryV10,
   CordisXPageMount,
 } from 'cordisx/contracts';
 
@@ -11,11 +11,11 @@ import type {
  */
 export async function selectChatroomPageMount(
   shell: CordisXAgentConversationShell | undefined,
-  factory: CordisXAgentConversationShellSourceFactoryV11,
+  factory: CordisXAgentConversationShellSourceFactoryV10,
   fallback: () => Promise<CordisXPageMount>,
 ): Promise<CordisXPageMount> {
   if (shell === undefined) return await fallback();
-  return shell.registerSourceV11(
+  return shell.registerSourceV10(
     factory,
     { composer: { mode: 'page-composer-v2' } },
   ).mount;

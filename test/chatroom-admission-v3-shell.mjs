@@ -15,7 +15,7 @@ test('Chatroom projects into the Host Shell while retaining Host page composer a
     /ctx\.pages\.register\(page, pageMount\)/,
   );
   assert.match(pluginSource, /agentConversationShell/);
-  assert.match(surfaceSource, /registerSourceV11/);
+  assert.match(surfaceSource, /registerSourceV10/);
   assert.match(surfaceSource, /mode: 'page-composer-v2'/);
   assert.match(pluginSource, /admissionMode: 'v9'/);
   assert.doesNotMatch(pluginSource, /agentAdmission(?:Origins|Reservations|BootstrapTargets|BootstrapReservations)/);
