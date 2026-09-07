@@ -48,7 +48,7 @@ const bundled = await build({
       builder.onResolve({ filter: /\/avatar\.js$|^\.\/avatar\.js$/ }, () => ({ path: 'avatar', namespace: 'test' }));
       builder.onLoad({ filter: /.*/, namespace: 'test' }, args => ({
         contents: args.path === 'hooks' ? hooks : args.path === 'ui'
-          ? "export const Button = 'button'; export const AttachmentPlaceholder = 'attachment';"
+          ? "export const MarkdownEditor = 'markdown-editor'; export const AttachmentPlaceholder = 'attachment';"
           : "export const ChatroomAvatar = 'avatar';",
         loader: 'js',
       }));
@@ -90,23 +90,73 @@ function mount(overrides = {}) {
   };
   let tree;
   const resident = {
-    style: {},
-    scrollHeight: 40,
-    focus() {},
-    setSelectionRange(start, end) {
+    selection: [0, 0],
+    focusCount: 0,
+    focus() {
+      this.focusCount += 1;
+    },
+    setSelection(start, end) {
       this.selection = [start, end];
+    },
+    getSelection() {
+      return { start: this.selection[0], end: this.selection[1] };
+    },
+  };
+  const listeners = new Map();
+  let observerCallback;
+  let disconnected = false;
+  const view = {
+    getComputedStyle: () => ({ paddingLeft: '8px', paddingRight: '8px', columnGap: '6px' }),
+    addEventListener: (name, callback) => listeners.set(name, callback),
+    removeEventListener: name => listeners.delete(name),
+    ResizeObserver: class {
+      constructor(callback) {
+        observerCallback = callback;
+      }
+      observe() {}
+      disconnect() {
+        disconnected = true;
+      }
+    },
+  };
+  const form = { clientWidth: 400, ownerDocument: { defaultView: view } };
+  const measurement = {
+    style: {},
+    value: '',
+    get scrollHeight() {
+      const width = Math.max(1, Number.parseFloat(this.style.width) - 12);
+      const rows = this.value.split('\n').reduce(
+        (sum, line) => sum + Math.max(1, Math.ceil(line.length * 7 / width)),
+        0,
+      );
+      return rows * 20 + 12;
     },
   };
   const render = () => {
     module.hooks.begin();
     tree = ChatroomComposer(props);
-    nodes(tree).find(node => node.type === 'textarea').props.ref.current = resident;
+    nodes(tree).find(node => node.type === 'markdown-editor').props.ref.current = resident;
+    tree.props.ref.current = form;
+    nodes(tree).find(node => node.props?.className === 'cx-chatroom-input__measurement').props.ref.current =
+      measurement;
+    nodes(tree).find(node => node.props?.className === 'cx-chatroom-input__tools').props.ref.current = {
+      getBoundingClientRect: () => ({ width: 70 }),
+    };
+    nodes(tree).find(node => node.props?.className === 'cx-chatroom-input__send').props.ref.current = {
+      getBoundingClientRect: () => ({ width: 32 }),
+    };
     module.hooks.finish();
   };
   const find = predicate => nodes(tree).find(predicate);
-  const input = () => find(node => node.type === 'textarea');
+  const input = () => find(node => node.type === 'markdown-editor');
   const change = value => {
-    input().props.onChange({ currentTarget: { value, selectionStart: value.length, selectionEnd: value.length } });
+    resident.selection = [value.length, value.length];
+    input().props.onValueChange(value);
+    render();
+  };
+  const resize = width => {
+    form.clientWidth = width;
+    observerCallback?.();
     render();
   };
   const key = (key, extra = {}) => {
@@ -125,7 +175,28 @@ function mount(overrides = {}) {
   };
   const submit = () => tree.props.onSubmit({ preventDefault() {} });
   render();
-  return { props, calls, abort, render, find, input, change, key, submit, resident };
+  return {
+    props,
+    calls,
+    abort,
+    render,
+    find,
+    input,
+    change,
+    key,
+    submit,
+    resident,
+    resize,
+    get expanded() {
+      return tree.props['data-layout'] === 'expanded';
+    },
+    get disconnected() {
+      return disconnected;
+    },
+    get listenerCount() {
+      return listeners.size;
+    },
+  };
 }
 const settle = async ui => {
   await new Promise(resolve => setImmediate(resolve));
@@ -331,4 +402,54 @@ test('a Host UTF16 admission rejection keeps the complete supplementary-characte
   await settle(ui);
   assert.equal(ui.input().props.value, draft);
   assert.equal(ui.find(node => node.props?.role === 'alert').props.children, 'composer.send-failed');
+});
+
+test('uses the public controlled MarkdownEditor and imperative selection contract', () => {
+  const ui = mount();
+  ui.change('**markdown**');
+  assert.equal(ui.input().type, 'markdown-editor');
+  assert.equal(ui.input().props.value, '**markdown**');
+  assert.equal(ui.input().props.onChange, undefined);
+  assert.equal(ui.input().props.onSelect, undefined);
+  assert.equal(ui.input().props.style, undefined);
+  const measurement = ui.find(node => node.type === 'textarea');
+  assert.equal(measurement.props['aria-hidden'], 'true');
+  assert.equal(measurement.props.readOnly, true);
+  assert.equal(measurement.props.tabIndex, -1);
+});
+
+test('returns between compact and expanded using plugin text/control width measurement', () => {
+  const ui = mount();
+  assert.equal(ui.expanded, false);
+  ui.change('short');
+  ui.render();
+  assert.equal(ui.expanded, false);
+  ui.change('a message long enough to wrap at the compact input width');
+  ui.render();
+  assert.equal(ui.expanded, true);
+  ui.resize(900);
+  assert.equal(ui.expanded, false);
+  ui.resize(240);
+  assert.equal(ui.expanded, true);
+  ui.change('');
+  ui.render();
+  assert.equal(ui.expanded, false);
+  ui.change('line one\n');
+  ui.render();
+  assert.equal(ui.expanded, true);
+  module.hooks.cleanup();
+  assert.equal(ui.disconnected, true);
+  assert.equal(ui.listenerCount, 0);
+});
+
+test('a public selection event filters mentions at the caret without reading Host DOM', () => {
+  const ui = mount();
+  ui.change('@Ali help');
+  ui.input().props.onSelectionChange({ start: 4, end: 4 });
+  ui.render();
+  assert.ok(ui.find(node => node.props?.role === 'listbox'));
+  ui.key('Enter');
+  assert.equal(ui.input().props.value, '@Alice help');
+  assert.deepEqual(ui.resident.selection, [7, 7]);
+  assert.equal(ui.calls.length, 0);
 });

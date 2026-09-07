@@ -1,57 +1,106 @@
 .cx-chatroom-input {
   position: relative;
   display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
   min-width: 0;
   gap: 6px;
   margin: 0;
-  padding: 12px;
+  padding: 8px;
   color: var(--cx-text, CanvasText);
   background: var(--cx-surface, Canvas);
   border: 1px solid
-    var(--cx-border, color-mix(in srgb, currentColor 15%, transparent));
+    var(--cx-border, color-mix(in srgb, currentcolor 15%, transparent));
   border-radius: 16px;
+  line-height: 1.5;
 }
-
 .cx-chatroom-input__editor {
   position: relative;
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
 }
-
-.cx-chatroom-input textarea {
-  display: block;
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 36px;
-  max-height: 160px;
-  padding: 6px;
-  resize: none;
-  overflow-y: auto;
-  border: 0;
-  border-radius: 6px;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-.cx-chatroom-input textarea:focus-visible {
-  outline: 2px solid var(--cx-primary, Highlight);
-  outline-offset: 1px;
-}
-.cx-chatroom-input textarea:disabled {
-  opacity: 0.6;
-}
-.cx-chatroom-input__actions {
+.cx-chatroom-input__tools {
+  grid-column: 1;
+  grid-row: 1;
   display: flex;
   align-items: center;
   gap: 6px;
 }
-.cx-chatroom-input__spacer {
-  flex: 1;
+.cx-chatroom-input__send {
+  grid-column: 3;
+  grid-row: 1;
+}
+.cx-chatroom-input[data-layout="expanded"] .cx-chatroom-input__editor {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+.cx-chatroom-input[data-layout="expanded"] .cx-chatroom-input__tools,
+.cx-chatroom-input[data-layout="expanded"] .cx-chatroom-input__send {
+  grid-row: 2;
+}
+.cx-chatroom-input__mention, .cx-chatroom-input__submit {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  font: inherit;
+  cursor: pointer;
+}
+.cx-chatroom-input__mention {
+  color: inherit;
+  background: transparent;
+}
+.cx-chatroom-input__submit {
+  color: var(--cx-primary-text, Canvas);
+  background: var(--cx-primary, CanvasText);
+  font-size: 20px;
+}
+.cx-chatroom-input__mention:focus-visible,
+.cx-chatroom-input__submit:focus-visible {
+  outline: 2px solid var(--cx-focus, Highlight);
+  outline-offset: 2px;
+}
+.cx-chatroom-input__mention:disabled, .cx-chatroom-input__submit:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.cx-chatroom-input__mention:hover:enabled {
+  background: color-mix(in srgb, currentcolor 8%, transparent);
+}
+.cx-chatroom-input__submit:hover:enabled {
+  filter: brightness(0.92);
+}
+
+/* This inert plugin-owned field measures the candidate compact width only.
+   It never styles or inspects the public MarkdownEditor's Host-owned input. */
+.cx-chatroom-input__measurement {
+  position: absolute;
+  inset: 0 auto auto -10000px;
+  box-sizing: border-box;
+  width: 1px;
+  height: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 6px;
+  border: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+  font: inherit;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 .cx-chatroom-input__hint,
 .cx-chatroom-input__status,
 .cx-chatroom-input__error {
+  grid-column: 1 / -1;
   margin: 0;
   font-size: 12px;
   line-height: 1.5;
