@@ -19,7 +19,10 @@ export function ChatroomNewTaskEntry({ roomId, details, navigation, t }: {
           setOpenFailed(false);
           const result = await details.startTask(roomId, input);
           if (result.status !== 'accepted') {
-            return { status: 'unavailable', message: t(`task.start.${result.code}`) };
+            return {
+              status: 'unavailable',
+              message: t(result.reason === undefined ? `task.start.${result.code}` : `task.failure.${result.reason}`),
+            };
           }
           if (result.roomId !== roomId) {
             try {

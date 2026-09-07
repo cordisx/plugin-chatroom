@@ -1,4 +1,19 @@
 export const chatroomDetailsEnglish = {
+  'task.failure.invalid-input': 'The task input was rejected.',
+  'task.failure.permission-denied': 'Permission denied. The task has not been accepted.',
+  'task.failure.operation-conflict': 'This operation is already associated with a different request.',
+  'task.failure.context-required': 'Choose a working directory for this task.',
+  'task.failure.context-unavailable': 'The task workspace is unavailable.',
+  'task.failure.project-unavailable': 'The selected project is unavailable.',
+  'task.failure.directory-unavailable': 'The selected working directory is unavailable.',
+  'task.failure.definition-unavailable': 'This Agent version is unavailable.',
+  'task.failure.tool-unavailable': 'The required task tool is unavailable.',
+  'task.failure.create-failed': 'The task could not be created.',
+  'task.failure.submit-failed': 'The task input could not be submitted.',
+  'task.failure.reconciliation-required': 'The result is not yet confirmed. Retry with the same input.',
+  'task.failure.host-unavailable': 'The Host is currently unavailable.',
+  'task.failure.unsupported': 'Task creation is not supported here.',
+
   'identity.settings': 'Settings',
   'identity.settings.unavailable': 'Settings are unavailable for this exact Agent version.',
   'identity.settings.failed': 'Could not open Agent settings.',
@@ -40,6 +55,21 @@ export const chatroomDetailsEnglish = {
 };
 
 export const chatroomDetailsChinese = {
+  'task.failure.invalid-input': '任务输入未通过校验。',
+  'task.failure.permission-denied': '权限不足，任务尚未获接受。',
+  'task.failure.operation-conflict': '此操作已关联另一份请求。',
+  'task.failure.context-required': '请选择此任务的工作目录。',
+  'task.failure.context-unavailable': '任务工作空间当前不可用。',
+  'task.failure.project-unavailable': '所选项目当前不可用。',
+  'task.failure.directory-unavailable': '所选工作目录当前不可用。',
+  'task.failure.definition-unavailable': '此 Agent 版本当前不可用。',
+  'task.failure.tool-unavailable': '任务所需工具当前不可用。',
+  'task.failure.create-failed': '未能创建任务。',
+  'task.failure.submit-failed': '未能提交任务内容。',
+  'task.failure.reconciliation-required': '尚未确认结果，请保留相同输入重试。',
+  'task.failure.host-unavailable': 'Host 当前不可用。',
+  'task.failure.unsupported': '当前环境不支持创建任务。',
+
   'identity.settings': '设置',
   'identity.settings.unavailable': '此 Agent 版本的设置当前不可用。',
   'identity.settings.failed': '未能打开 Agent 设置。',

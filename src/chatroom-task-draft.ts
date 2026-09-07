@@ -1,3 +1,5 @@
+import type { AgentTaskFailureCode } from '@cordisx/protocol/agent-task/v1';
+import { taskFailureCode } from './chatroom-task-failures.js';
 import type { CordisXCommands } from 'cordisx/contracts';
 import type { ChatroomAgentConfiguration } from './agent-definition.js';
 import type { DurableChatroomRoomStore } from './room-store.js';
@@ -9,7 +11,11 @@ export interface ChatroomTaskDraftInput {
 }
 export type ChatroomTaskDraftResult =
   | { readonly status: 'accepted'; readonly roomId: string; }
-  | { readonly status: 'unavailable'; readonly code: 'invalid-input' | 'leader-unavailable' | 'pending' | 'failed'; };
+  | {
+    readonly status: 'unavailable';
+    readonly code: 'invalid-input' | 'leader-unavailable' | 'pending' | 'failed';
+    readonly reason?: AgentTaskFailureCode;
+  };
 const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -125,7 +131,12 @@ export class ChatroomTaskDrafts {
       // Only these rejections prove task.start returned before creating any task fact.
       draft.editable = record(result) && result.status === 'rejected'
         && ['invalid-input', 'context-required', 'unsupported'].includes(String(result.code));
-      return { status: 'unavailable', code: draft.editable ? 'failed' : 'pending' };
+      const reason = record(result) && result.status === 'unavailable' ? taskFailureCode(result.code) : undefined;
+      return {
+        status: 'unavailable',
+        code: draft.editable ? 'failed' : 'pending',
+        ...(reason === undefined ? {} : { reason }),
+      };
     } catch {
       return { status: 'unavailable', code: 'pending' };
     }

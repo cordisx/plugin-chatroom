@@ -10,8 +10,17 @@ const output = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   fileName: 'chatroom-task-draft.ts',
 }).outputText;
+const failureSource = await readFile(new URL('../src/chatroom-task-failures.ts', import.meta.url), 'utf8');
+const failureExports = {};
+new Function(
+  'exports',
+  ts.transpileModule(failureSource, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText,
+)(failureExports);
 const exports = {};
-new Function('exports', output)(exports);
+new Function('require', 'exports', output)(name => {
+  assert.equal(name, './chatroom-task-failures.js');
+  return failureExports;
+}, exports);
 const { ChatroomTaskDrafts } = exports;
 
 const members = [
@@ -253,9 +262,13 @@ test('only matching accepted task results complete a draft; unknown results reta
     args => ({ status: 'accepted', operationId: 'foreign', roomId: args.roomId, runId: 'prepared-run' }),
     args => ({ status: 'accepted', operationId: args.operationId, roomId: 'foreign', runId: 'prepared-run' }),
   ];
-  for (const response of responses) {
+  for (const [index, response] of responses.entries()) {
     const h = harness({ initial: [room()], start: async args => response(args) });
-    assert.deepEqual(await h.drafts.start('existing', input), { status: 'unavailable', code: 'pending' });
+    assert.deepEqual(await h.drafts.start('existing', input), {
+      status: 'unavailable',
+      code: 'pending',
+      ...(index === 4 ? { reason: 'reconciliation-required' } : {}),
+    });
     const first = h.calls[0].arguments;
     assert.deepEqual(await h.drafts.start('existing', { ...input, to: 'lead-b' }), {
       status: 'unavailable',
@@ -350,4 +363,29 @@ test('an unavailable prepare result retains the same draft even when no runId is
   assert.equal(result.roomId, h.calls[0].arguments.roomId);
   assert.deepEqual(h.calls[1].arguments, h.calls[0].arguments);
   assert.equal(h.rooms.size, 1);
+});
+
+test('a definite permission denial remains visible without changing the retained operation or payload', async () => {
+  const h = harness({
+    initial: [room()],
+    start: args => ({
+      status: 'unavailable',
+      code: 'permission-denied',
+      roomId: args.roomId,
+      operationId: args.operationId,
+      runId: 'retained-run',
+    }),
+  });
+  assert.deepEqual(await h.drafts.start('existing', input), {
+    status: 'unavailable',
+    code: 'pending',
+    reason: 'permission-denied',
+  });
+  await h.drafts.start('existing', input);
+  assert.deepEqual(h.calls[0], h.calls[1]);
+  assert.deepEqual(await h.drafts.start('existing', { ...input, text: 'different' }), {
+    status: 'unavailable',
+    code: 'pending',
+  });
+  assert.equal(h.calls.length, 2);
 });

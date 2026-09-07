@@ -30,6 +30,7 @@ export function ChatroomTaskDetails({ task, t }: {
           <dd>{t(creation)}</dd>
         </div>
       </dl>
+      {task.creation.status === 'unavailable' && <p role="status">{t(`task.failure.${task.creation.code}`)}</p>}
       {task.reports.length === 0 ? <p>{t('task.reports.empty')}</p> : (
         <section>
           <h4>{t('task.reports')}</h4>
