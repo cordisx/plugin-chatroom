@@ -1,6 +1,11 @@
 import { type KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'cordisx/react';
 import type { CordisXReactPageProps } from 'cordisx/contracts';
-import { AttachmentPlaceholder, Button } from 'cordisx/ui';
+import {
+  AttachmentPlaceholder,
+  MarkdownEditor,
+  type MarkdownEditorHandle,
+  type MarkdownEditorSelection,
+} from 'cordisx/ui';
 import { ChatroomAvatar, type ChatroomAvatarParticipant } from './avatar.js';
 import type { ChatroomPageSource } from './chatroom-page-source.js';
 import { CHATROOM_COMMAND_SUBMIT } from './conversation-model.js';
@@ -49,6 +54,59 @@ export function composerMentionToken(
   return safe(name) && unique(name) ? `@${name}` : undefined;
 }
 
+/** Measure only plugin-owned text and controls; the public Editor owns its DOM. */
+function useComposerLayout(draft: string) {
+  const form = useRef<HTMLFormElement>(null);
+  const measurement = useRef<HTMLTextAreaElement>(null);
+  const tools = useRef<HTMLDivElement>(null);
+  const send = useRef<HTMLDivElement>(null);
+  const currentDraft = useRef(draft);
+  currentDraft.current = draft;
+  const measure = useRef<(() => void) | undefined>(undefined);
+  const [expanded, setExpanded] = useState(false);
+  useLayoutEffect(() => {
+    const root = form.current;
+    const input = measurement.current;
+    const view = root?.ownerDocument.defaultView;
+    if (root === null || input === null || view === undefined || view === null) return;
+    const update = () => {
+      if (root.clientWidth <= 0) return;
+      const style = view.getComputedStyle(root);
+      const number = (value: string) => Number.parseFloat(value) || 0;
+      const controls = (tools.current?.getBoundingClientRect().width ?? 0)
+        + (send.current?.getBoundingClientRect().width ?? 0);
+      const available = root.clientWidth - number(style.paddingLeft) - number(style.paddingRight)
+        - controls - number(style.columnGap) * 2;
+      input.style.width = `${Math.max(1, available)}px`;
+      input.value = 'M';
+      const singleLine = input.scrollHeight;
+      const text = currentDraft.current;
+      input.value = text.endsWith('\n') ? `${text}M` : text || 'M';
+      setExpanded(text !== '' && (available <= 0 || input.scrollHeight > singleLine + 1));
+    };
+    measure.current = update;
+    update();
+    const Observer = view.ResizeObserver;
+    const observer = Observer === undefined ? undefined : new Observer(update);
+    observer?.observe(root);
+    if (tools.current !== null) observer?.observe(tools.current);
+    if (send.current !== null) observer?.observe(send.current);
+    view.addEventListener('resize', update);
+    // A late font load can change wrapping without changing the form width.
+    root.ownerDocument.fonts?.addEventListener('loadingdone', update);
+    return () => {
+      measure.current = undefined;
+      observer?.disconnect();
+      view.removeEventListener('resize', update);
+      root.ownerDocument.fonts?.removeEventListener('loadingdone', update);
+    };
+  }, []);
+  useLayoutEffect(() => {
+    measure.current?.();
+  }, [draft]);
+  return { form, measurement, tools, send, expanded };
+}
+
 export function ChatroomComposer(
   { source, shortcutPolicy, pageComposer, signal, t, participants, mentionRequest }: ChatroomComposerProps,
 ) {
@@ -59,7 +117,11 @@ export function ChatroomComposer(
   const [error, setError] = useState<string>();
   const [query, setQuery] = useState<string>();
   const [activeIndex, setActiveIndex] = useState(0);
-  const input = useRef<HTMLTextAreaElement>(null);
+  const input = useRef<MarkdownEditorHandle>(null);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const layout = useComposerLayout(draft);
+  const options = useRef(new Map<number, HTMLButtonElement>());
   const composing = useRef(false);
   const busy = useRef(false);
   const mounted = useRef(false);
@@ -89,17 +151,15 @@ export function ChatroomComposer(
   }, [signal]);
 
   useLayoutEffect(() => {
-    const textarea = input.current;
-    if (textarea === null) return;
-    // Only measure the plugin-owned input; no Host DOM discovery or overlays.
-    textarea.style.height = 'auto';
-    textarea.style.height = `${Math.min(Math.max(textarea.scrollHeight, 36), 160)}px`;
     if (pendingSelection.current !== undefined && !disabled) {
-      textarea.focus({ preventScroll: true });
-      textarea.setSelectionRange(...pendingSelection.current);
+      input.current?.focus({ preventScroll: true });
+      input.current?.setSelection(...pendingSelection.current);
       pendingSelection.current = undefined;
     }
   }, [draft, query, disabled]);
+  useLayoutEffect(() => {
+    if (query !== undefined) options.current.get(selectedIndex)?.scrollIntoView({ block: 'nearest' });
+  }, [query, selectedIndex]);
 
   const insertMention = (participant: ChatroomComposerParticipant) => {
     if (disabled || composing.current || signal.aborted) return;
@@ -120,6 +180,7 @@ export function ChatroomComposer(
     pendingSelection.current = existing === undefined
       ? [token.length + 1, token.length + 1]
       : [existing.index!, existing.index! + token.length];
+    draftRef.current = next;
     setDraft(next);
     setQuery(undefined);
     queryRange.current = undefined;
@@ -127,7 +188,7 @@ export function ChatroomComposer(
     // Also focus when selecting an already present mention leaves draft unchanged.
     input.current?.focus({ preventScroll: true });
     if (next === draft) {
-      input.current?.setSelectionRange(...pendingSelection.current);
+      input.current?.setSelection(...pendingSelection.current);
       pendingSelection.current = undefined;
     }
   };
@@ -143,13 +204,13 @@ export function ChatroomComposer(
     insertMention(participant);
   }, [mentionRequest, disabled, participants]);
 
-  const updateQuery = (textarea: HTMLTextAreaElement) => {
-    if (composing.current || textarea.selectionStart !== textarea.selectionEnd) {
+  const updateQuery = (value: string, selection: MarkdownEditorSelection | undefined) => {
+    if (composing.current || selection === undefined || selection.start !== selection.end) {
       setQuery(undefined);
       return;
     }
-    const caret = textarea.selectionStart;
-    const match = textarea.value.slice(0, caret).match(/(?:^|\s)@([^\s@]*)$/u);
+    const caret = selection.start;
+    const match = value.slice(0, caret).match(/(?:^|\s)@([^\s@]*)$/u);
     queryRange.current = match === null ? undefined : [caret - match[1].length - 1, caret];
     setQuery(match?.[1]);
     setActiveIndex(0);
@@ -222,7 +283,12 @@ export function ChatroomComposer(
 
   return (
     <form
+      ref={layout.form}
       className="cx-chatroom-input"
+      data-layout={layout.expanded ? 'expanded' : 'compact'}
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setQuery(undefined);
+      }}
       aria-label={t('composer.label')}
       aria-busy={sending}
       onSubmit={event => {
@@ -242,6 +308,10 @@ export function ChatroomComposer(
             {matches.map((participant, index) => (
               <button
                 key={participant.id}
+                ref={element => {
+                  if (element === null) options.current.delete(index);
+                  else options.current.set(index, element);
+                }}
                 type="button"
                 role="option"
                 id={`${id}-member-${index}`}
@@ -258,10 +328,9 @@ export function ChatroomComposer(
             ))}
           </div>
         )}
-        <textarea
+        <MarkdownEditor
           ref={input}
           value={draft}
-          rows={1}
           placeholder={t('composer.placeholder')}
           aria-label={t('composer.label')}
           aria-describedby={`${id}-hint ${id}-status`}
@@ -270,32 +339,33 @@ export function ChatroomComposer(
             ? undefined
             : `${id}-member-${selectedIndex}`}
           disabled={disabled}
-          onChange={event => {
-            setDraft(event.currentTarget.value);
+          onValueChange={value => {
+            draftRef.current = value;
+            setDraft(value);
             setNotice(undefined);
             setError(undefined);
-            updateQuery(event.currentTarget);
+            updateQuery(value, input.current?.getSelection());
           }}
-          onSelect={event => updateQuery(event.currentTarget)}
-          onBlur={() => setQuery(undefined)}
+          onSelectionChange={selection => updateQuery(draftRef.current, selection)}
           onCompositionStart={() => {
             composing.current = true;
             setQuery(undefined);
           }}
-          onCompositionEnd={event => {
+          onCompositionEnd={() => {
             composing.current = false;
-            updateQuery(event.currentTarget);
+            updateQuery(draftRef.current, input.current?.getSelection());
           }}
           onKeyDown={onKeyDown}
         />
       </div>
-      <div className="cx-chatroom-input__actions">
+      <div ref={layout.tools} className="cx-chatroom-input__tools">
         <AttachmentPlaceholder
           size={32}
           aria-label={t('composer.attachment-unavailable')}
           title={t('composer.attachment-unavailable')}
         />
-        <Button
+        <button
+          className="cx-chatroom-input__mention"
           type="button"
           disabled={disabled || participants.length === 0}
           aria-label={t('composer.members')}
@@ -307,12 +377,26 @@ export function ChatroomComposer(
           }}
         >
           @
-        </Button>
-        <span className="cx-chatroom-input__spacer" />
-        <Button type="submit" variant="primary" disabled={disabled || sending || draft.trim() === ''}>
-          {sending ? t('composer.sending') : t('composer.send')}
-        </Button>
+        </button>
       </div>
+      <div ref={layout.send} className="cx-chatroom-input__send">
+        <button
+          type="submit"
+          className="cx-chatroom-input__submit"
+          aria-label={sending ? t('composer.sending') : t('composer.send')}
+          disabled={disabled || sending || draft.trim() === ''}
+        >
+          <span aria-hidden="true">{sending ? '…' : '↑'}</span>
+        </button>
+      </div>
+      <textarea
+        ref={layout.measurement}
+        className="cx-chatroom-input__measurement"
+        aria-hidden="true"
+        tabIndex={-1}
+        readOnly
+        rows={1}
+      />
       <p className="cx-chatroom-input__hint" id={`${id}-hint`}>
         {t(shortcutPolicy === 'enter' ? 'composer.shortcut.enter' : 'composer.shortcut.mod-enter')}
       </p>
