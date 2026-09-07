@@ -179,6 +179,8 @@ Vite-built `dist/runtime/chatroom.js` graph entry. `src/chatroom.ts` registers t
 React page, routes, Room management commands, Manager content, and the v3
 generic-image sidebar collection. The build emits hashed page, renderer, and
 CSS chunks while keeping CordisX's public React/UI modules Host-shared.
+The dated [CSS and build audit](.agents/docs/css-and-build-audit.md) records
+Team's retained inline styles, output consumers, and lifecycle validation limits.
 OneWorks license and provenance details are in `THIRD_PARTY_NOTICES.md`. Local
 experimental Host, Protocol, and Avatar checkpoints may be used for combination
 validation; that does not make them a merged or released dependency.
