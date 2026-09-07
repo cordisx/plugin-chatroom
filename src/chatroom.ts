@@ -418,6 +418,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       await roomStore.upsert(room);
     },
     (roomId, runId) => agentSession.isRunLocallyUnavailable(roomId, runId),
+    (roomId, runId) => agentSession.canAttemptRunRecovery(roomId, runId),
   );
   const composerSettings = new ChatroomComposerSettings(ctx.settings);
   const product = ChatroomProductBase.attach(roomStore);
