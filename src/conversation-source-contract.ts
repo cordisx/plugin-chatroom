@@ -1,11 +1,5 @@
-import type { AgentConversationRoomSettingsUpdateRequest } from '@cordisx/protocol/agent-conversation-shell/v3';
-
 import { type RoomDispatchRecipient } from './room-target.js';
 import { type Room } from './room.js';
-
-export type ChatroomRoomSettingsUpdater = (
-  request: AgentConversationRoomSettingsUpdateRequest,
-) => Promise<'applied' | 'room-conflict'>;
 
 export interface ChatroomCommandDelivery {
   readonly memberId: string;
@@ -13,9 +7,6 @@ export interface ChatroomCommandDelivery {
   readonly runCreated: boolean;
   readonly reason: RoomDispatchRecipient['reason'];
 }
-
-/** The Shell version that owns the composer admission capability for a source. */
-export type ChatroomComposerAdmissionMode = 'v8' | 'v9';
 
 export type ChatroomCommandIntent =
   | {
