@@ -11,11 +11,17 @@ member run; it never parses, constructs, or emulates a Connector handle.
 
 ## Status
 
-The plugin contributes a body-only React page through the public CordisX page
-API. Chatroom owns its title, timeline, member panel, composer, approval cards,
-and direct OneWorks Avatar rendering. CordisX still owns the page seat, route,
-shared React runtime, lifecycle, and application chrome. Chatroom never
-fabricates a reply or projects opaque runtime handles.
+The plugin contributes through the public CordisX page API. Its current
+[page selector](src/chatroom-page-surface.ts) prefers the Host Conversation
+Shell when that public service exists; otherwise it mounts the lazy plugin
+React page. Chatroom provides Room state and actions; on the Shell path, Host
+renders the conversation and details. CordisX owns the page seat, route, shared
+React runtime, lifecycle, and application chrome in both paths. Chatroom never
+fabricates a reply or exposes opaque runtime handles as product copy.
+
+Moving the business UI back into the plugin is tracked in
+[issue #74](https://github.com/cordisx/plugin-chatroom/issues/74); that planned
+migration is not the current implementation.
 
 Each Room freezes a cycle-free membership forest with any number of leaders.
 Role and attention policy are independent: ordinary messages fan out to every
@@ -28,7 +34,7 @@ for a bounded Chatroom cache; sidebar navigation receives only the generic
 `{ kind: "image", image }` value, or a semantic icon while no capture exists.
 
 The distributable runtime is a closed ESM graph. Plugin activation loads the
-small registration entry only. Mounting the Room loads its page module and
+small registration entry only. On the plugin-page fallback, mounting the Room loads its page module and
 stylesheet; the OneWorks renderer module and renderer-only stylesheet remain
 deferred until a resolved avatar is actually displayed. Closing and reopening
 the page creates a fresh React mount while the immutable module request is
@@ -165,6 +171,9 @@ records. External Channel runtime integration remains out of scope for this
 version.
 
 ## Development
+
+For missing history, cold-start identity, source changes or CLI evidence, see
+the [Room runtime debugging guide](.agents/docs/runtime-debugging.md).
 
 Requires Node.js 22 or newer.
 
