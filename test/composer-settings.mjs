@@ -35,11 +35,11 @@ function settingsFixture(initial) {
   };
 }
 
-test('Config declares one live closed shortcut setting with the accepted default and localized copy', () => {
+test('Config declares explicit reporting opt-in and a live closed shortcut setting with the accepted default and localized copy', () => {
   assert.equal(configApplies, 'live');
   assert.equal(CHATROOM_DEFAULT_COMPOSER_SHORTCUT_POLICY, 'enter');
-  assert.deepEqual(Config({}), { shortcutPolicy: 'enter' });
-  assert.deepEqual(Config({ shortcutPolicy: 'mod-enter' }), { shortcutPolicy: 'mod-enter' });
+  assert.deepEqual(Config({}), { shortcutPolicy: 'enter', cliReporting: false });
+  assert.deepEqual(Config({ shortcutPolicy: 'mod-enter' }), { shortcutPolicy: 'mod-enter', cliReporting: false });
   assert.throws(() => Config({ shortcutPolicy: 'future' }));
 
   const envelope = JSON.parse(JSON.stringify(Config));

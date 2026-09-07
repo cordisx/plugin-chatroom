@@ -236,6 +236,8 @@ export interface RoomMembership {
 }
 
 export interface RoomRun {
+  /** Explicit Room reports use the authenticated CLI; assistant transcript stays private. */
+  readonly collaborationMode?: 'cli-pending' | 'cli';
   readonly runId: string;
   readonly memberId: string;
   readonly title: string;

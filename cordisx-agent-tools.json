@@ -1,0 +1,16 @@
+{
+  "contract": "cordisx.agent-tools/v1",
+  "skills": [
+    {
+      "id": "chatroom",
+      "path": "./dist/agent-tools/skills/chatroom"
+    }
+  ],
+  "commands": [
+    {
+      "id": "send",
+      "entry": "./dist/agent-tools/cli/chatroom.mjs",
+      "skillId": "chatroom"
+    }
+  ]
+}
