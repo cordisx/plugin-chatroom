@@ -66,13 +66,26 @@ function stableItemOrder(left: ChatroomPageItem, right: ChatroomPageItem): numbe
   return left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0;
 }
 
-function chronologicalItems(items: readonly ChatroomPageItem[]): readonly ChatroomPageItem[] {
+function chronologicalItems(
+  items: readonly ChatroomPageItem[],
+  anchors: readonly Readonly<{ itemId: string; appendAfterItemId: string; }>[] = [],
+): readonly ChatroomPageItem[] {
   const stable = [...items].sort(stableItemOrder);
   const timed = stable
     .filter(item => itemTime(item) !== undefined)
     .sort((left, right) => itemTime(left)! - itemTime(right)! || stableItemOrder(left, right));
   let timedIndex = 0;
-  return Object.freeze(stable.map(item => itemTime(item) === undefined ? item : timed[timedIndex++]));
+  const ordered = stable.map(item => itemTime(item) === undefined ? item : timed[timedIndex++]);
+  // Preserve the owner-verified admission fence across live updates and cold replay.
+  for (const anchor of anchors) {
+    const index = ordered.findIndex(item => item.itemId === anchor.itemId);
+    const predecessor = ordered.findIndex(item => item.itemId === anchor.appendAfterItemId);
+    if (index < 0 || predecessor < 0 || index > predecessor) continue;
+    const [item] = ordered.splice(index, 1);
+    const nextPredecessor = ordered.findIndex(candidate => candidate.itemId === anchor.appendAfterItemId);
+    ordered.splice(nextPredecessor + 1, 0, item!);
+  }
+  return Object.freeze(ordered.map((item, sequence) => item.sequence === sequence ? item : { ...item, sequence }));
 }
 
 /**
@@ -85,6 +98,9 @@ export class ChatroomPageSource {
   private readonly unsubscribeRooms: () => void;
   private readonly unsubscribeProjection: () => void;
   private readonly unsubscribeSettings: () => void;
+  private readonly watchedRooms = new Set<string>();
+  private readonly hydrationRevisions = new Map<string, number>();
+  private readonly hydrations = new Map<string, Promise<void>>();
   private revision = 0;
   private disposed = false;
 
@@ -93,8 +109,8 @@ export class ChatroomPageSource {
     private readonly sessions: ChatroomAgentSessionController,
     private readonly settings: ChatroomComposerSettings,
   ) {
-    this.unsubscribeRooms = conversation.rooms.subscribe(() => this.refresh());
-    this.unsubscribeProjection = sessions.subscribeProjection(() => this.refresh());
+    this.unsubscribeRooms = conversation.rooms.subscribe(roomId => this.refreshRoom(roomId));
+    this.unsubscribeProjection = sessions.subscribeProjection(roomId => this.refreshRoom(roomId));
     this.unsubscribeSettings = settings.subscribe(() => this.refresh());
   }
 
@@ -132,7 +148,7 @@ export class ChatroomPageSource {
       items: chronologicalItems([
         ...domainItems,
         ...projection.items,
-      ]),
+      ], projection.admissionAppendAnchors),
       shortcutPolicy: this.settings.current,
     });
     this.cache.set(key, snapshot);
@@ -141,8 +157,25 @@ export class ChatroomPageSource {
 
   async hydrate(roomId: string | undefined): Promise<void> {
     if (this.disposed || roomId === undefined || this.conversation.rooms.get(roomId) === undefined) return;
-    await this.sessions.hydrateRoom(roomId);
-    if (!this.disposed) this.refresh();
+    this.watchedRooms.add(roomId);
+    const pending = this.hydrations.get(roomId);
+    if (pending !== undefined) return await pending;
+    // A lease can close while another run is replaying. Drain notifications
+    // after the current pass so the first run is replayed under its new lease.
+    const operation = Promise.resolve().then(async () => {
+      let revision: number;
+      do {
+        revision = this.hydrationRevisions.get(roomId) ?? 0;
+        await this.sessions.hydrateRoom(roomId);
+      } while (!this.disposed && revision !== (this.hydrationRevisions.get(roomId) ?? 0));
+      if (!this.disposed) this.refresh();
+    });
+    this.hydrations.set(roomId, operation);
+    try {
+      await operation;
+    } finally {
+      if (this.hydrations.get(roomId) === operation) this.hydrations.delete(roomId);
+    }
   }
 
   subscribe(listener: () => void): () => void {
@@ -305,7 +338,18 @@ export class ChatroomPageSource {
     this.unsubscribeProjection();
     this.unsubscribeSettings();
     this.cache.clear();
+    this.watchedRooms.clear();
+    this.hydrationRevisions.clear();
     this.listeners.clear();
+  }
+
+  private refreshRoom(roomId: string): void {
+    this.refresh();
+    if (this.disposed || !this.watchedRooms.has(roomId)) return;
+    this.hydrationRevisions.set(roomId, (this.hydrationRevisions.get(roomId) ?? 0) + 1);
+    // Keep the last verified snapshot when an observer replay is unavailable.
+    // A later notification or explicit page hydration can retry it.
+    void this.hydrate(roomId).catch(() => {});
   }
 
   private refresh(): void {
