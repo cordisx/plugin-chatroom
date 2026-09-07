@@ -191,3 +191,26 @@ when collaboration is disabled. The Skill uses the current Host-provided CLI
 invocation through an actually available command execution tool. These
 definition declarations are instructions, not permission grants; native tool
 execution still passes the normal Host approval and permission checks.
+
+## Task and ordinary Session permission scopes
+
+The runtime and package manifests use v12 and the formal
+[task permission contract](https://github.com/cordisx/cordisx-protocol/blob/main/.agents/docs/agent-task-permission/README.md).
+The existing optional `approvals.request` and `approvals.answer` declarations
+retain their exact Session route selectors. They additionally declare
+`task` and `taskRequester` selectors for the actually packaged `send` command.
+Each capability appears once. No wildcard, arbitrary Session, Room scope, or
+required approval grant is added.
+
+The Host chooses the task or ordinary route branch from its own authenticated
+provenance. A required task whose registration, connection, or authority was
+revoked cannot fall back to a route grant, even on a matching Session page.
+Task scopes only bound the maximum permission request: actual requester and
+authority permissions, accepted v3 routing, and a human decision still apply.
+The plugin does not create source records or mint approval leases. Ordinary
+non-task Session approvals retain their existing route and correlation checks.
+
+Manifest schema and source equality checks verify this consumer declaration,
+including task-only and route-only variants and rejected duplicate/arbitrary
+selectors. They do not prove Host authorization. The final compatible Host must
+also verify both branches through its actual broker and native execution.

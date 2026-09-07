@@ -19,7 +19,7 @@ const authorityRequesterScope = {
   },
 };
 
-test('publishes v8 package and source manifests with correlated Lead authority route', () => {
+test('publishes v12 manifests with independent task and existing exact Session approval scopes', () => {
   const packageManifest = JSON.parse(readFileSync(
     new URL('../cordisx-package.json', import.meta.url),
     'utf8',
@@ -29,11 +29,11 @@ test('publishes v8 package and source manifests with correlated Lead authority r
     'utf8',
   ));
   const staticCapabilities = runtimeManifest.capabilities;
-  assert.equal(packageManifest.schemaVersion, 8);
-  assert.equal(runtimeManifest.schemaVersion, 8);
+  assert.equal(packageManifest.schemaVersion, 12);
+  assert.equal(runtimeManifest.schemaVersion, 12);
   assert.equal(
     packageManifest.runtimeManifest.schema,
-    'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v8.schema.json',
+    'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v12.schema.json',
   );
   assert.deepEqual(staticCapabilities.map(item => item.name), [
     'agents.create',
@@ -48,8 +48,16 @@ test('publishes v8 package and source manifests with correlated Lead authority r
   ]);
   assert.equal(staticCapabilities.slice(0, 7).every(item => item.required === true), true);
   assert.deepEqual(staticCapabilities.slice(7), [
-    { name: 'approvals.request', required: false, scope: exactApprovalScope },
-    { name: 'approvals.answer', required: false, scope: authorityRequesterScope },
+    {
+      name: 'approvals.request',
+      required: false,
+      scope: { ...exactApprovalScope, task: { kind: 'agent-task-command', commandId: 'send' } },
+    },
+    {
+      name: 'approvals.answer',
+      required: false,
+      scope: { ...authorityRequesterScope, taskRequester: { kind: 'agent-task-command', commandId: 'send' } },
+    },
   ]);
   assert.equal(staticCapabilities.some(item => item.name.includes('*')), false);
   assert.equal(new Set(staticCapabilities.map(item => item.name)).size, staticCapabilities.length);
