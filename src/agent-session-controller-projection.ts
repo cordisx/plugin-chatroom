@@ -69,12 +69,19 @@ export abstract class ChatroomAgentSessionProjectionController extends ChatroomA
         )
         .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0),
     );
+    const admittedRoomItemIds = [
+      ...new Set([
+        ...linkedByItemId.keys(),
+        ...projectors.flatMap(projector => projector.supersededAdmissionRoomItemIds()),
+      ]),
+    ];
     return Object.freeze({
       activeRuns: Object.freeze(projectors.map(projector => projector.activeRun())),
       // One Room human item may be admitted to N exact targets. Keep every
       // durable Session/message link for replay/fencing, but expose one stable
       // canonical SessionEvent projection rather than duplicating it N times.
       items: Object.freeze(items),
+      ...(admittedRoomItemIds.length === 0 ? {} : { admittedRoomItemIds: Object.freeze(admittedRoomItemIds) }),
       ...(admissionAppendAnchors.length === 0 ? {} : { admissionAppendAnchors }),
     });
   }

@@ -109,7 +109,7 @@ test('real CLI process commits one authenticated Room report through Host docume
       routeSelection: { scope: 'room-or-new', selectedRoomParam: room.id },
     };
     domain = new h.ChatroomConversationController(store.rooms);
-    shell = new h.ChatroomAgentSessionConversationSourceV10(
+    shell = new h.ChatroomAgentSessionConversationSourceV11(
       shellBinding,
       domain.createSource(shellBinding),
       sessionController,
@@ -148,9 +148,15 @@ test('real CLI process commits one authenticated Room report through Host docume
     assert.equal(visible[0].source.sequence, reports[0].sequence);
     assert.equal(visible[0].author.participantId, member.participantId);
     assert.equal(visible[0].body[0].text.fallback, 'Accepted the assigned work.');
-    const hostModel = projectAgentConversationShellSnapshotV7('chatroom', shellSnapshot, {
-      resolve: value => value.fallback ?? value.key,
-    }, true);
+    const hostModel = projectAgentConversationShellSnapshotV7(
+      'chatroom',
+      shellSnapshot,
+      {
+        resolve: value => value.fallback ?? value.key,
+      },
+      true,
+      true,
+    );
     const hostMessage = hostModel.entries.find(item => item.kind === 'message' && item.messageId === first.messageId);
     assert.equal(hostMessage.authorId, member.participantId);
     assert.deepEqual(hostMessage.body, ['Accepted the assigned work.']);

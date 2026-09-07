@@ -3,13 +3,13 @@ import test from 'node:test';
 
 import { selectChatroomPageMount } from '../dist/chatroom-page-surface.js';
 
-test('selects the public Host Shell v10 mount without creating the plugin page fallback', async () => {
+test('selects the public Host Shell v11 mount without creating the plugin page fallback', async () => {
   const mount = () => {};
   let fallbackCalls = 0;
   const registrations = [];
   const selected = await selectChatroomPageMount(
     {
-      registerSourceV10(factory, options) {
+      registerSourceV11(factory, options) {
         registrations.push({ factory, options });
         return { mount, dispose() {} };
       },
