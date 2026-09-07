@@ -1,8 +1,4 @@
-import type {
-  AgentConversationItem,
-  AgentConversationShellBinding,
-  AgentConversationShellCommandContext,
-} from '@cordisx/protocol/agent-conversation-shell/v3';
+import type { AgentConversationItem } from '@cordisx/protocol/agent-conversation-shell/v3';
 import type {
   ChatroomPlaygroundAgentApprovalProjection,
   ChatroomPlaygroundAgentDelegationProjection,
@@ -11,18 +7,7 @@ import type {
 } from './conversation-source-contract.js';
 
 import { CHATROOM_DEFAULT_AGENT_CONFIGURATION, type ChatroomAgentConfiguration } from './agent-definition.js';
-import {
-  CHATROOM_COMMAND_APPROVAL_APPROVE,
-  CHATROOM_COMMAND_APPROVAL_CANCEL,
-  CHATROOM_COMMAND_APPROVAL_DENY,
-  CHATROOM_COMMAND_SUBMIT,
-  type ChatroomConversationModel,
-  createNoRoomConversationModel,
-  createRoomConversationModel,
-} from './conversation-model.js';
-import { approvalDecisionOperationId } from './room-agent-operations.js';
 import { failRoomRunPresence } from './room-engagement.js';
-import { replaceRoomProfile } from './room-profile.js';
 import { resolveRoomMessageDispatch } from './room-target.js';
 import {
   addRoomRun,
@@ -35,20 +20,16 @@ import {
 
 import { ChatroomPlaygroundApprovalProjection } from './conversation-playground-approval.js';
 import { ChatroomPlaygroundDispatchProjection } from './conversation-playground-dispatch.js';
-import { ChatroomConversationSource } from './conversation-shell-source.js';
 import {
   type ChatroomCommandDelivery,
   type ChatroomCommandIntent,
-  type ChatroomComposerAdmissionMode,
   type ChatroomPlaygroundMessagePlan,
   type ChatroomPlaygroundSourceCorrelation,
   type ChatroomPlaygroundSourceInspection,
 } from './conversation-source-contract.js';
-export { ChatroomConversationSource } from './conversation-shell-source.js';
 export {
   type ChatroomCommandDelivery,
   type ChatroomCommandIntent,
-  type ChatroomComposerAdmissionMode,
   type ChatroomPlaygroundAgentApprovalProjection,
   type ChatroomPlaygroundAgentDelegationProjection,
   type ChatroomPlaygroundAgentReplyCorrelation,
@@ -58,28 +39,11 @@ export {
   type ChatroomPlaygroundSourceCorrelation,
   type ChatroomPlaygroundSourceInspection,
 } from './conversation-source-contract.js';
-const sourceKey = (binding: Readonly<AgentConversationShellBinding>, generation: string) =>
-  `${binding.bindingId}:${binding.ownerGeneration}:${generation}`;
-
 export class ChatroomConversationController {
   private readonly dispatchProjection: ChatroomPlaygroundDispatchProjection;
   private readonly approvalProjection: ChatroomPlaygroundApprovalProjection;
-  private readonly sources = new Map<string, {
-    readonly binding: Readonly<AgentConversationShellBinding>;
-    readonly source: ChatroomConversationSource;
-    readonly admissionMode?: ChatroomComposerAdmissionMode;
-    roomId?: string;
-  }>();
-  private readonly playgroundSourceCorrelations = new Map<string, {
-    readonly binding: Readonly<AgentConversationShellBinding>;
-    readonly roomId?: string;
-  }>();
   private readonly pending: ChatroomCommandIntent[] = [];
-  private readonly seenRoomIds = new Set<string>();
-  private readonly ownerGenerationListeners = new Set<(ownerGeneration: string) => void>();
-  private ownerGenerationValue: string | undefined;
   readonly rooms: ChatroomRoomRegistry;
-  private readonly unsubscribeRegistry: () => void;
   private nextRoomNumber = 1;
   private nextMessageNumber = 1;
   private nextRunNumber = 1;
@@ -122,135 +86,10 @@ export class ChatroomConversationController {
       ]),
       /^(?:target-error-)?message-(\d+)$/,
     );
-    for (const room of hydrated) this.seenRoomIds.add(room.id);
-    this.unsubscribeRegistry = this.rooms.subscribe(roomId => {
-      if (this.rooms.get(roomId) !== undefined) this.seenRoomIds.add(roomId);
-      this.refreshRoom(roomId);
-    });
-  }
-
-  createSource(
-    binding: Readonly<AgentConversationShellBinding>,
-    options: Readonly<{ admissionMode?: ChatroomComposerAdmissionMode; }> = {},
-  ): ChatroomConversationSource {
-    if (this.ownerGenerationValue !== binding.ownerGeneration) {
-      this.ownerGenerationValue = binding.ownerGeneration;
-      this.playgroundSourceCorrelations.clear();
-      for (const listener of this.ownerGenerationListeners) listener(binding.ownerGeneration);
-    }
-    const generation = binding.ownerGeneration;
-    const key = sourceKey(binding, generation);
-    const source = new ChatroomConversationSource(
-      binding,
-      this.modelFor(binding),
-      () => this.sources.delete(key),
-      async request => {
-        const room = this.rooms.get(request.roomId);
-        if (room === undefined || binding.routeSelection.selectedRoomParam !== room.id) return 'room-conflict';
-        const patch = request.patch;
-        const description = 'description' in patch && patch.description !== undefined
-          ? patch.description.state === 'present' ? patch.description.text : undefined
-          : room.description;
-        const replacement = replaceRoomProfile(room, {
-          name: 'name' in patch && patch.name !== undefined ? patch.name : room.title,
-          description,
-        });
-        await this.commitDirectRoom(replacement);
-        return 'applied';
-      },
-    );
-    this.sources.set(key, {
-      binding,
-      source,
-      admissionMode: options.admissionMode,
-      roomId: binding.routeSelection.selectedRoomParam,
-    });
-    this.playgroundSourceCorrelations.set(key, {
-      binding,
-      roomId: binding.routeSelection.selectedRoomParam,
-    });
-    return source;
   }
 
   dispose(): void {
-    this.unsubscribeRegistry();
-    for (const { source } of this.sources.values()) source.dispose();
-    this.sources.clear();
-    this.playgroundSourceCorrelations.clear();
-    this.ownerGenerationListeners.clear();
-  }
-
-  subscribeOwnerGeneration(listener: (ownerGeneration: string) => void): () => void {
-    this.ownerGenerationListeners.add(listener);
-    if (this.ownerGenerationValue !== undefined) listener(this.ownerGenerationValue);
-    return () => this.ownerGenerationListeners.delete(listener);
-  }
-
-  handle(context: AgentConversationShellCommandContext): ChatroomCommandIntent | undefined {
-    const key = `${context.binding.bindingId}:${context.binding.ownerGeneration}:${context.generation}`;
-    const active = this.sources.get(key);
-    if (active === undefined) return undefined;
-
-    if (context.scope === 'approval') {
-      const decision = context.command.id === CHATROOM_COMMAND_APPROVAL_APPROVE
-        ? 'approved'
-        : context.command.id === CHATROOM_COMMAND_APPROVAL_DENY
-        ? 'denied'
-        : context.command.id === CHATROOM_COMMAND_APPROVAL_CANCEL
-        ? 'cancelled'
-        : undefined;
-      const roomId = active.binding.routeSelection.selectedRoomParam;
-      const room = roomId === undefined ? undefined : this.rooms.get(roomId);
-      const item = room?.items
-        .find(candidate => candidate.itemId === context.itemId);
-      if (
-        decision === undefined || roomId === undefined || item?.kind !== 'approval'
-        || item.state !== 'pending'
-        || !item.actions.some(action =>
-          action.decision === context.command.id.split('.').at(-1)
-          && action.command.id === context.command.id
-        )
-      ) return undefined;
-      const playgroundApproval = room?.playgroundAgentApprovals
-        ?.find(candidate => candidate.itemId === item.itemId && candidate.approvalId === item.approvalId);
-      if (playgroundApproval !== undefined) {
-        return {
-          kind: 'playground-approval-decision',
-          roomId,
-          itemId: item.itemId,
-          decision,
-          operationId: approvalDecisionOperationId(
-            roomId,
-            item.runId,
-            item.turn,
-            item.approvalId,
-            decision,
-          ),
-        };
-      }
-      return {
-        kind: 'approval-decision',
-        roomId,
-        runId: item.runId,
-        turn: item.turn,
-        approvalId: item.approvalId,
-        decision,
-      };
-    }
-    if (context.scope !== 'composer-submit' || context.command.id !== CHATROOM_COMMAND_SUBMIT) return undefined;
-
-    const selectedRoomId = active.binding.routeSelection.selectedRoomParam;
-    const intent = this.submitMessage(
-      selectedRoomId,
-      context.submitPayload,
-      context.binding.bindingId,
-      context.generation,
-    );
-    if (intent.kind === 'send-message' && selectedRoomId === undefined) {
-      active.roomId = intent.roomId;
-      active.source.replace(createRoomConversationModel(this.rooms.get(intent.roomId)!));
-    }
-    return intent;
+    this.pending.splice(0);
   }
 
   /** Direct-page submit seam. It owns Room mutation, never a Host Shell binding. */
@@ -288,41 +127,6 @@ export class ChatroomConversationController {
     };
     this.pending.push(intent);
     return intent;
-  }
-
-  selectedRoomId(
-    context: Readonly<{
-      binding: { readonly bindingId: string; readonly ownerGeneration: string; };
-      generation: string;
-    }>,
-  ): string | undefined {
-    return this.sources.get(
-      `${context.binding.bindingId}:${context.binding.ownerGeneration}:${context.generation}`,
-    )?.roomId;
-  }
-
-  /** Versioned Shell sources never downgrade a composer submit to v6/v7 admission. */
-  requiresAdmissionOrigin(
-    context: Readonly<{
-      binding: { readonly bindingId: string; readonly ownerGeneration: string; };
-      generation: string;
-    }>,
-  ): boolean {
-    return this.sources.get(
-      `${context.binding.bindingId}:${context.binding.ownerGeneration}:${context.generation}`,
-    )?.admissionMode !== undefined;
-  }
-
-  /** The exact public Shell admission contract selected for this live source. */
-  composerAdmissionMode(
-    context: Readonly<{
-      binding: { readonly bindingId: string; readonly ownerGeneration: string; };
-      generation: string;
-    }>,
-  ): ChatroomComposerAdmissionMode | undefined {
-    return this.sources.get(
-      `${context.binding.bindingId}:${context.binding.ownerGeneration}:${context.generation}`,
-    )?.admissionMode;
   }
 
   /**
@@ -368,48 +172,9 @@ export class ChatroomConversationController {
       }
       return { status: 'available', room, run, member };
     }
-    const key = `${correlation.bindingId}:${correlation.ownerGeneration}:${correlation.generation}`;
-    const source = this.sources.get(key) ?? this.playgroundSourceCorrelations.get(key);
-    if (source === undefined) {
-      const sameBinding = [...this.playgroundSourceCorrelations.values()].filter(candidate =>
-        candidate.binding.bindingId === correlation.bindingId
-      );
-      if (sameBinding.some(candidate => candidate.binding.ownerGeneration === correlation.ownerGeneration)) {
-        return { status: 'unavailable', code: 'generation-invalid' };
-      }
-      return {
-        status: 'unavailable',
-        code: sameBinding.length === 0 ? 'stale-binding' : 'retired',
-      };
-    }
-    if (
-      source.roomId !== correlation.roomId
-      || source.binding.routeSelection.selectedRoomParam !== correlation.roomId
-    ) {
-      return { status: 'unavailable', code: 'correlation-invalid' };
-    }
-    const room = this.rooms.get(correlation.roomId);
-    if (room === undefined) {
-      return {
-        status: 'unavailable',
-        code: this.seenRoomIds.has(correlation.roomId) ? 'deleted' : 'missing',
-      };
-    }
-    if (room.archived) return { status: 'unavailable', code: 'archived' };
-    const member = room.memberships.find(candidate => candidate.memberId === correlation.memberId);
-    const run = room.runs.find(candidate => candidate.runId === correlation.runId);
-    if (member === undefined || run?.memberId !== member.memberId) {
-      return { status: 'unavailable', code: 'correlation-invalid' };
-    }
-    const hasRuntimeIdentity = run.sessionId !== undefined
-      || (run.taskBinding?.state === 'active' && run.detailsUrl !== undefined);
-    if (
-      this.isRunLocallyUnavailable(room.id, run.runId) || !hasRuntimeIdentity
-      || (run.presence.state !== 'joined' && run.presence.state !== 'ready')
-    ) {
-      return { status: 'unavailable', code: 'retired' };
-    }
-    return { status: 'available', room, run, member };
+    // Shell bindings no longer establish runtime authority. Only an exact
+    // persisted Session association can authorize Playground Room access.
+    return { status: 'unavailable', code: 'stale-binding' };
   }
 
   planPlaygroundMessage(
@@ -601,33 +366,6 @@ export class ChatroomConversationController {
       return;
     }
     await this.persistDirectRoom(room);
-  }
-
-  private modelFor(binding: Readonly<AgentConversationShellBinding>): ChatroomConversationModel {
-    const roomId = binding.routeSelection.selectedRoomParam;
-    const room = roomId === undefined ? undefined : this.rooms.get(roomId);
-    return room === undefined
-      ? createNoRoomConversationModel()
-      : createRoomConversationModel(
-        room,
-        runId => this.isRunLocallyUnavailable(room.id, runId),
-      );
-  }
-
-  private refreshRoom(roomId: string): void {
-    for (const active of this.sources.values()) {
-      if (active.roomId === roomId) {
-        const room = this.rooms.get(roomId);
-        active.source.replace(
-          room === undefined
-            ? createNoRoomConversationModel()
-            : createRoomConversationModel(
-              room,
-              runId => this.isRunLocallyUnavailable(room.id, runId),
-            ),
-        );
-      }
-    }
   }
 
   private createRoomWithFirstMessage(text: string): {
