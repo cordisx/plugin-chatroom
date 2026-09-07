@@ -15,7 +15,7 @@ test('prefers the Host-owned Shell and retains the lazy React Room page only as 
   ]);
 
   assert.match(entry, /selectChatroomPageMount/u);
-  assert.match(surface, /registerSourceV11/u);
+  assert.match(surface, /registerSourceV12/u);
   assert.match(surface, /mode: 'page-composer-v2'/u);
   assert.match(entry, /admissionMode: 'v9'/u);
   assert.match(entry, /ctx\.pages\.register\(page, pageMount\)/u);

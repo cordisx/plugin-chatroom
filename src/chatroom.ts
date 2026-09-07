@@ -20,7 +20,7 @@ const avatarDevelopmentDependencies = () =>
 void avatarDevelopmentDependencies;
 
 import { ChatroomAgentSessionController } from './agent-session-controller.js';
-import { ChatroomAgentSessionConversationSourceV11 } from './agent-session-conversation-source-v11.js';
+import { ChatroomAgentSessionConversationSourceV12 } from './agent-session-conversation-source-v12.js';
 import { v3BindingFor } from './agent-session-conversation-source.js';
 import {
   CHATROOM_COMMAND_APPROVAL_APPROVE,
@@ -490,12 +490,13 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     (binding: AgentConversationShellBindingV9) => {
       const domain = controller.createSource(v3BindingFor(binding), { admissionMode: 'v9' });
       let unsubscribeSettings = () => {};
-      const source = new ChatroomAgentSessionConversationSourceV11(
+      const source = new ChatroomAgentSessionConversationSourceV12(
         binding,
         domain,
         agentSession,
         composerSettings.current,
         () => unsubscribeSettings(),
+        ctx.agentSessionDetailReferences,
       );
       unsubscribeSettings = composerSettings.subscribe(policy => source.setComposerShortcutPolicy(policy));
       return source;

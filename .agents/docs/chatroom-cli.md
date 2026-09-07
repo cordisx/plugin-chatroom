@@ -70,8 +70,8 @@ Other unavailable CLI targets report a target error instead of falling through
 to the legacy retire-and-create path. Testing the recovery helper alone misses
 this earlier UI routing decision.
 
-The actual Host Shell uses `ChatroomAgentSessionConversationSourceV11` registered
-through `registerSourceV11`. Its predecessor source type only accepts SessionEvent
+The actual Host Shell uses `ChatroomAgentSessionConversationSourceV12` registered
+through `registerSourceV12`. Its predecessor source type only accepts SessionEvent
 or acknowledgement messages; do not forge an event sequence or acknowledgement
 to display a CLI fact. The v10 `plugin-command` source expresses the original Room message ID,
 identity, operation, and sequence without inventing a SessionEvent.
@@ -82,6 +82,21 @@ it. This preserves its original Room message ID, text, timestamp, and sequence;
 The original Room document is never rewritten for this display. Real Session
 replay takes precedence using its validated Room item association, and known
 surface replacements fence superseded history. Matching text is not a dedupe key.
+
+Shell v12 distinguishes Room session associations from loaded Session
+observations. `associatedSessions` is derived read-only from persisted Room runs,
+excluding exact Session IDs already in `activeRuns` and retaining at most the
+latest 64 associations in Room order, as required by the public snapshot bound. Its `unloaded` state means
+only that this Room source has no loaded Session projection; it does not assert
+Host-global loadedness, native execution status, or that recovery will succeed. The current Host runtime
+continues to own actual running status.
+
+Details come solely from `agentSessionDetailReferences.get({ sessionId })`.
+Only an accepted result for that exact Session supplies an opaque navigation
+reference. Missing or denied detail access leaves the association visible
+without a link. This display path never acquires, resumes, sends, synthesizes
+Session events, writes the Room, or constructs a native thread URL. Source
+revision/disposal fences prevent a late lookup from publishing a stale selection.
 
 Room IDs are local to the owner home/profile/source. Two homes containing
 `room-1` can reference different Sessions and different real replies; restoring
