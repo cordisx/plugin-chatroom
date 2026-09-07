@@ -110,3 +110,12 @@ export function validateRoomTasks(room: Pick<Room, 'id' | 'memberships' | 'runs'
     }
   }
 }
+
+/** A root task anchors human approval on its own Session; children retain their direct reports-to authority. */
+export function taskApprovalAuthorityMemberId(room: Room, run: RoomRun): string | undefined {
+  const member = room.memberships.find(value => value.memberId === run.memberId);
+  if (member?.reportsToMemberId !== undefined) return member.reportsToMemberId;
+  return member?.role === 'leader' && run.delegation !== undefined && 'kind' in run.delegation.source
+    ? member.memberId
+    : undefined;
+}

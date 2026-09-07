@@ -1,3 +1,4 @@
+import type { AgentTaskApprovals, AgentTaskOwnership } from '@cordisx/protocol/agent-task-binding/v1';
 import { createRoomTaskBootstrap } from './room-task-bootstrap.js';
 import type { AgentTasks } from '@cordisx/protocol/agent-task/v1';
 import { ChatroomCliBindings } from './room-cli-bindings.js';
@@ -52,6 +53,7 @@ export type ChatroomMessages =
   >
   & {
     'task.start': undefined;
+    'task.recover': undefined;
     'room.prepare': undefined;
     'members.mention': { readonly name: string; };
     'navigation.title': undefined;
@@ -221,10 +223,29 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   );
   const agentTools: AgentTools | undefined = ctx.reflect.get('agentTools', false);
   const agentTasks: AgentTasks | undefined = ctx.reflect.get('agentTasks', false);
-  const collaboration = new ChatroomCliBindings(agentTools, roomStore, ctx.settings, agentTasks);
+  const taskApprovals: AgentTaskApprovals | undefined = ctx.reflect.get('agentTaskApprovals', false);
+  const taskOwnership: AgentTaskOwnership | undefined = ctx.reflect.get('agentTaskOwnership', false);
+  const taskProvider: AgentTasks | undefined =
+    agentTasks === undefined || taskApprovals === undefined || taskOwnership === undefined
+      ? undefined
+      : {
+        createAndSubmit: request => taskApprovals.createAndSubmit(request),
+        query: request => agentTasks.query(request),
+      };
+  const collaboration = new ChatroomCliBindings(
+    agentTools,
+    roomStore,
+    ctx.settings,
+    taskProvider,
+    taskApprovals === undefined ? undefined : request => taskApprovals.recover(request),
+  );
   ctx.commands.register(
     { id: 'task.start', title: message('task.start', 'Start Leader task'), public: true },
     command => collaboration.startTask(command.arguments, command.signal),
+  );
+  ctx.commands.register(
+    { id: 'task.recover', title: message('task.recover', 'Retry task setup'), public: true },
+    command => collaboration.recoverTask(command.arguments, command.signal),
   );
   ctx.effect(() => () => {
     void collaboration.dispose();
@@ -235,6 +256,15 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     roomStore,
   );
   try {
+    if (taskOwnership !== undefined) agentSession.setTaskOwnership(taskOwnership);
+    if (taskApprovals !== undefined) {
+      const unregister = taskApprovals.register({ commandId: 'send' }, {
+        resolveRequest: (question, binding, signal) => agentSession.resolveTaskApproval(question, binding, signal),
+        answerAuthority: (question, binding, signal) => agentSession.answerTaskAuthority(question, binding, signal),
+        answerLegacy: (question, binding, signal) => agentSession.answerTaskLegacy(question, binding, signal),
+      });
+      ctx.effect(() => unregister, 'chatroom.task-approvals');
+    }
     await agentSession.hydrate();
   } catch (error) {
     await agentSession.dispose();
@@ -248,6 +278,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     default: true,
     messages: {
       'task.start': 'Start Leader task',
+      'task.recover': 'Retry task setup',
       'room.prepare': 'Prepare Room',
       ...chatroomDetailsEnglish,
       ...chatroomPageEnglish,
@@ -326,6 +357,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     locale: 'zh-CN',
     messages: {
       'task.start': '启动 Leader 任务',
+      'task.recover': '重试任务准备',
       'room.prepare': '准备房间',
       ...chatroomDetailsChinese,
       ...chatroomPageChinese,

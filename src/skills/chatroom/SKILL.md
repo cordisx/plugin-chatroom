@@ -76,3 +76,14 @@ The child uses `send` for acceptance, meaningful checkpoints, blockers and its
 result. The Leader uses `query` and the Room reports to follow up. Automatic
 Leader notifications are not provided. Approval decisions and external chat
 still require separately available authorized tools.
+
+If setup failed after creating a known task Session, inspect `query` first.
+`recover --operation <original-id>` explicitly asks the Host to retry only a
+proven failure while installing approvals before submission, in the same live
+Session. It does not create or resume. An uncertain create/submission or a
+restart without a recoverable live handle remains unavailable; do not change
+operation IDs or resend task text to work around that result.
+
+When execution requests approval, wait for the Room's human decision. A root
+Leader's own Session may carry that approval; this never authorizes the model
+to approve itself. Child approvals follow the exact source Leader task.

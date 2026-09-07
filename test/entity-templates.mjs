@@ -208,7 +208,7 @@ test('package pins the formal Protocol and exact experimental Host task candidat
   );
   assert.equal(
     packageJson.devDependencies.cordisx,
-    'github:cordisx/cordisx#697585244c8af56ba1fa092e8f3e68a6fe761859',
+    'github:cordisx/cordisx#78ed068887ccc0ea768d40cbf78a087403518dd0',
   );
   assert.equal(packageJson.main, packageManifest.entry);
   assert.equal(packageManifest.entry, './dist/runtime/chatroom.js');
