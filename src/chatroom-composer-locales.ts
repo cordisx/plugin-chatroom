@@ -1,5 +1,7 @@
 export const chatroomComposerEn = {
   'composer.label': 'Message',
+  'composer.attachment-unavailable': 'Add attachment (unavailable)',
+  'composer.message-too-long': 'Messages can contain up to 65,536 characters.',
   'composer.placeholder': 'Message the room, or @ a member…',
   'composer.members': 'Mention a member',
   'composer.no-members': 'No matching members',
@@ -16,6 +18,8 @@ export const chatroomComposerEn = {
 
 export const chatroomComposerZhCN = {
   'composer.label': '消息',
+  'composer.attachment-unavailable': '添加附件（暂不可用）',
+  'composer.message-too-long': '消息最多可包含 65,536 个字符。',
   'composer.placeholder': '发送消息，或 @ 一位成员…',
   'composer.members': '@ 成员',
   'composer.no-members': '没有匹配的成员',

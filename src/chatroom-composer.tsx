@@ -6,41 +6,47 @@ import type { ChatroomPageSource } from './chatroom-page-source.js';
 import { CHATROOM_COMMAND_SUBMIT } from './conversation-model.js';
 import './chatroom-composer.css';
 
+export interface ChatroomComposerParticipant extends ChatroomAvatarParticipant {
+  /** Exact Room membership alias supplied by the page, not a participant ID inference. */
+  readonly mentionAlias?: string;
+}
+
 export interface ChatroomComposerProps {
   readonly source: ChatroomPageSource;
   readonly shortcutPolicy: 'enter' | 'mod-enter';
   readonly pageComposer?: CordisXReactPageProps['pageComposer'];
   readonly signal: AbortSignal;
   readonly t: (key: string) => string;
-  readonly participants: readonly ChatroomAvatarParticipant[];
+  readonly participants: readonly ChatroomComposerParticipant[];
   readonly mentionRequest?: { readonly participantId: string; readonly sequence: number; };
 }
 
-const MAX_DRAFT = 32_768;
+const MAX_DRAFT = 65_536;
 
 /** Match the resident editor: Shift+Enter always inserts a line break. */
 export function composerShouldSubmit(
   event: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'altKey' | 'ctrlKey' | 'metaKey'>,
   policy: ChatroomComposerProps['shortcutPolicy'],
 ): boolean {
-  return event.key === 'Enter' && !event.shiftKey && !event.altKey
+  return event.key === 'Enter' && !event.shiftKey
     && (policy === 'enter' || event.ctrlKey || event.metaKey);
 }
 
 /** The Room parser consumes leading whitespace-delimited targets only. */
 export function composerMentionToken(
-  participant: ChatroomAvatarParticipant,
-  participants: readonly ChatroomAvatarParticipant[],
+  participant: ChatroomComposerParticipant,
+  participants: readonly ChatroomComposerParticipant[],
 ): string | undefined {
-  const name = participant.name.trim();
   const safe = (value: string) => value !== '' && !/[\s/@]/u.test(value);
-  const uniqueName = participants.filter(candidate =>
-    candidate.name.trim().toLowerCase() === name.toLowerCase()
-    || candidate.id.toLowerCase() === name.toLowerCase()
-  ).length === 1;
-  if (safe(name) && uniqueName) return `@${name}`;
-  if (safe(participant.id)) return `@${participant.id}`;
-  return undefined;
+  const unique = (value: string) =>
+    participants.filter(candidate =>
+      candidate.name.trim().toLowerCase() === value.toLowerCase()
+      || candidate.mentionAlias?.toLowerCase() === value.toLowerCase()
+    ).length === 1;
+  const alias = participant.mentionAlias;
+  if (alias !== undefined && safe(alias) && unique(alias)) return `@${alias}`;
+  const name = participant.name.trim();
+  return safe(name) && unique(name) ? `@${name}` : undefined;
 }
 
 export function ChatroomComposer(
@@ -62,7 +68,7 @@ export function ChatroomComposer(
   const queryRange = useRef<readonly [number, number] | undefined>(undefined);
   const id = useId();
   const unavailable = pageComposer === undefined || aborted;
-  const disabled = sending || unavailable;
+  const disabled = unavailable;
   const matches = query === undefined
     ? []
     : participants.filter(participant =>
@@ -95,8 +101,8 @@ export function ChatroomComposer(
     }
   }, [draft, query, disabled]);
 
-  const insertMention = (participant: ChatroomAvatarParticipant) => {
-    if (disabled || busy.current || composing.current || signal.aborted) return;
+  const insertMention = (participant: ChatroomComposerParticipant) => {
+    if (disabled || composing.current || signal.aborted) return;
     const token = composerMentionToken(participant, participants);
     if (token === undefined) {
       setError(t('composer.mention-unavailable'));
@@ -107,7 +113,7 @@ export function ChatroomComposer(
     const leading = content.match(/^(?:\s*@\S+\s+)*/u)?.[0] ?? '';
     const existing = [...leading.matchAll(/@\S+/gu)].find(match => match[0] === token);
     const next = existing === undefined ? `${token} ${content.trimStart()}` : content;
-    if (next.length > MAX_DRAFT) {
+    if ([...next].length > MAX_DRAFT) {
       setError(t('composer.too-long'));
       return;
     }
@@ -151,6 +157,11 @@ export function ChatroomComposer(
 
   const send = async () => {
     if (busy.current || disabled || composing.current || draft.trim() === '' || signal.aborted) return;
+    if ([...draft].length > MAX_DRAFT) {
+      setError(t('composer.message-too-long'));
+      return;
+    }
+    const submittedDraft = draft;
     busy.current = true;
     setSending(true);
     setQuery(undefined);
@@ -171,9 +182,8 @@ export function ChatroomComposer(
         setError(t('composer.send-failed'));
         return;
       }
-      setDraft('');
+      setDraft(current => current === submittedDraft ? '' : current);
       setNotice(t('composer.sent'));
-      pendingSelection.current = [0, 0];
     } catch {
       if (mounted.current && !signal.aborted) setError(t('composer.send-failed'));
     } finally {
@@ -252,7 +262,6 @@ export function ChatroomComposer(
           ref={input}
           value={draft}
           rows={1}
-          maxLength={MAX_DRAFT}
           placeholder={t('composer.placeholder')}
           aria-label={t('composer.label')}
           aria-describedby={`${id}-hint ${id}-status`}
@@ -281,7 +290,11 @@ export function ChatroomComposer(
         />
       </div>
       <div className="cx-chatroom-input__actions">
-        <AttachmentPlaceholder size={32} />
+        <AttachmentPlaceholder
+          size={32}
+          aria-label={t('composer.attachment-unavailable')}
+          title={t('composer.attachment-unavailable')}
+        />
         <Button
           type="button"
           disabled={disabled || participants.length === 0}
@@ -296,7 +309,7 @@ export function ChatroomComposer(
           @
         </Button>
         <span className="cx-chatroom-input__spacer" />
-        <Button type="submit" variant="primary" disabled={disabled || draft.trim() === ''}>
+        <Button type="submit" variant="primary" disabled={disabled || sending || draft.trim() === ''}>
           {sending ? t('composer.sending') : t('composer.send')}
         </Button>
       </div>
