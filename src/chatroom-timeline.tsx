@@ -42,15 +42,18 @@ function ParticipantAvatar({ participant, onParticipantClick, onOpenActions }: {
     );
 }
 
-function MessageItem({ item, participants, t, onParticipantClick, onOpenActions, onCopy, copyAvailable }: {
-  readonly item: Extract<ChatroomPageItem, { readonly kind: 'message'; }>;
-  readonly participants: readonly PageParticipant[];
-  readonly t: Translate;
-  readonly onParticipantClick?: (participantId: string) => void;
-  readonly onOpenActions: (participant: PageParticipant, event: ActionEvent, text?: string) => void;
-  readonly onCopy: (text: string, trigger: HTMLElement) => void;
-  readonly copyAvailable: boolean;
-}) {
+function MessageItem(
+  { item, participants, t, onParticipantClick, onOpenActions, onCopy, copyAvailable, runtimeRunning = false }: {
+    readonly item: Extract<ChatroomPageItem, { readonly kind: 'message'; }>;
+    readonly participants: readonly PageParticipant[];
+    readonly t: Translate;
+    readonly onParticipantClick?: (participantId: string) => void;
+    readonly onOpenActions: (participant: PageParticipant, event: ActionEvent, text?: string) => void;
+    readonly onCopy: (text: string, trigger: HTMLElement) => void;
+    readonly copyAvailable: boolean;
+    readonly runtimeRunning?: boolean;
+  },
+) {
   const author = display(item.author.displayName, t);
   const body = item.body.map(block => display(block.text, t)).join('\n\n');
   const human = item.author.role === 'human';
@@ -104,7 +107,7 @@ function MessageItem({ item, participants, t, onParticipantClick, onOpenActions,
             ⋯
           </button>
           {item.deliveryState === 'failed' && <span>{t('timeline.delivery.failed')}</span>}
-          {item.runState === 'running' && <span>{t('timeline.run.running')}</span>}
+          {runtimeRunning && <span>{t('timeline.run.running')}</span>}
         </div>
         {item.reactions.length === 0 ? null : (
           <div className="cx-chatroom-message__reactions">
@@ -277,7 +280,8 @@ function ApprovalItem({ item, participant, participants, roomId, source, t, onPa
 }
 
 export function ChatroomTimeline(
-  { items, participants, roomId, source, t, onParticipantClick, onMentionParticipant, copyText }: {
+  { items, participants, roomId, source, t, onParticipantClick, onMentionParticipant, copyText, activeRuns = [] }: {
+    readonly activeRuns?: import('./chatroom-page-source.js').ChatroomPageSnapshot['activeRuns'];
     readonly items: readonly ChatroomPageItem[];
     readonly participants: readonly PageParticipant[];
     readonly roomId?: string;
@@ -501,6 +505,11 @@ export function ChatroomTimeline(
                   <MessageItem
                     onCopy={(text, trigger) => void copy(text, trigger)}
                     copyAvailable={canCopy}
+                    runtimeRunning={typeof item.source === 'object' && item.source.kind === 'session-event'
+                      && activeRuns.some(run =>
+                        typeof item.source === 'object' && item.source.kind === 'session-event'
+                        && run.sessionId === item.source.sessionId && run.lifecycle.phase === 'running'
+                      )}
                     key={item.itemId}
                     item={item}
                     participants={participants}

@@ -253,6 +253,7 @@ export function ChatroomPage(
           <ChatroomTimeline
             key={roomId ?? 'new'}
             items={snapshot.items}
+            activeRuns={snapshot.activeRuns}
             participants={participants}
             roomId={snapshot.room?.id}
             source={source}
