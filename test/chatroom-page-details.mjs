@@ -90,3 +90,59 @@ test('missing historical capability cannot silently use current-only navigation'
   });
   assert.equal(await details.openSession(room, 'person-a', 's2'), false);
 });
+
+test('settings navigation revalidates exact current membership and never guesses an Agent target', async () => {
+  const calls = [];
+  const rooms = new Map([[room.id, room]]);
+  const details = new ChatroomPageDetails({
+    rooms: { rooms },
+    entitySettings: {
+      async get(request) {
+        calls.push(['get', request]);
+        return { status: 'available' };
+      },
+      async open(request) {
+        calls.push(['open', request]);
+        return { status: 'accepted', code: 'opened' };
+      },
+    },
+  });
+  assert.equal(await details.entitySettingsAvailable(room, 'person-a'), true);
+  assert.equal(await details.openEntitySettings(room, 'person-a'), true);
+  assert.deepEqual(calls, [
+    ['get', { identity: room.memberships[0].definition }],
+    ['open', { identity: room.memberships[0].definition }],
+  ]);
+  rooms.delete(room.id);
+  assert.equal(await details.openEntitySettings(room, 'person-a'), false);
+  assert.equal(calls.length, 2);
+});
+
+test('Room header actions use current owner commands and Host-generated links only', async () => {
+  const rooms = new Map([[room.id, { ...room, archived: false }]]);
+  const calls = [];
+  const canonical = 'cordisx://host-returned-opaque-link';
+  const details = new ChatroomPageDetails({
+    rooms: { rooms },
+    roomLink: async roomId => {
+      calls.push(['link', roomId]);
+      return canonical;
+    },
+    commands: {
+      execute: async command => {
+        calls.push(command);
+        return { status: 'applied' };
+      },
+    },
+  });
+  assert.equal(await details.roomLink(room.id), canonical);
+  await details.executeRoomAction(room.id, 'pin');
+  assert.equal(calls[1].arguments.roomId, room.id);
+  await assert.rejects(details.executeRoomAction(room.id, 'restore'));
+  await assert.rejects(details.executeRoomAction(room.id, 'copy-link'));
+  rooms.set(room.id, { ...room, archived: true });
+  await details.executeRoomAction(room.id, 'restore');
+  rooms.delete(room.id);
+  assert.equal(await details.roomLink(room.id), undefined);
+  await assert.rejects(details.executeRoomAction(room.id, 'delete'));
+});

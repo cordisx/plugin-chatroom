@@ -696,3 +696,116 @@ test('approval body copy, diagnostics, mention, individual decision availability
   assert.equal(all(tree, node => node.type === 'Button').length, 0);
   harness.unmount();
 });
+
+test('new task entry distinguishes accepted creation from navigation failure', async () => {
+  const harness = await componentHarness('chatroom-new-task-entry.tsx', {
+    './chatroom-new-task.js': { ChatroomNewTask: 'NewTask' },
+  });
+  const calls = [];
+  const props = {
+    t,
+    details: {
+      taskLeaders: () => [{ memberId: 'lead', label: 'Leader' }],
+      startTask: async (roomId, input) => {
+        calls.push([roomId, input]);
+        return { status: 'accepted', roomId: 'created-room' };
+      },
+    },
+    navigation: {
+      navigate: async () => {
+        throw new Error('route unavailable');
+      },
+    },
+  };
+  const input = { text: 'Task', to: 'lead', cwd: '/project' };
+  let tree = harness.render(harness.exports.ChatroomNewTaskEntry, props);
+  assert.deepEqual(await all(tree, node => node.type === 'NewTask')[0].props.onStart(input), { status: 'accepted' });
+  tree = harness.render(harness.exports.ChatroomNewTaskEntry, props);
+  assert.deepEqual(calls, [[undefined, input]]);
+  assert.equal(all(tree, node => node.props.role === 'status')[0].props.children, 'task.start.open-failed');
+});
+
+test('Room settings rejects backend-invalid names, prevents duplicate save and closes only on success', async () => {
+  const harness = await componentHarness('chatroom-room-settings.tsx', {
+    './room-profile.js': { CHATROOM_ROOM_NAME_MAX_LENGTH: 200, CHATROOM_ROOM_DESCRIPTION_MAX_LENGTH: 2000 },
+  });
+  let name = 'Room';
+  const saved = [];
+  let finish;
+  let closed = 0;
+  const props = {
+    roomId: 'room',
+    t,
+    onSaved: () => closed++,
+    details: {
+      profile: () => ({ revision: 2, room: { title: name, description: '' } }),
+      saveProfile: (...args) => {
+        saved.push(args);
+        return new Promise(resolve => finish = resolve);
+      },
+    },
+  };
+  let tree = harness.render(harness.exports.ChatroomRoomSettings, props);
+  harness.flush();
+  tree = harness.render(harness.exports.ChatroomRoomSettings, props);
+  const input = () => all(tree, node => node.type === 'input')[0];
+  input().props.onChange({ currentTarget: { value: '😀'.repeat(201) } });
+  tree = harness.render(harness.exports.ChatroomRoomSettings, props);
+  all(tree, node => node.type === 'form')[0].props.onSubmit({ preventDefault() {} });
+  assert.equal(saved.length, 0);
+  tree = harness.render(harness.exports.ChatroomRoomSettings, props);
+  assert.equal(all(tree, node => node.props.role === 'alert')[0].props.children, 'room.settings.name-invalid');
+  input().props.onChange({ currentTarget: { value: 'Updated' } });
+  tree = harness.render(harness.exports.ChatroomRoomSettings, props);
+  const form = all(tree, node => node.type === 'form')[0];
+  const first = form.props.onSubmit({ preventDefault() {} });
+  const second = form.props.onSubmit({ preventDefault() {} });
+  assert.equal(saved.length, 1);
+  assert.equal(closed, 0);
+  finish();
+  await Promise.all([first, second]);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(closed, 1);
+});
+
+test('Room delete requires confirmation and blocks same-turn duplicate execution', async () => {
+  const action = {
+    id: 'delete',
+    kind: 'command',
+    disabled: { value: false },
+    tone: 'danger',
+    label: { key: 'delete' },
+    confirmation: { title: { key: 'title' }, description: { key: 'description' }, confirmLabel: { key: 'confirm' } },
+    feedback: { success: { key: 'deleted' }, failure: { key: 'failed' } },
+  };
+  const harness = await componentHarness('chatroom-room-actions.tsx', {
+    './room-navigation.js': { roomActions: () => [action] },
+  });
+  const calls = [];
+  let finish;
+  const props = {
+    room: { id: 'room', archived: false },
+    t,
+    details: {
+      executeRoomAction: (...args) => {
+        calls.push(args);
+        return new Promise(resolve => finish = resolve);
+      },
+    },
+    onDeleted: async () => calls.push('navigated'),
+  };
+  let tree = harness.render(harness.exports.ChatroomRoomActions, props);
+  all(tree, node => node.props['aria-haspopup'] === 'menu')[0].props.onClick();
+  tree = harness.render(harness.exports.ChatroomRoomActions, props);
+  all(tree, node => node.props.role === 'menuitem')[0].props.onClick({ currentTarget: {} });
+  assert.deepEqual(calls, []);
+  tree = harness.render(harness.exports.ChatroomRoomActions, props);
+  const dialog = all(tree, node => node.type === 'dialog')[0];
+  const buttons = all(dialog, node => node.type === 'Button');
+  buttons[1].props.onClick({ currentTarget: {} });
+  buttons[1].props.onClick({ currentTarget: {} });
+  assert.deepEqual(calls, [['room', 'delete']]);
+  finish();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(calls, [['room', 'delete'], 'navigated']);
+});

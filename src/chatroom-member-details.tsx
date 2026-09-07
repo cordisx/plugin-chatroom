@@ -1,3 +1,4 @@
+import { ChatroomEntitySettings } from './chatroom-entity-settings.js';
 import { useEffect, useState } from 'cordisx/react';
 import { Button, MarkdownViewer } from 'cordisx/ui';
 import type { CordisXReactPageProps } from 'cordisx/contracts';
@@ -71,6 +72,7 @@ export function ChatroomMemberDetails({ snapshot, participantId, details, t }: {
           <p>{member.title ?? t(`member.role.${member.role}`)}</p>
         </div>
       </div>
+      <ChatroomEntitySettings room={room} participantId={participantId} details={details} t={t} />
       <section>
         <h3>{t('identity.introduction')}</h3>
         {loading

@@ -1,3 +1,4 @@
+import { ChatroomNewTaskEntry } from './chatroom-new-task-entry.js';
 import {
   type CSSProperties,
   useCallback,
@@ -225,6 +226,15 @@ export function ChatroomPage(
             : <p>{snapshot.room?.description ?? props.t('page.description')}</p>}
         </div>
         <div className="cx-chatroom-header__actions">
+          {details !== undefined && (
+            <ChatroomNewTaskEntry
+              key={roomId ?? 'new'}
+              roomId={roomId}
+              details={details}
+              navigation={props.navigation}
+              t={props.t}
+            />
+          )}
           <button
             ref={membersTrigger}
             type="button"

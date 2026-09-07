@@ -45,7 +45,7 @@ function feedback(successKey: string, success: string, failureKey: string, failu
   return { success: localized(successKey, success), failure: localized(failureKey, failure) };
 }
 
-function roomActions(room: Room, mode: ChatroomRoomNavigationMode): NavigationCollectionActions {
+export function roomActions(room: Room, mode: ChatroomRoomNavigationMode): NavigationCollectionActions {
   const roomArguments = { roomId: room.id } as const;
   const direct = mode === 'active'
     ? [{

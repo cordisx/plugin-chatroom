@@ -1,3 +1,4 @@
+import { chatroomNewTaskEn, chatroomNewTaskZhCN } from './chatroom-new-task-locales.js';
 import type { AgentTaskApprovals, AgentTaskOwnership } from '@cordisx/protocol/agent-task-binding/v1';
 import { createRoomTaskBootstrap } from './room-task-bootstrap.js';
 import type { AgentTasks } from '@cordisx/protocol/agent-task/v1';
@@ -24,6 +25,7 @@ import { ChatroomConversationController } from './conversation-source.js';
 import { ChatroomPageSource } from './chatroom-page-source.js';
 import { chatroomPageChinese, chatroomPageEnglish } from './chatroom-page-locales.js';
 import { chatroomComposerEn, chatroomComposerZhCN } from './chatroom-composer-locales.js';
+import { ChatroomTaskDrafts } from './chatroom-task-draft.js';
 import { ChatroomPageDetails } from './chatroom-page-details.js';
 import { chatroomDetailsChinese, chatroomDetailsEnglish } from './chatroom-details-locales.js';
 import { manifest, roomSessionDetailRoute } from './chatroom-runtime-contract.js';
@@ -46,6 +48,7 @@ import {
 
 export type ChatroomMessages =
   & Record<
+    | keyof typeof chatroomNewTaskEn
     | keyof typeof chatroomDetailsEnglish
     | keyof typeof chatroomComposerEn
     | Exclude<keyof typeof chatroomPageEnglish, 'members.mention'>,
@@ -145,6 +148,7 @@ export const inject = [
   'sessions',
   'agentSessionDetailReferences',
   'agentDetailNavigation',
+  'entitySettingsNavigation',
   'approvals',
   'agentPageAdmissionTargets',
   'agentPageAdmissionReservations',
@@ -281,6 +285,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       'task.recover': 'Retry task setup',
       'room.prepare': 'Prepare Room',
       ...chatroomDetailsEnglish,
+      ...chatroomNewTaskEn,
       ...chatroomPageEnglish,
       ...chatroomComposerEn,
       'navigation.title': 'New room',
@@ -360,6 +365,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       'task.recover': '重试任务准备',
       'room.prepare': '准备房间',
       ...chatroomDetailsChinese,
+      ...chatroomNewTaskZhCN,
       ...chatroomPageChinese,
       ...chatroomComposerZhCN,
       'navigation.title': '新建房间',
@@ -476,6 +482,13 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     pageSource,
     product.sidebarImages,
     new ChatroomPageDetails({
+      entitySettings: ctx.entitySettingsNavigation,
+      roomLink: async roomId => {
+        const result = await ctx.routes.resolveLink?.({ id: 'room', params: { roomId } });
+        return result?.status === 'accepted' ? result.url : undefined;
+      },
+      commands: ctx.commands,
+      tasks: new ChatroomTaskDrafts(roomStore, agent, ctx.commands),
       entities: ctx.entities,
       references: ctx.agentSessionDetailReferences,
       navigation: ctx.agentDetailNavigation,

@@ -35,7 +35,7 @@
 .cx-chatroom-header {
   display: grid;
   min-width: 0;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
+  grid-template-columns: 42px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   padding: 14px 20px;
@@ -54,12 +54,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cx-chatroom-header p,
+.cx-chatroom-header__copy > p,
 .cx-chatroom-header__count {
   color: var(--cx-chatroom-muted);
   font-size: 11px;
 }
-.cx-chatroom-header p {
+.cx-chatroom-header__copy > p {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -111,6 +111,10 @@
 }
 .cx-chatroom-header__actions {
   display: flex;
+  min-width: 0;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  justify-content: end;
   align-items: center;
   gap: 4px;
 }
