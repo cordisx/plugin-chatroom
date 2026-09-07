@@ -55,6 +55,20 @@ Out of scope: host adapters, credentials, external channels, automation,
 application chrome, arbitrary Host DOM access, rich-media messages, and Agent
 execution.
 
+## Start a task
+
+Use **New task** in the Room header to select a Leader, describe the task, and
+enter an absolute working directory (for example `/Users/me/project`). From a
+new Room page, this prepares a Room before starting the task. In an existing
+Room, existing conversations keep their Session and workspace associations.
+Ordinary messages continue through the composer.
+
+A task whose creation result is uncertain retains its input for a retry using
+the same operation. Check the Room task details before changing the request.
+This entry does not select a default directory, change an existing Session's
+workspace, or automatically create a worktree. Native acceptance of the new
+page remains part of the [migration gates](.agents/docs/room-ui-ownership.md).
+
 ## Agent configuration
 
 The optional `team` configuration supplies seed leaders, a team graph, and the

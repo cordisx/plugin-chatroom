@@ -48,6 +48,25 @@ The member's session cards show the existing task projection: assignment,
 resolved working directory when available, creation result, and Agent reports.
 A report is message content and never changes the task's runtime status.
 
+Entity Settings uses the public exact-identity availability/open service. An
+unavailable target stays disabled, and a changed membership cannot redirect an
+old button to another definition. Room header actions reuse the sidebar's
+owner command definitions. Copy link uses the public Host route resolver;
+Chatroom does not manufacture a canonical URL. Deletion requires confirmation.
+
+The explicit new-task form calls the existing `room.prepare` and `task.start`
+commands. It requires a Room Leader, task text and an absolute working directory
+before preparing any Room. Form idempotency is ephemeral; durable task facts
+stay in the Room document. An unknown result retains the operation and payload.
+Only a rejection known to precede task creation permits an edited request, and
+an already prepared Room is reused. This does not mutate existing Sessions or
+infer their workspace. Ordinary sending still uses page composer admission.
+
+The composer uses the public controlled Markdown editor for text editing,
+syntax highlighting, selection, theme and six-line sizing. Chatroom owns its
+compact/expanded form and action layout, mentions and send semantics. It does
+not query or style the editor's private descendants.
+
 ## Styles and delivery
 
 Room components load ordinary CSS alongside their lazy page graph. Their
