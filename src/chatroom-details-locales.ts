@@ -1,0 +1,33 @@
+export const chatroomDetailsEnglish = {
+  'identity.introduction': 'Introduction',
+  'identity.pending': 'Fetching details…',
+  'identity.introduction.unavailable': 'Introduction unavailable',
+  'identity.sessions': 'Sessions',
+  'identity.sessions.empty': 'No sessions yet',
+  'identity.session.untitled': 'Conversation',
+  'identity.session.open-failed': 'Could not open this conversation. Try again.',
+  'member.role.leader': 'Leader',
+  'member.role.member': 'Member',
+  'room.settings.name': 'Room name',
+  'room.settings.description': 'Description',
+  'room.settings.save': 'Save',
+  'room.settings.saved': 'Saved',
+  'room.settings.failed': 'Could not save. The room may have changed. Reopen settings and try again.',
+};
+
+export const chatroomDetailsChinese = {
+  'identity.introduction': '介绍',
+  'identity.pending': '正在获取详情…',
+  'identity.introduction.unavailable': '暂无介绍',
+  'identity.sessions': '会话',
+  'identity.sessions.empty': '暂无会话',
+  'identity.session.untitled': '会话',
+  'identity.session.open-failed': '未能打开此会话，请重试。',
+  'member.role.leader': 'Leader',
+  'member.role.member': '成员',
+  'room.settings.name': '群聊名称',
+  'room.settings.description': '群聊介绍',
+  'room.settings.save': '保存',
+  'room.settings.saved': '已保存',
+  'room.settings.failed': '未能保存，房间可能已更新。请重新打开设置后重试。',
+};
