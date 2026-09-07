@@ -36,9 +36,23 @@ CLI-mode assistant mentions also do not trigger automatic cross-member sends.
 ## Current integration boundaries
 
 The first milestone is a newly created Room/Agent: persist the real run and
-Session, bind tools, then allow the first task. Revoked CLI-bound resume remains
-fail closed until the Host supplies a supported two-phase rebind path. Ordinary
-unbound Agent resume remains independent of that limitation.
+Session, bind tools, then allow the first task. Existing CLI runs use normal
+`session-persisted` resume first. Only an exact `session-unavailable` result plus
+a fresh missing Session lookup permits the inline `AgentSetup` recovery request.
+An existing, identity-matched Session snapshot with `header.isSeeded === true`
+selects the same explicit inline path. Other unavailable, unsupported, denied,
+conflicting, or thrown results never trigger recovery. Pending and ordinary
+non-CLI runs keep their existing path.
+
+Inline recovery obtains the original member revision and complete parent catalog
+from a fresh owner-scoped Entity snapshot. Missing, upgraded, foreign, duplicate,
+cyclic, or digest-mismatched definitions fail closed. Its deterministic recovery
+mutation ID is separate from normal resume, and the Session ID never changes.
+These client-side conditions request recovery; they grant no authority. The Host
+must independently verify the original native mapping, owner/source/profile and
+rendered setup evidence before issuing an owner handle. B creates no historical
+`entity/definition-bound`, turn or message events. A recovery observation ledger
+is new evidence; missing old Host Session history is not reconstructed.
 
 When the Host accepts a same-Session resume, Chatroom verifies the returned
 Session against the current Room run and skips `bindRoomRunSession`. Restoring

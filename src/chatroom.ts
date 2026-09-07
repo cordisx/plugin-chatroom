@@ -237,7 +237,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     void collaboration.dispose();
   }, 'chatroom.cli-tools');
   const agentSession = new ChatroomAgentSessionController(
-    { agents: ctx.agents, sessions: ctx.sessions, approvals: ctx.approvals, collaboration },
+    { agents: ctx.agents, sessions: ctx.sessions, approvals: ctx.approvals, entities: ctx.entities, collaboration },
     agent,
     roomStore,
   );
