@@ -64,15 +64,15 @@ test('history navigation relays an authorized opaque reference and rejects unrel
   const calls = [];
   const details = new ChatroomPageDetails({
     references: {
-      async get(request) {
-        calls.push(['get', request]);
+      async getV2(request) {
+        calls.push(['getV2', request]);
         return { status: 'accepted', sessionId: request.sessionId, target: opaqueTarget };
       },
     },
     navigation: {
-      async open(request) {
+      async openV2(request) {
         assert.equal(request.target, opaqueTarget);
-        calls.push(['open']);
+        calls.push(['openV2']);
         return { status: 'accepted', code: 'opened' };
       },
     },
@@ -80,5 +80,13 @@ test('history navigation relays an authorized opaque reference and rejects unrel
   assert.equal(await details.openSession(room, 'person-a', 'foreign'), false);
   assert.deepEqual(calls, []);
   assert.equal(await details.openSession(room, 'person-a', 's2'), true);
-  assert.deepEqual(calls, [['get', { sessionId: 's2' }], ['open']]);
+  assert.deepEqual(calls, [['getV2', { sessionId: 's2' }], ['openV2']]);
+});
+
+test('missing historical capability cannot silently use current-only navigation', async () => {
+  const details = new ChatroomPageDetails({
+    references: { get: () => assert.fail('v1 lookup cannot stand in for history') },
+    navigation: { open: () => assert.fail('v1 open cannot stand in for history') },
+  });
+  assert.equal(await details.openSession(room, 'person-a', 's2'), false);
 });

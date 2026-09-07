@@ -3,6 +3,10 @@ import type {
   AgentDetailNavigationService,
   AgentSessionDetailReferenceService,
 } from '@cordisx/protocol/agent-detail-navigation/v1';
+import type {
+  AgentDetailNavigationService as HistoricalNavigation,
+  AgentSessionDetailReferenceService as HistoricalReferences,
+} from '@cordisx/protocol/agent-detail-navigation/v2';
 import type { AgentConversationActiveRunDescriptor } from '@cordisx/protocol/agent-conversation-shell/v7';
 import type { SessionId } from '@cordisx/protocol/sessions/v1';
 
@@ -12,8 +16,8 @@ import { executeRoomProfileCommand } from './room-profile.js';
 
 export interface ChatroomPageDetailServices {
   readonly entities: Pick<EntityRegistry, 'get'>;
-  readonly references: AgentSessionDetailReferenceService;
-  readonly navigation: AgentDetailNavigationService;
+  readonly references: AgentSessionDetailReferenceService | HistoricalReferences;
+  readonly navigation: AgentDetailNavigationService | HistoricalNavigation;
   readonly rooms: DurableChatroomRoomStore;
 }
 
@@ -70,9 +74,12 @@ export class ChatroomPageDetails {
 
   async openSession(room: Room, participantId: string, sessionId: SessionId): Promise<boolean> {
     if (!memberSessions(room, participantId, []).some(session => session.sessionId === sessionId)) return false;
-    const reference = await this.services.references.get({ sessionId });
+    const { references, navigation } = this.services;
+    // Historical navigation never falls back to the frozen current-only v1 API.
+    if (!('getV2' in references) || !('openV2' in navigation)) return false;
+    const reference = await references.getV2({ sessionId });
     if (reference.status !== 'accepted' || reference.sessionId !== sessionId) return false;
-    return (await this.services.navigation.open({ target: reference.target })).status === 'accepted';
+    return (await navigation.openV2({ target: reference.target })).status === 'accepted';
   }
 
   profile(roomId: string) {
