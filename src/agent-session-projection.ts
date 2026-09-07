@@ -282,6 +282,15 @@ export class ChatroomAgentSessionProjector {
     return this.admissionMessageLinkFor(event.data);
   }
 
+  /** Known authoritative replacements also fence the durable history fallback. */
+  supersededAdmissionRoomItemIds(): readonly string[] {
+    return [...this.events.values()].flatMap(event => {
+      if (event.type !== 'user/message' || !this.surfaceReplacedEventSeqs.has(event.seq)) return [];
+      const link = this.admissionMessageLinkFor(event.data);
+      return link === undefined ? [] : [link.itemId];
+    });
+  }
+
   updateLiveApprovalQuestion(question: ApprovalQuestionV2): void {
     if (question.requester.sessionId !== this.sessionId || this.invalidApprovals.has(question.id)) return;
     this.liveApprovalQuestions.set(question.id, question);
