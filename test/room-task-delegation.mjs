@@ -331,3 +331,69 @@ test('legacy controller cannot create a second Session for a pending or partial 
     store.dispose();
   }
 });
+
+test('explicit recovery uses the retained Host operation and Session without creating another task', async () => {
+  const { store, scope, input } = fixture();
+  let request;
+  let creates = 0;
+  let recoveries = 0;
+  const handler = new ChatroomTaskHandler(store, {
+    async createAndSubmit(value) {
+      request = value;
+      creates += 1;
+      return {
+        status: 'unavailable',
+        operationId: value.operationId,
+        code: 'submit-failed',
+        sessionId: 'child-session',
+      };
+    },
+  }, async value => {
+    recoveries += 1;
+    assert.equal(value.operationId, request.operationId);
+    return accepted(request);
+  });
+  await handler.handle(scope, input);
+  const recovered = await handler.handle(scope, { action: 'recover', operationId: input.operationId });
+  assert.equal(recovered.status, 'accepted');
+  assert.equal(recovered.task.sessionId, 'child-session');
+  assert.equal(creates, 1);
+  assert.equal(recoveries, 1);
+  assert.equal(store.rooms.get(scope.roomId).runs.length, 2);
+  store.dispose();
+});
+
+test('a relationship revoked while task persistence yields prevents the first Host call', async () => {
+  const { store, scope, input } = fixture();
+  const cas = store.compareAndSwap.bind(store);
+  let changed = false;
+  store.compareAndSwap = async (revision, room) => {
+    const result = await cas(revision, room);
+    if (!changed && room.runs.some(run => run.delegation)) {
+      changed = true;
+      const current = store.document(room.id);
+      await cas(
+        current.revision,
+        createRoom({
+          ...current.room,
+          memberships: current.room.memberships.map(member =>
+            member.memberId === input.to
+              ? { ...member, reportsToMemberId: undefined }
+              : member
+          ),
+        }),
+      );
+    }
+    return result;
+  };
+  let creates = 0;
+  const handler = new ChatroomTaskHandler(store, {
+    async createAndSubmit(request) {
+      creates += 1;
+      return accepted(request);
+    },
+  });
+  assert.equal((await handler.handle(scope, input)).code, 'stale-binding');
+  assert.equal(creates, 0);
+  store.dispose();
+});

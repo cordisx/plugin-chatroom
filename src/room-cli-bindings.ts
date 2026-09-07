@@ -37,9 +37,12 @@ export class ChatroomCliBindings implements ChatroomRunCollaboration {
     private readonly store: DurableChatroomRoomStore,
     private readonly settings: ChatroomSettingsService,
     tasks?: AgentTasks,
+    recoverTask?: (
+      input: { operationId: string; },
+    ) => Promise<import('@cordisx/protocol/agent-task/v1').AgentTaskCreateResult>,
   ) {
     const send = createChatroomCliMessageHandler(store);
-    this.taskHandler = new ChatroomTaskHandler(store, tasks);
+    this.taskHandler = new ChatroomTaskHandler(store, tasks, recoverTask);
     this.unregister = tools?.register({ id: 'send' }, async ({ binding, input, signal }): Promise<JsonValue> => {
       if (this.disposed || !this.enabled() || signal.aborted) return { status: 'rejected', code: 'unavailable' };
       const scope = scopeFromBinding(binding.sessionId, binding.scope);
@@ -56,6 +59,11 @@ export class ChatroomCliBindings implements ChatroomRunCollaboration {
   async startTask(input: unknown, signal?: AbortSignal): Promise<JsonValue> {
     if (this.disposed || !this.enabled()) return { status: 'rejected', code: 'unavailable' };
     return await this.taskHandler.start(input, signal);
+  }
+
+  async recoverTask(input: unknown, signal?: AbortSignal): Promise<JsonValue> {
+    if (this.disposed || !this.enabled()) return { status: 'rejected', code: 'unavailable' };
+    return await this.taskHandler.recoverRoomTask(input, signal);
   }
 
   enabled(): boolean {

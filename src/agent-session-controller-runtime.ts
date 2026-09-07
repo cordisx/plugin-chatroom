@@ -226,8 +226,12 @@ export class ChatroomAgentSessionRuntimeController extends ChatroomAgentSessionA
     const key = runKey(roomId, runId);
     const retained = this.owners.get(key);
     if (retained !== undefined) {
-      await this.ensureCollaboration(roomId, runId);
-      await this.ensureOwnerApprovalRegistrations(roomId, runId, retained.handle);
+      if (task === undefined) {
+        await this.ensureCollaboration(roomId, runId);
+        await this.ensureOwnerApprovalRegistrations(roomId, runId, retained.handle);
+      } else if (!this.runtime.collaboration?.enabled()) {
+        throw new Error('Chatroom task collaboration is unavailable.');
+      }
       this.localUnavailableRuns.delete(key);
       return { handle: retained.handle, disposition: 'retained' };
     }

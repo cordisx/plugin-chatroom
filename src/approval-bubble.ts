@@ -1,3 +1,4 @@
+import { taskApprovalAuthorityMemberId } from './room-task-model.js';
 import type { Agent, AgentDefinitionIdentity } from '@cordisx/protocol/agents/v1';
 import type {
   ApprovalAgentBinding,
@@ -13,13 +14,7 @@ import type { AgentConversationApprovalItem } from '@cordisx/protocol/agent-conv
 import type { SessionEvent, SessionId } from '@cordisx/protocol/sessions/v1';
 
 import { CHATROOM_COMMAND_APPROVAL_APPROVE, CHATROOM_COMMAND_APPROVAL_DENY } from './conversation-model.js';
-import {
-  approvalAuthorityMemberIds,
-  createChatroomOpaqueId,
-  type Room,
-  type RoomMembership,
-  type RoomRun,
-} from './room.js';
+import { createChatroomOpaqueId, type Room, type RoomMembership, type RoomRun } from './room.js';
 
 const sameIdentity = (left: AgentDefinitionIdentity, right: AgentDefinitionIdentity): boolean =>
   left.agentId === right.agentId && left.revision === right.revision;
@@ -109,7 +104,7 @@ export function prepareChatroomApprovalRequest(
   if (!validToolName(input.toolName)) return unavailable('tool-name-invalid');
   if (input.callId !== undefined && !validOpaqueId(input.callId)) return unavailable('call-id-invalid');
 
-  const authorityMemberId = approvalAuthorityMemberIds(input.room, requesterMember.memberId)[0];
+  const authorityMemberId = taskApprovalAuthorityMemberId(input.room, requesterRun);
   const authorityMember = authorityMemberId === undefined
     ? undefined
     : input.room.memberships.find(member => member.memberId === authorityMemberId);
@@ -318,7 +313,7 @@ export function routeChatroomDriverApproval(
     return routingResult(question, { status: 'unavailable', code: 'mapping-unavailable' });
   }
 
-  const authorityMemberId = approvalAuthorityMemberIds(input.room, requesterMember.memberId)[0];
+  const authorityMemberId = taskApprovalAuthorityMemberId(input.room, requesterRun);
   const authorityMember = authorityMemberId === undefined
     ? undefined
     : input.room.memberships.find(member => member.memberId === authorityMemberId);
@@ -326,7 +321,9 @@ export function routeChatroomDriverApproval(
     return routingResult(question, { status: 'unavailable', code: 'authority-unavailable' });
   }
   const authorityRuns = input.room.runs.filter(run => run.memberId === authorityMember.memberId);
-  const preferred = authorityMember.preferredRunId === undefined
+  const preferred = authorityMember.memberId === requesterMember.memberId
+    ? requesterRun
+    : authorityMember.preferredRunId === undefined
     ? authorityRuns.length === 1 ? authorityRuns[0] : undefined
     : authorityRuns.find(run => run.runId === authorityMember.preferredRunId);
   const authorityAgent = preferred === undefined ? undefined : input.liveAgentForRun(preferred.runId);
@@ -401,7 +398,7 @@ export function projectChatroomApprovalBubble(
   if (requesterMember === undefined || !sameIdentity(requesterMember.definition, binding.requester)) {
     return projectionResult({ status: 'invalid', code: 'requester-correlation-invalid' });
   }
-  const authorityMemberId = approvalAuthorityMemberIds(input.room, requesterMember.memberId)[0];
+  const authorityMemberId = taskApprovalAuthorityMemberId(input.room, requesterRun);
   const authorityMember = authorityMemberId === undefined
     ? undefined
     : input.room.memberships.find(member => member.memberId === authorityMemberId);

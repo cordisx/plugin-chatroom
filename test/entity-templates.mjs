@@ -204,11 +204,11 @@ test('package pins the formal Protocol and exact experimental Host task candidat
   const packageJson = JSON.parse(readFileSync(path.join(repositoryRoot, 'package.json'), 'utf8'));
   assert.equal(
     packageJson.devDependencies['@cordisx/protocol'],
-    'github:cordisx/cordisx-protocol#d657899e763a524efe97a137396642fbcb167f47',
+    'github:cordisx/cordisx-protocol#9425e90dcc5085dcd262fd68467544cad761ed93',
   );
   assert.equal(
     packageJson.devDependencies.cordisx,
-    'github:cordisx/cordisx#697585244c8af56ba1fa092e8f3e68a6fe761859',
+    'github:cordisx/cordisx#78ed068887ccc0ea768d40cbf78a087403518dd0',
   );
   assert.equal(packageJson.main, packageManifest.entry);
   assert.equal(packageManifest.entry, './dist/runtime/chatroom.js');

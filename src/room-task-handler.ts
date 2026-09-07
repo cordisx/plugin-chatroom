@@ -18,7 +18,11 @@ const json = (value: unknown): JsonValue => JSON.parse(JSON.stringify(value));
 /** The Host is the only execution authority. This service owns business joins, never a Session ledger. */
 export class ChatroomTaskHandler {
   private readonly pending = new Map<string, Promise<AgentTaskCreateResult>>();
-  constructor(private readonly store: DurableChatroomRoomStore, private readonly tasks: AgentTasks | undefined) {}
+  constructor(
+    private readonly store: DurableChatroomRoomStore,
+    private readonly tasks: AgentTasks | undefined,
+    private readonly recoverTask?: (input: { operationId: string; }) => Promise<AgentTaskCreateResult>,
+  ) {}
 
   async handle(scope: ChatroomCliScope, value: unknown, signal?: AbortSignal): Promise<JsonValue> {
     if (!isTaskInput(value) || value.action === 'start') return rejected('invalid-input');
@@ -26,7 +30,11 @@ export class ChatroomTaskHandler {
     if (!this.authorized(scope) || signal?.aborted) return rejected('stale-binding');
     if (this.tasks === undefined) return rejected('unsupported');
     try {
-      return value.action === 'delegate' ? await this.delegate(scope, value, signal) : await this.query(scope, value);
+      return value.action === 'delegate'
+        ? await this.delegate(scope, value, signal)
+        : value.action === 'recover'
+        ? await this.recover(scope, value)
+        : await this.query(scope, value);
     } catch {
       return rejected('unavailable');
     }
@@ -40,6 +48,36 @@ export class ChatroomTaskHandler {
     if (signal?.aborted) return rejected('unavailable');
     try {
       return await this.delegate({ kind: 'room', roomId: value.roomId }, value, signal);
+    } catch {
+      return rejected('unavailable');
+    }
+  }
+
+  async recoverRoomTask(value: unknown, signal?: AbortSignal): Promise<JsonValue> {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return rejected('invalid-input');
+    const input = value as Record<string, unknown>;
+    if (
+      !Object.keys(input).every(key => ['roomId', 'runId'].includes(key))
+      || typeof input.roomId !== 'string' || typeof input.runId !== 'string'
+    ) return rejected('invalid-input');
+    if (this.recoverTask === undefined) return rejected('unsupported');
+    const room = this.store.rooms.get(input.roomId);
+    const run = room?.runs.find(value => value.runId === input.runId);
+    if (room === undefined || room.archived || run?.delegation === undefined || signal?.aborted) {
+      return rejected('unavailable');
+    }
+    try {
+      const result = await this.recoverTask({ operationId: run.delegation.request.operationId });
+      if (!await this.retainResult(room.id, run.runId, result)) return rejected('reconciliation-required');
+      const current = this.store.rooms.get(room.id);
+      if (signal?.aborted || current === undefined || current.archived) return rejected('unavailable');
+      return json({
+        ...result,
+        roomId: room.id,
+        runId: run.runId,
+        operationId: run.delegation.operationId,
+        memberId: run.memberId,
+      });
     } catch {
       return rejected('unavailable');
     }
@@ -141,7 +179,12 @@ export class ChatroomTaskHandler {
     const prepared = await this.prepare(scope, input);
     if (typeof prepared === 'string') return rejected(prepared);
     const task = prepared.delegation!;
-    if (signal?.aborted || !this.authorized(scope)) return rejected('stale-binding');
+    const beforeSubmit = this.authorized(scope);
+    const currentTarget = beforeSubmit?.memberships.find(member => member.memberId === prepared.memberId);
+    if (
+      signal?.aborted || beforeSubmit === undefined || !this.targetAllowed(beforeSubmit, scope, prepared.memberId)
+      || canonicalTaskValue(currentTarget?.definition) !== canonicalTaskValue(task.request.definition)
+    ) return rejected('stale-binding');
     let operation = this.pending.get(task.request.operationId);
     if (operation === undefined) {
       operation = this.tasks!.createAndSubmit(task.request).catch((): AgentTaskCreateResult => ({
@@ -171,6 +214,25 @@ export class ChatroomTaskHandler {
         memberId: prepared.memberId,
       })
       : rejected('reconciliation-required');
+  }
+
+  private async recover(scope: ChatroomCliScope, input: ChatroomTaskQueryInput): Promise<JsonValue> {
+    if (this.recoverTask === undefined) return rejected('unsupported');
+    const room = this.authorized(scope);
+    const run = room === undefined ? undefined : taskForSource(room, scope, input.operationId);
+    if (run === undefined) return { status: 'not-found' };
+    if (!this.targetAllowed(room!, scope, run.memberId)) return rejected('unauthorized');
+    const result = await this.recoverTask({ operationId: run.delegation!.request.operationId });
+    if (!await this.retainResult(scope.roomId, run.runId, result)) return rejected('reconciliation-required');
+    const current = this.authorized(scope);
+    if (current === undefined || !this.targetAllowed(current, scope, run.memberId)) return rejected('stale-binding');
+    return json({
+      ...result,
+      operationId: input.operationId,
+      roomId: scope.roomId,
+      runId: run.runId,
+      memberId: run.memberId,
+    });
   }
 
   private async query(scope: ChatroomCliScope, input: ChatroomTaskQueryInput): Promise<JsonValue> {
@@ -207,6 +269,10 @@ export class ChatroomTaskHandler {
       ) return false;
       const sessionId = result.status === 'accepted' ? result.task.sessionId : result.sessionId;
       if (run.sessionId !== undefined && sessionId !== undefined && run.sessionId !== sessionId) return false;
+      if (
+        canonicalTaskValue(run.delegation.result) === canonicalTaskValue(result)
+        && (sessionId === undefined || run.sessionId === sessionId)
+      ) return true;
       // An early authenticated report can attach the Session, but cannot prove first-input acceptance.
       if (
         run.delegation.result?.status === 'accepted' && (result.status !== 'accepted'
@@ -220,6 +286,7 @@ export class ChatroomTaskHandler {
             runs: document.room.runs.map(value =>
               value.runId !== runId ? value : {
                 ...run,
+                ...(result.status === 'accepted' ? { presence: { ...run.presence, state: 'joined' as const } } : {}),
                 ...(sessionId === undefined ? {} : { sessionId }),
                 delegation: { ...run.delegation!, result },
               }

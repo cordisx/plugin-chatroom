@@ -16,7 +16,7 @@ export interface ChatroomTaskStartInput extends Omit<ChatroomDelegateInput, 'act
   readonly roomId: string;
 }
 export interface ChatroomTaskQueryInput {
-  readonly action: 'query';
+  readonly action: 'query' | 'recover';
   readonly operationId: string;
   readonly roomId?: string;
 }
@@ -28,15 +28,15 @@ export function isTaskInput(
   value: unknown,
 ): value is ChatroomDelegateInput | ChatroomTaskQueryInput | ChatroomTaskStartInput {
   if (
-    !record(value) || !['delegate', 'query', 'start'].includes(String(value.action))
+    !record(value) || !['delegate', 'query', 'recover', 'start'].includes(String(value.action))
     || typeof value.operationId !== 'string' || !CLI_OPERATION_PATTERN.test(value.operationId)
     || value.roomId !== undefined && !nonempty(value.roomId)
   ) return false;
-  const keys = value.action === 'query'
+  const keys = ['query', 'recover'].includes(String(value.action))
     ? ['action', 'operationId', 'roomId']
     : ['action', 'operationId', 'roomId', 'to', 'text', 'cwd', 'projectId'];
   if (!Object.keys(value).every(key => keys.includes(key))) return false;
-  return value.action === 'query' || nonempty(value.to) && nonempty(value.text)
+  return ['query', 'recover'].includes(String(value.action)) || nonempty(value.to) && nonempty(value.text)
       && value.text.length <= MAX_CLI_TEXT_LENGTH
       && (value.cwd === undefined || nonempty(value.cwd) && value.cwd.startsWith('/') && !value.cwd.includes('\0'))
       && (value.projectId === undefined || nonempty(value.projectId));
