@@ -11,6 +11,9 @@ member run; it never parses, constructs, or emulates a Connector handle.
 
 ## Status
 
+See [Room UI ownership](.agents/docs/room-ui-ownership.md) for the renderer boundary
+and the separate native migration gates.
+
 The plugin contributes a body-only React page through the public CordisX page
 API. Chatroom owns its title, timeline, member panel, composer, approval cards,
 and direct OneWorks Avatar rendering. CordisX still owns the page seat, route,

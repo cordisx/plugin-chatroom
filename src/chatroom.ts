@@ -1,8 +1,4 @@
 import type { Context } from '@deepseek-ai/cordis';
-import type {
-  AgentConversationShellBinding as AgentConversationShellBindingV9,
-  AgentConversationShellCommandContext as AgentConversationShellCommandContextV9,
-} from '@cordisx/protocol/agent-conversation-shell/v9';
 import type { AgentPageComposerCommandContext } from '@cordisx/protocol/agent-page-admission/v2';
 import { ChatroomComposerSettings, Config, configApplies } from './composer-settings.js';
 import { CORDISX_PAGE_SCHEMA_V3, CORDISX_ROUTE_SCHEMA_V2, type CordisXCommandContext } from 'cordisx/contracts';
@@ -18,18 +14,13 @@ const avatarDevelopmentDependencies = () =>
 void avatarDevelopmentDependencies;
 
 import { ChatroomAgentSessionController } from './agent-session-controller.js';
-import { ChatroomAgentSessionConversationSourceV7 } from './agent-session-conversation-source-v7.js';
-import { v3BindingFor } from './agent-session-conversation-source.js';
-import {
-  CHATROOM_COMMAND_APPROVAL_APPROVE,
-  CHATROOM_COMMAND_APPROVAL_CANCEL,
-  CHATROOM_COMMAND_APPROVAL_DENY,
-  CHATROOM_COMMAND_SUBMIT,
-  text,
-} from './conversation-model.js';
+import { CHATROOM_COMMAND_SUBMIT } from './conversation-model.js';
 import { ChatroomConversationController } from './conversation-source.js';
-import { selectChatroomPageMount } from './chatroom-page-surface.js';
 import { ChatroomPageSource } from './chatroom-page-source.js';
+import { chatroomPageChinese, chatroomPageEnglish } from './chatroom-page-locales.js';
+import { chatroomComposerEn, chatroomComposerZhCN } from './chatroom-composer-locales.js';
+import { ChatroomPageDetails } from './chatroom-page-details.js';
+import { chatroomDetailsChinese, chatroomDetailsEnglish } from './chatroom-details-locales.js';
 import { manifest, roomSessionDetailRoute } from './chatroom-runtime-contract.js';
 import { CHATROOM_MANAGER_CONTENT_DECLARATIONS, registerChatroomManager } from './manager-chat.js';
 import { ChatroomProductBase } from './product-base.js';
@@ -48,82 +39,83 @@ import {
   registerChatroomAgentSessionRoomSimulationOwner,
 } from './playground-room-simulation-bridge.js';
 
-export type ChatroomMessages = {
-  'navigation.title': undefined;
-  'navigation.description': undefined;
-  'navigation.rooms': undefined;
-  'navigation.archived': undefined;
-  'navigation.room.empty': undefined;
-  'navigation.room.summary': { readonly summary: string; };
-  'action.pin': undefined;
-  'action.unpin': undefined;
-  'action.archive': undefined;
-  'action.restore': undefined;
-  'action.copy-link': undefined;
-  'action.copy-id': undefined;
-  'action.delete': undefined;
-  'confirmation.delete.title': undefined;
-  'confirmation.delete.description': undefined;
-  'confirmation.delete.confirm': undefined;
-  'feedback.pinned': undefined;
-  'feedback.unpinned': undefined;
-  'feedback.pin-failed': undefined;
-  'feedback.archived': undefined;
-  'feedback.archive-failed': undefined;
-  'feedback.restored': undefined;
-  'feedback.restore-failed': undefined;
-  'feedback.link-copied': undefined;
-  'feedback.id-copied': undefined;
-  'feedback.copy-failed': undefined;
-  'feedback.deleted': undefined;
-  'feedback.delete-failed': undefined;
-  'route.title': undefined;
-  'route.description': undefined;
-  'page.title': undefined;
-  'page.description': undefined;
-  'page.missing.title': undefined;
-  'page.missing.description': undefined;
-  'timeline.label': undefined;
-  'timeline.empty.title': undefined;
-  'timeline.empty.description': undefined;
-  'timeline.delivery.failed': undefined;
-  'timeline.run.running': undefined;
-  'timeline.member.presence': { readonly state: string; };
-  'composer.placeholder': undefined;
-  'composer.unavailable': undefined;
-  'composer.send': undefined;
-  'composer.sending': undefined;
-  'composer.send-failed': undefined;
-  'composer.target-error': { readonly code: string; };
-  'composer.shortcut.enter': undefined;
-  'composer.shortcut.mod-enter': undefined;
-  'approval.title': undefined;
-  'approval.approve': undefined;
-  'approval.deny': undefined;
-  'approval.cancel': undefined;
-  'approval.reason.unavailable': undefined;
-  'approval.target': { readonly requester: string; readonly authority: string; };
-  'approval.target.unavailable': undefined;
-  'approval.decision.failed': undefined;
-  'approval.state.pending': undefined;
-  'approval.state.approved': undefined;
-  'approval.state.denied': undefined;
-  'approval.state.cancelled': undefined;
-  'approval.state.failed': undefined;
-  'members.title': undefined;
-  'members.count': { readonly count: number; };
-  'members.status.idle': undefined;
-  'members.status.active': undefined;
-  'members.status.running': undefined;
-  'members.status.waiting': undefined;
-  'members.status.attention': undefined;
-  'agent.approval.unavailable': undefined;
-  'permission.tasks.create': undefined;
-  'permission.tasks.content.read': undefined;
-  'permission.turns.submit': undefined;
-  'permission.turns.introduce': undefined;
-  'permission.approvals.decide': undefined;
-};
+export type ChatroomMessages =
+  & Record<
+    | keyof typeof chatroomDetailsEnglish
+    | keyof typeof chatroomComposerEn
+    | Exclude<keyof typeof chatroomPageEnglish, 'members.mention'>,
+    undefined
+  >
+  & {
+    'members.mention': { readonly name: string; };
+    'navigation.title': undefined;
+    'navigation.description': undefined;
+    'navigation.rooms': undefined;
+    'navigation.archived': undefined;
+    'navigation.room.empty': undefined;
+    'navigation.room.summary': { readonly summary: string; };
+    'action.pin': undefined;
+    'action.unpin': undefined;
+    'action.archive': undefined;
+    'action.restore': undefined;
+    'action.copy-link': undefined;
+    'action.copy-id': undefined;
+    'action.delete': undefined;
+    'confirmation.delete.title': undefined;
+    'confirmation.delete.description': undefined;
+    'confirmation.delete.confirm': undefined;
+    'feedback.pinned': undefined;
+    'feedback.unpinned': undefined;
+    'feedback.pin-failed': undefined;
+    'feedback.archived': undefined;
+    'feedback.archive-failed': undefined;
+    'feedback.restored': undefined;
+    'feedback.restore-failed': undefined;
+    'feedback.link-copied': undefined;
+    'feedback.id-copied': undefined;
+    'feedback.copy-failed': undefined;
+    'feedback.deleted': undefined;
+    'feedback.delete-failed': undefined;
+    'route.title': undefined;
+    'route.description': undefined;
+    'page.title': undefined;
+    'page.description': undefined;
+    'page.missing.title': undefined;
+    'page.missing.description': undefined;
+    'timeline.label': undefined;
+    'timeline.empty.title': undefined;
+    'timeline.empty.description': undefined;
+    'timeline.delivery.failed': undefined;
+    'timeline.run.running': undefined;
+    'timeline.member.presence': { readonly state: string; };
+    'composer.target-error': { readonly code: string; };
+    'approval.title': undefined;
+    'approval.approve': undefined;
+    'approval.deny': undefined;
+    'approval.cancel': undefined;
+    'approval.reason.unavailable': undefined;
+    'approval.target': { readonly requester: string; readonly authority: string; };
+    'approval.target.unavailable': undefined;
+    'approval.decision.failed': undefined;
+    'approval.state.pending': undefined;
+    'approval.state.approved': undefined;
+    'approval.state.denied': undefined;
+    'approval.state.cancelled': undefined;
+    'approval.state.failed': undefined;
+    'members.title': undefined;
+    'members.count': { readonly count: number; };
+    'members.status.idle': undefined;
+    'members.status.active': undefined;
+    'members.status.running': undefined;
+    'members.status.waiting': undefined;
+    'members.status.attention': undefined;
+    'agent.approval.unavailable': undefined;
+    'permission.tasks.create': undefined;
+    'permission.tasks.content.read': undefined;
+    'permission.turns.submit': undefined;
+    'permission.turns.introduce': undefined;
+    'permission.approvals.decide': undefined;
+  };
 
 export { Config, configApplies };
 export { manifest, roomSessionDetailRoute };
@@ -209,19 +201,6 @@ function pageComposerCommandContext(
   return value;
 }
 
-function shellApprovalCommandContext(
-  context: CordisXCommandContext,
-): Extract<AgentConversationShellCommandContextV9, { readonly scope: 'approval'; }> | undefined {
-  const value = context.hostContext;
-  if (
-    value === undefined
-    || !('scope' in value)
-    || value.scope !== 'approval'
-    || !('approval' in value)
-  ) return undefined;
-  return value;
-}
-
 export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   const entitySnapshot = await ctx.entities.snapshot();
   const agent = configurationFromEntitySnapshot(
@@ -246,6 +225,9 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     locale: 'en',
     default: true,
     messages: {
+      ...chatroomDetailsEnglish,
+      ...chatroomPageEnglish,
+      ...chatroomComposerEn,
       'navigation.title': 'New room',
       'navigation.description': 'Start a new collaboration room.',
       'navigation.rooms': 'Rooms',
@@ -286,14 +268,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       'timeline.delivery.failed': 'Delivery failed',
       'timeline.run.running': 'Working',
       'timeline.member.presence': 'Member is {state}',
-      'composer.placeholder': 'Write a message',
-      'composer.unavailable': 'Messaging is not available yet.',
-      'composer.send': 'Send',
-      'composer.sending': 'Sending…',
-      'composer.send-failed': 'Message could not be sent.',
       'composer.target-error': 'Message target is unavailable ({code}).',
-      'composer.shortcut.enter': 'Enter sends',
-      'composer.shortcut.mod-enter': 'Command/Ctrl+Enter sends',
       'approval.title': 'Approval requested',
       'approval.approve': 'Approve',
       'approval.deny': 'Deny',
@@ -326,6 +301,9 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     namespace: 'chatroom',
     locale: 'zh-CN',
     messages: {
+      ...chatroomDetailsChinese,
+      ...chatroomPageChinese,
+      ...chatroomComposerZhCN,
       'navigation.title': '新建房间',
       'navigation.description': '开始一个新的协作房间。',
       'navigation.rooms': '房间',
@@ -366,14 +344,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       'timeline.delivery.failed': '发送失败',
       'timeline.run.running': '工作中',
       'timeline.member.presence': '成员状态：{state}',
-      'composer.placeholder': '输入消息',
-      'composer.unavailable': '消息功能暂不可用。',
-      'composer.send': '发送',
-      'composer.sending': '发送中…',
-      'composer.send-failed': '消息发送失败。',
       'composer.target-error': '消息目标不可用（{code}）。',
-      'composer.shortcut.enter': 'Enter 发送',
-      'composer.shortcut.mod-enter': 'Command/Ctrl+Enter 发送',
       'approval.title': '审批请求',
       'approval.approve': '批准',
       'approval.deny': '拒绝',
@@ -430,41 +401,6 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       });
     },
   );
-  const shell = ctx.reflect.get('agentConversationShell', false);
-  if (shell !== undefined) {
-    const handleApprovalCommand = async (command: CordisXCommandContext) => {
-      const hostContext = shellApprovalCommandContext(command);
-      if (hostContext === undefined) {
-        throw new Error('Chatroom conversation approval context is unavailable.');
-      }
-      const intent = controller.handle(hostContext);
-      if (intent === undefined) {
-        const roomId = controller.selectedRoomId(hostContext);
-        if (roomId !== undefined) agentSession.answerApprovalCommand(roomId, hostContext);
-        return;
-      }
-      if (intent.kind === 'playground-approval-decision') {
-        await controller.decidePlaygroundAgentApprovalFromRoom(
-          intent.roomId,
-          intent.itemId,
-          intent.operationId,
-          intent.decision,
-        );
-      }
-    };
-    ctx.commands.register(
-      { id: CHATROOM_COMMAND_APPROVAL_APPROVE, title: text('approval.approve', 'Approve') },
-      handleApprovalCommand,
-    );
-    ctx.commands.register(
-      { id: CHATROOM_COMMAND_APPROVAL_DENY, title: text('approval.deny', 'Deny') },
-      handleApprovalCommand,
-    );
-    ctx.commands.register(
-      { id: CHATROOM_COMMAND_APPROVAL_CANCEL, title: text('approval.cancel', 'Cancel') },
-      handleApprovalCommand,
-    );
-  }
   const playgroundBridge = ctx.reflect.get(
     'playgroundRoomSimulationBridge',
     false,
@@ -476,25 +412,16 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       controller,
       agentSession,
     );
-  const pageMount = await selectChatroomPageMount(
-    shell,
-    (binding: AgentConversationShellBindingV9) => {
-      const domain = controller.createSource(v3BindingFor(binding), { admissionMode: 'v9' });
-      let unsubscribeSettings = () => {};
-      const source = new ChatroomAgentSessionConversationSourceV7(
-        binding,
-        domain,
-        agentSession,
-        composerSettings.current,
-        () => unsubscribeSettings(),
-      );
-      unsubscribeSettings = composerSettings.subscribe(policy => source.setComposerShortcutPolicy(policy));
-      return source;
-    },
-    async () => {
-      const { createLazyChatroomPage } = await import('./chatroom-page-loader.js');
-      return createLazyChatroomPage(pageSource, product.sidebarImages);
-    },
+  const { createLazyChatroomPage } = await import('./chatroom-page-loader.js');
+  const pageMount = createLazyChatroomPage(
+    pageSource,
+    product.sidebarImages,
+    new ChatroomPageDetails({
+      entities: ctx.entities,
+      references: ctx.agentSessionDetailReferences,
+      navigation: ctx.agentDetailNavigation,
+      rooms: roomStore,
+    }),
   );
   ctx.pages.register(page, pageMount);
   ctx.routes.register(newRoomRoute);

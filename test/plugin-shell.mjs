@@ -4,23 +4,20 @@ import test from 'node:test';
 
 const source = name => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 
-test('prefers the Host-owned Shell and retains the lazy React Room page only as a compatibility fallback', async () => {
-  const [entry, surface, loader, page, pageSource, css] = await Promise.all([
+test('mounts the plugin-owned Room page through one lazy public page path', async () => {
+  const [entry, loader, page, pageSource, css] = await Promise.all([
     source('src/chatroom.ts'),
-    source('src/chatroom-page-surface.ts'),
     source('src/chatroom-page-loader.tsx'),
     source('src/chatroom-page.tsx'),
     source('src/chatroom-page-source.ts'),
     source('src/chatroom-page.css'),
   ]);
 
-  assert.match(entry, /selectChatroomPageMount/u);
-  assert.match(surface, /registerSourceV9/u);
-  assert.match(surface, /mode: 'page-composer-v2'/u);
-  assert.match(entry, /admissionMode: 'v9'/u);
+  assert.match(entry, /createLazyChatroomPage/u);
+  assert.doesNotMatch(entry, /selectChatroomPageMount|agentConversationShell|registerSourceV[0-9]+/u);
   assert.match(entry, /ctx\.pages\.register\(page, pageMount\)/u);
   assert.match(entry, /await import\('\.\/chatroom-page-loader\.js'\)/u);
-  assert.doesNotMatch(`${entry}\n${surface}`, /as unknown/u);
+  assert.doesNotMatch(entry, /as unknown/u);
   assert.match(entry, /chrome: 'body-only'/u);
   assert.doesNotMatch(entry, /from '\.\/chatroom-page\.js'/u);
   assert.match(loader, /import\('\.\/chatroom-page\.js'\)/u);
@@ -33,14 +30,14 @@ test('prefers the Host-owned Shell and retains the lazy React Room page only as 
   assert.doesNotMatch(page, /defineReactPage/u);
   assert.match(page, /export function ChatroomPage/u);
   assert.match(page, /cx-chatroom-header/u);
-  assert.match(page, /cx-chatroom-timeline/u);
+  assert.match(page, /<ChatroomTimeline/u);
   assert.match(page, /cx-chatroom-members/u);
-  assert.match(page, /cx-chatroom-composer/u);
+  assert.match(page, /<ChatroomComposer/u);
   assert.match(page, /ChatroomAvatar/u);
   assert.match(page, /ChatroomCompositeAvatar/u);
   assert.match(page, /import '\.\/chatroom-page\.css'/u);
   assert.doesNotMatch(page, /data-chatroom-page-styles|CHATROOM_AVATAR_VENDOR_STYLES/u);
-  assert.match(css, /@media \(max-width: 760px\)/u);
+  assert.match(css, /@container chatroom-page \(max-width: 760px\)/u);
   assert.doesNotMatch(
     `${entry}\n${page}\n${pageSource}`,
     /ctx\.visuals|AgentConversationRenderer|renderer\/host-ui|data-cordisx-app-theme/u,
@@ -66,8 +63,9 @@ test('routes page composer delivery through the Host-bound v2 admission command'
   assert.match(pageSource, /submitDeliveriesViaPageAdmissionV2Fresh/u);
   assert.match(pageSource, /pageComposerCompletion/u);
   assert.doesNotMatch(pageSource, /sessions\.sendToRoom/u);
-  assert.match(page, /pageComposer\.execute/u);
-  assert.match(page, /source\.pageComposerCompletion/u);
+  const composer = await source('src/chatroom-composer.tsx');
+  assert.match(composer, /pageComposer!?\.execute/u);
+  assert.match(composer, /source\.pageComposerCompletion/u);
   assert.doesNotMatch(page, /source\.submit\(/u);
   assert.match(pageSource, /sessions\.answerApprovalItem/u);
   assert.match(pageSource, /decidePlaygroundAgentApprovalFromRoom/u);
