@@ -151,7 +151,7 @@ export class ChatroomPageSource {
       ),
       activeRuns: Object.freeze(projection.activeRuns.flatMap(run => {
         const phase = this.observedStatuses.get(room?.id ?? '')?.get(run.sessionId);
-        return phase === undefined ? [] : [{ ...run, lifecycle: { phase } }];
+        return phase === 'running' ? [{ ...run, lifecycle: { phase } }] : [];
       })),
       items: chronologicalItems([
         ...domainItems,

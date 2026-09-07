@@ -168,7 +168,10 @@ test('member status comes from an available live Agent observation, never histor
   assert.deepEqual(h.source.getSnapshot('room-a').activeRuns, []);
   status = { status: 'available', value: 'idle' };
   await h.source.hydrate('room-a');
-  assert.equal(h.source.getSnapshot('room-a').activeRuns[0].lifecycle.phase, 'idle');
+  assert.deepEqual(h.source.getSnapshot('room-a').activeRuns, []);
+  status = { status: 'available', value: 'running' };
+  await h.source.hydrate('room-a');
+  assert.equal(h.source.getSnapshot('room-a').activeRuns[0].lifecycle.phase, 'running');
   status = { status: 'unavailable', code: 'connection-replaced' };
   h.projectionListeners.forEach(listener => listener('room-a'));
   assert.deepEqual(h.source.getSnapshot('room-a').activeRuns, []);
