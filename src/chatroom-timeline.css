@@ -1,0 +1,228 @@
+.cx-chatroom-timeline-region {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+.cx-chatroom-timeline__items {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+.cx-chatroom-timeline__avatar {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.cx-chatroom-timeline__avatar:focus-visible,
+.cx-chatroom-timeline__latest:focus-visible,
+.cx-chatroom-timeline:focus-visible {
+  outline: 2px solid var(--cx-primary, currentColor);
+  outline-offset: -2px;
+}
+.cx-chatroom-timeline__latest {
+  position: absolute;
+  right: 20px;
+  bottom: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--cx-chatroom-border);
+  border-radius: 999px;
+  background: var(--cx-surface, Canvas);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.cx-chatroom-timeline {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  padding: 24px max(18px, calc((100% - 780px) / 2));
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
+.cx-chatroom-message {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: end;
+  gap: 9px;
+}
+
+.cx-chatroom-message[data-role="human"] {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: end;
+}
+.cx-chatroom-message > .cx-chatroom-avatar {
+  width: 36px;
+  height: 36px;
+}
+.cx-chatroom-message__content {
+  display: grid;
+  min-width: 0;
+  max-width: 88%;
+  gap: 3px;
+}
+.cx-chatroom-message[data-role="human"] .cx-chatroom-message__content {
+  justify-items: end;
+}
+.cx-chatroom-message__author {
+  padding-inline: 2px;
+  color: var(--cx-chatroom-muted);
+  font-size: 10px;
+}
+.cx-chatroom-message__bubble {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 9px 12px;
+  border: 1px solid var(--cx-chatroom-border);
+  border-radius: 14px 14px 14px 4px;
+  background: color-mix(in srgb, currentColor 3%, transparent);
+  overflow-wrap: anywhere;
+}
+.cx-chatroom-message[data-role="human"] .cx-chatroom-message__bubble {
+  border-color: color-mix(
+    in srgb,
+    var(--cx-primary, currentColor) 32%,
+    var(--cx-chatroom-border)
+  );
+  border-radius: 14px 14px 4px 14px;
+  background: color-mix(
+    in srgb,
+    var(--cx-primary, currentColor) 12%,
+    transparent
+  );
+}
+.cx-chatroom-message__bubble > * {
+  margin: 0;
+}
+.cx-chatroom-message__meta {
+  display: flex;
+  gap: 6px;
+  padding-inline: 2px;
+  color: var(--cx-chatroom-muted);
+  font-size: 9px;
+}
+.cx-chatroom-message__reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.cx-chatroom-message__reactions > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px 2px 3px;
+  border: 1px solid var(--cx-chatroom-border);
+  border-radius: 999px;
+  font-size: 11px;
+}
+.cx-chatroom-message__reactions .cx-chatroom-avatar,
+.cx-chatroom-message__reactions .cx-chatroom-timeline__avatar {
+  width: 16px;
+  height: 16px;
+  font-size: 6px;
+}
+
+.cx-chatroom-status {
+  justify-self: center;
+  max-width: 80%;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  color: var(--cx-chatroom-muted);
+  font-size: 10px;
+  text-align: center;
+}
+.cx-chatroom-status--member {
+  display: inline-grid;
+  grid-template-columns: 20px auto;
+  align-items: center;
+  gap: 5px;
+}
+.cx-chatroom-status--member .cx-chatroom-avatar,
+.cx-chatroom-status--member .cx-chatroom-timeline__avatar {
+  width: 20px;
+  height: 20px;
+  font-size: 7px;
+}
+.cx-chatroom-status[data-state="error"],
+.cx-chatroom-approval .cx-chatroom-error {
+  color: var(--cx-danger, #c94a42);
+}
+
+.cx-chatroom-approval {
+  display: grid;
+  width: min(100%, 560px);
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--cx-chatroom-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, currentColor 3%, transparent);
+}
+.cx-chatroom-approval > header {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+}
+.cx-chatroom-approval > header .cx-chatroom-avatar,
+.cx-chatroom-approval > header .cx-chatroom-timeline__avatar {
+  width: 34px;
+  height: 34px;
+}
+.cx-chatroom-approval > header > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+}
+.cx-chatroom-approval > header strong {
+  grid-column: 1;
+}
+.cx-chatroom-approval > header small {
+  grid-column: 1;
+  overflow: hidden;
+  color: var(--cx-chatroom-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cx-chatroom-approval > header > div > span {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  align-self: center;
+  color: var(--cx-chatroom-muted);
+  font-size: 10px;
+  text-transform: capitalize;
+}
+.cx-chatroom-approval > p {
+  color: var(--cx-chatroom-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.cx-chatroom-approval__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cx-chatroom-approval__action {
+  display: inline-grid;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  place-items: center;
+}
+.cx-chatroom-approval__action > span {
+  font-size: 16px;
+  line-height: 1;
+}
