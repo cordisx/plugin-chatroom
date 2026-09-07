@@ -327,7 +327,13 @@ export function createRoom(input: CreateRoomInput): Room {
       }
     }
   }
-  const timelineSequence = Math.max(input.timelineSequence ?? 0, ...items.map(item => item.sequence));
+  const cliMessages = freezeRoomCliMessages(input.cliMessages);
+  if (cliMessages.some(message => message.roomId !== input.id)) throw new Error('CLI message Room mismatch.');
+  const timelineSequence = Math.max(
+    input.timelineSequence ?? 0,
+    ...items.map(item => item.sequence),
+    ...cliMessages.map(message => message.sequence),
+  );
   const channelLinks = Object.freeze([...(input.channelLinks ?? [])].map(link => Object.freeze({ ...link })));
   if (new Set(channelLinks.map(link => link.linkId)).size !== channelLinks.length) {
     throw new Error('Room ChannelLink ids must be unique.');
@@ -810,8 +816,6 @@ export function createRoom(input: CreateRoomInput): Room {
   ) {
     throw new Error('Playground Agent approval decision collides with another Room operation.');
   }
-  const cliMessages = freezeRoomCliMessages(input.cliMessages);
-  if (cliMessages.some(message => message.roomId !== input.id)) throw new Error('CLI message Room mismatch.');
   return Object.freeze({
     id: input.id,
     title: input.title,

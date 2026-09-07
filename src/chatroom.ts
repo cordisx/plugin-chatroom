@@ -1,3 +1,5 @@
+import { ChatroomCliBindings } from './room-cli-bindings.js';
+import type { AgentTools } from '@cordisx/protocol/agent-tools/v1';
 import type { Context } from '@deepseek-ai/cordis';
 import type {
   AgentConversationShellBinding as AgentConversationShellBindingV9,
@@ -229,8 +231,13 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     entitySnapshot,
   );
   const roomStore = await DurableChatroomRoomStore.openOwnerDocuments(ctx.documents);
+  const agentTools: AgentTools | undefined = ctx.reflect.get('agentTools', false);
+  const collaboration = new ChatroomCliBindings(agentTools, roomStore, ctx.settings);
+  ctx.effect(() => () => {
+    void collaboration.dispose();
+  }, 'chatroom.cli-tools');
   const agentSession = new ChatroomAgentSessionController(
-    { agents: ctx.agents, sessions: ctx.sessions, approvals: ctx.approvals },
+    { agents: ctx.agents, sessions: ctx.sessions, approvals: ctx.approvals, collaboration },
     agent,
     roomStore,
   );
@@ -238,6 +245,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     await agentSession.hydrate();
   } catch (error) {
     await agentSession.dispose();
+    await collaboration.dispose();
     roomStore.dispose();
     throw error;
   }

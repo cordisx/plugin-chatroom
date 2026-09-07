@@ -12,10 +12,11 @@
     "entities",
     "cordisx-package.json",
     "runtime-manifest.json",
-    "THIRD_PARTY_NOTICES.md"
+    "THIRD_PARTY_NOTICES.md",
+    "cordisx-agent-tools.json"
   ],
   "scripts": {
-    "build": "node scripts/clean-build-output.mjs && tsc -p tsconfig.json && vite build --config vite.config.mjs && node scripts/verify-runtime-bundle.mjs && node scripts/copy-build-assets.mjs",
+    "build": "node scripts/clean-build-output.mjs && tsc -p tsconfig.json && vite build --config vite.config.mjs && node scripts/verify-runtime-bundle.mjs && node scripts/copy-build-assets.mjs && node scripts/copy-agent-tool-assets.mjs",
     "check:fast": "npm run lint:staged && npm run typecheck && npm run build && npm test",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test test/*.mjs",
@@ -32,26 +33,29 @@
     "node": ">=22.19"
   },
   "devDependencies": {
-    "@cordisx/protocol": "github:cordisx/cordisx-protocol#3f0dbcd8b04ae83c920d2d913ac2c313af5f83f1",
+    "@cordisx/eslint-config": "github:cordisx/cordisxmono#c63c2e8c2ba7e11502934a52ad2ce3734e804cdc",
+    "@cordisx/protocol": "github:cordisx/cordisx-protocol#a535a5b15f78e474e4a5b8248716753c82108370",
     "@deepseek-ai/cordis": "4.0.1",
     "@deepseek-ai/schemastery": "3.18.1",
     "@oneworks/avatar": "1.0.0-rc.9",
     "@oneworks/avatar-react": "1.0.0-rc.9",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
+    "@typescript-eslint/parser": "8.69.0",
     "@vitejs/plugin-react": "6.1.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "cordisx": "github:cordisx/cordisx#f0ab469202549912995f72122d441eeec463d2ab",
     "dprint": "0.57.1",
     "esbuild": "^0.28.2",
+    "eslint": "9.39.4",
+    "lint-staged": "16.2.7",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "typescript": "^5.9.2",
-    "vite": "8.2.2",
-    "@cordisx/eslint-config": "github:cordisx/cordisxmono#c63c2e8c2ba7e11502934a52ad2ce3734e804cdc",
-    "eslint": "9.39.4",
-    "@typescript-eslint/parser": "8.69.0",
-    "lint-staged": "16.2.7"
+    "vite": "8.2.2"
+  },
+  "bin": {
+    "cordisx-chatroom": "./dist/agent-tools/cli/chatroom.mjs"
   }
 }

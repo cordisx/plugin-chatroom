@@ -4,12 +4,12 @@ import { addRoomRun, bindRoomRunSession, createRoom } from '../dist/room.js';
 import { DurableChatroomRoomStore } from '../dist/room-store.js';
 import { createChatroomCliMessageHandler } from '../dist/room-cli-message.js';
 import { roomCliPageMessages } from '../dist/room-cli-message-page.js';
-import { parseChatroomArguments } from '../cli/parse.mjs';
+import { parseChatroomArguments } from '../src/cli/parse.mjs';
 
 function fixture() {
   let room = createRoom({ id: 'room-cli-test', title: 'CLI test' });
   const member = room.memberships[0];
-  room = addRoomRun(room, { memberId: member.memberId, runId: 'run-cli-test' });
+  room = addRoomRun(room, { memberId: member.memberId, runId: 'run-cli-test', status: 'creating' });
   room = bindRoomRunSession(room, 'run-cli-test', 'session-cli-test');
   const scope = {
     roomId: room.id,

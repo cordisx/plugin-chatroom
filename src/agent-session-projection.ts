@@ -433,6 +433,7 @@ export class ChatroomAgentSessionProjector {
   private projectAssistantMessage(
     event: Extract<SessionEvent, { readonly type: 'assistant/message'; }>,
   ): ChatroomSessionProjectionChange | undefined {
+    if (this.run.collaborationMode === 'cli') return undefined;
     const requests = this.sourceUserMessages(event);
     const body = bodyFor(visibleAssistantContent(event.data.message.content));
     if (body === undefined) return undefined;

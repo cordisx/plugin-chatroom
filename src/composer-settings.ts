@@ -16,6 +16,13 @@ const label = (en: string, zh: string) => ({ en, 'zh-CN': zh });
  * only the resolved initial value and committed live updates.
  */
 export const Config = Schema.object({
+  cliReporting: Schema.boolean().default(false)
+    .description('Ask members to report to the Room through the authorized collaboration CLI.')
+    .i18n(label(
+      'Ask members to report to the Room through the authorized collaboration CLI.',
+      '让成员通过已授权的协作命令向房间主动回报。',
+    ))
+    .extra('extra', { label: label('Explicit member reports', '成员主动回报') }),
   shortcutPolicy: Schema.union([
     Schema.const('enter').extra('extra', { label: label('Enter sends', 'Enter 发送') }),
     Schema.const('mod-enter').extra('extra', {

@@ -38,6 +38,7 @@ export function cliScopeMatchesRoom(room: Room, scope: ChatroomCliScope): boolea
 export function freezeRoomCliMessages(messages: readonly RoomCliMessage[] = []): readonly RoomCliMessage[] {
   if (messages.length > MAX_ROOM_CLI_MESSAGES) throw new Error('Room CLI message capacity exceeded.');
   const keys = new Set<string>();
+  const messageIds = new Set<string>();
   return Object.freeze(messages.map(value => {
     const ids = [value.roomId, value.participantId, value.memberId, value.runId, value.sessionId, value.messageId];
     if (
@@ -49,7 +50,9 @@ export function freezeRoomCliMessages(messages: readonly RoomCliMessage[] = []):
     ) throw new Error('Invalid Room CLI message.');
     const key = JSON.stringify([...ids.slice(0, 5), value.operationId]);
     if (keys.has(key)) throw new Error('Duplicate Room CLI operation.');
+    if (messageIds.has(value.messageId)) throw new Error('Duplicate Room CLI message identity.');
     keys.add(key);
+    messageIds.add(value.messageId);
     return Object.freeze({ ...value });
   }));
 }

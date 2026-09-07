@@ -50,12 +50,13 @@ const receipt = (message: RoomCliMessage, disposition: 'created' | 'replayed'): 
 
 /** Caller must obtain scope from the Host handler context, never from CLI input. */
 export function createChatroomCliMessageHandler(store: DurableChatroomRoomStore) {
-  return async (scope: ChatroomCliScope, value: unknown): Promise<ChatroomCliResult> => {
+  return async (scope: ChatroomCliScope, value: unknown, signal?: AbortSignal): Promise<ChatroomCliResult> => {
     if (!isChatroomCliSendInput(value)) return { status: 'rejected', code: 'invalid-input' };
     if (value.roomId !== undefined && value.roomId !== scope.roomId) {
       return { status: 'rejected', code: 'unauthorized' };
     }
     for (let attempt = 0; attempt < 8; attempt += 1) {
+      if (signal?.aborted) return { status: 'rejected', code: 'unavailable' };
       const document = store.document(scope.roomId);
       if (document === undefined || !cliScopeMatchesRoom(document.room, scope)) {
         return { status: 'rejected', code: 'stale-binding' };
