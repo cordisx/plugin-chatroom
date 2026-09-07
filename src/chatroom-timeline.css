@@ -297,3 +297,44 @@
   color: inherit;
   font-size: 12px;
 }
+
+.cx-chatroom-message__author {
+  width: fit-content;
+  border: 0;
+  background: transparent;
+  text-align: start;
+}
+button.cx-chatroom-message__author {
+  cursor: pointer;
+}
+button.cx-chatroom-message__author:focus-visible {
+  outline: 2px solid var(--cx-primary, currentColor);
+}
+.cx-chatroom-message__avatar-placeholder {
+  width: 36px;
+  height: 36px;
+}
+.cx-chatroom-message__reaction-actor {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cx-chatroom-approval__copy {
+  justify-self: start;
+  padding: 4px 6px;
+  border: 1px solid var(--cx-chatroom-border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.cx-chatroom-approval__copy:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.cx-chatroom-approval:focus-visible, .cx-chatroom-approval__copy:focus-visible {
+  outline: 2px solid var(--cx-primary, currentColor);
+}
