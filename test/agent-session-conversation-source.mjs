@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { ChatroomAgentSessionConversationSource, v3BindingFor } from '../dist/agent-session-conversation-source.js';
-import { ChatroomAgentSessionConversationSourceV11 } from '../dist/agent-session-conversation-source-v11.js';
+import { ChatroomAgentSessionConversationSourceV12 } from '../dist/agent-session-conversation-source-v12.js';
 
 const binding = {
   bindingId: 'binding-one',
@@ -642,7 +642,7 @@ test('Shell v7 keeps the complete A3/B1 Room timeline when Reviewer approval is 
     }],
     items: [user3, intro, pending],
   });
-  const source = new ChatroomAgentSessionConversationSourceV11(
+  const source = new ChatroomAgentSessionConversationSourceV12(
     binding,
     domainSource([delegation]),
     projection,
@@ -729,7 +729,7 @@ test('Shell v7 keeps the complete A3/B1 Room timeline when Reviewer approval is 
     items: [user3, intro, { ...denied, state: 'denied', actions: [] }, user1, leadReply],
     admissionAppendAnchors: [{ itemId: 'user-1-v7', appendAfterItemId: 'approval-v7' }],
   });
-  const cold = new ChatroomAgentSessionConversationSourceV11(
+  const cold = new ChatroomAgentSessionConversationSourceV12(
     binding,
     domainSource([delegation]),
     coldProjection,

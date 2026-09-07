@@ -75,7 +75,7 @@ test('cold Room history shows persisted hi and CLI reply, then exact Session rep
     ownerGeneration: 'history-owner',
     routeSelection: { scope: 'room-or-new', selectedRoomParam: room.id },
   };
-  const source = new h.ChatroomAgentSessionConversationSourceV11(
+  const source = new h.ChatroomAgentSessionConversationSourceV12(
     binding,
     domain.createSource(binding),
     sessions,
@@ -84,6 +84,13 @@ test('cold Room history shows persisted hi and CLI reply, then exact Session rep
   try {
     const cold = await source.snapshot();
     const messages = cold.items.filter(item => item.kind === 'message');
+    assert.deepEqual(cold.selection.associatedSessions, [{
+      participantId: 'leader',
+      memberId: 'leader',
+      runId: 'original-run',
+      sessionId: 'original-session',
+      state: 'unloaded',
+    }]);
     assert.equal(messages.length, 2);
     const human = messages.find(item => item.author.role === 'human');
     assert.equal(human.source.kind, 'room-user-message');
@@ -97,6 +104,7 @@ test('cold Room history shows persisted hi and CLI reply, then exact Session rep
       {
         resolve: value => value.fallback ?? value.key,
       },
+      true,
       true,
       true,
     );
@@ -123,7 +131,9 @@ test('cold Room history shows persisted hi and CLI reply, then exact Session rep
     runtime.sessions.set(session.id, session);
     await sessions.hydrateRoom(room.id);
     await new Promise(resolve => setImmediate(resolve));
-    const observed = (await source.snapshot()).items.filter(item => item.kind === 'message');
+    const observedSnapshot = await source.snapshot();
+    assert.equal(observedSnapshot.selection.associatedSessions, undefined);
+    const observed = observedSnapshot.items.filter(item => item.kind === 'message');
     assert.equal(observed.length, 2);
     assert.equal(observed.filter(item => item.source.kind === 'room-user-message').length, 0);
     assert.equal(observed.find(item => item.author.role === 'human').messageId, 'accepted-session-message');

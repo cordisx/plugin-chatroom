@@ -109,7 +109,7 @@ test('real CLI process commits one authenticated Room report through Host docume
       routeSelection: { scope: 'room-or-new', selectedRoomParam: room.id },
     };
     domain = new h.ChatroomConversationController(store.rooms);
-    shell = new h.ChatroomAgentSessionConversationSourceV11(
+    shell = new h.ChatroomAgentSessionConversationSourceV12(
       shellBinding,
       domain.createSource(shellBinding),
       sessionController,
@@ -154,6 +154,7 @@ test('real CLI process commits one authenticated Room report through Host docume
       {
         resolve: value => value.fallback ?? value.key,
       },
+      true,
       true,
       true,
     );

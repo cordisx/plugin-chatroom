@@ -34,7 +34,7 @@
   },
   "devDependencies": {
     "@cordisx/eslint-config": "github:cordisx/cordisxmono#c63c2e8c2ba7e11502934a52ad2ce3734e804cdc",
-    "@cordisx/protocol": "github:cordisx/cordisx-protocol#3b570970a0c2c4be4145c1e3a571b32196b9789a",
+    "@cordisx/protocol": "github:cordisx/cordisx-protocol#6d1650bd328f680cec03c2d0fe323dacd32077aa",
     "@deepseek-ai/cordis": "4.0.1",
     "@deepseek-ai/schemastery": "3.18.1",
     "@oneworks/avatar": "1.0.0-rc.9",
@@ -45,7 +45,7 @@
     "@vitejs/plugin-react": "6.1.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
-    "cordisx": "github:cordisx/cordisx#8833ef94c9a657ea26f33b2c5f8618a31492b53c",
+    "cordisx": "github:cordisx/cordisx#5a70e43e8d3fe30139895ee0bec3df535bf4a16e",
     "dprint": "0.57.1",
     "esbuild": "^0.28.2",
     "eslint": "9.39.4",

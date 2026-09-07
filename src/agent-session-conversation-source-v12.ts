@@ -1,3 +1,5 @@
+import type { AgentSessionDetailReferenceService } from '@cordisx/protocol/agent-detail-navigation/v1';
+import { roomAssociatedSessions } from './room-associated-sessions.js';
 import { roomUserShellMessages } from './room-user-message-shell.js';
 import { roomCliShellMessages } from './room-cli-message-shell.js';
 import type {
@@ -17,7 +19,7 @@ import type {
   AgentConversationShellSubscription,
   AgentConversationShellSubscriptionClosed,
   AgentConversationShellUpdate,
-} from '@cordisx/protocol/agent-conversation-shell/v11';
+} from '@cordisx/protocol/agent-conversation-shell/v12';
 
 import type { ChatroomAgentSessionController } from './agent-session-controller.js';
 import type { ProjectedItem } from './agent-session-projection.js';
@@ -39,7 +41,7 @@ const closeEnvelope = (
     code,
   });
 
-class V11Stream {
+class V12Stream {
   private cursor: number;
   private terminal?: AgentConversationShellSubscriptionClosed;
   private readonly updates: AgentConversationShellUpdate[] = [];
@@ -207,11 +209,11 @@ function applyAdmissionAppendAnchors(
 }
 
 /**
- * Atomic Shell-v11 adapter around the accepted Chatroom domain source. Domain
+ * Atomic Shell-v12 adapter around the accepted Chatroom domain source. Domain
  * state/copy stays unchanged; only execution facts are replaced by the
  * SessionEvent projector.
  */
-export class ChatroomAgentSessionConversationSourceV11 implements AgentConversationShellSource {
+export class ChatroomAgentSessionConversationSourceV12 implements AgentConversationShellSource {
   private disposed = false;
   private sequence = 500;
   private subscriptions = 0;
@@ -219,7 +221,7 @@ export class ChatroomAgentSessionConversationSourceV11 implements AgentConversat
   private roomId?: string;
   private refreshRevision = 0;
   private refreshTail: Promise<void> = Promise.resolve();
-  private readonly streams = new Set<V11Stream>();
+  private readonly streams = new Set<V12Stream>();
   private readonly ready: Promise<void>;
   private unsubscribeDomain?: () => void;
   private readonly unsubscribeProjection: () => void;
@@ -230,6 +232,7 @@ export class ChatroomAgentSessionConversationSourceV11 implements AgentConversat
     private readonly sessions: ChatroomAgentSessionController,
     private shortcutPolicy: ChatroomComposerShortcutPolicy,
     private readonly onDispose: () => void = () => {},
+    private readonly references?: AgentSessionDetailReferenceService,
   ) {
     this.unsubscribeProjection = sessions.subscribeProjection(roomId => {
       if (roomId === this.roomId) void this.refresh();
@@ -240,7 +243,7 @@ export class ChatroomAgentSessionConversationSourceV11 implements AgentConversat
   async snapshot(): Promise<AgentConversationShellSnapshot> {
     await this.ready;
     await this.refreshTail;
-    if (this.snapshotValue === undefined) throw new Error('Chatroom Shell v11 source is unavailable.');
+    if (this.snapshotValue === undefined) throw new Error('Chatroom Shell v12 source is unavailable.');
     return this.snapshotValue;
   }
 
@@ -258,8 +261,8 @@ export class ChatroomAgentSessionConversationSourceV11 implements AgentConversat
       afterSequence,
       snapshotSequence: snapshot.snapshotSequence,
     };
-    let stream!: V11Stream;
-    stream = new V11Stream(subscription, () => this.streams.delete(stream));
+    let stream!: V12Stream;
+    stream = new V12Stream(subscription, () => this.streams.delete(stream));
     this.streams.add(stream);
     return {
       result: { type: 'subscribe', status: 'accepted', code: 'allowed', subscription },
@@ -379,6 +382,11 @@ export class ChatroomAgentSessionConversationSourceV11 implements AgentConversat
       ? { activeRuns: [], items: [] }
       : this.sessions.projectionForRoom(roomId);
     const sessionByRun = new Map(projection.activeRuns.map(run => [run.runId, run.sessionId]));
+    const committedRoom = roomId === undefined ? undefined : this.sessions.rooms.get(roomId);
+    const associatedSessions = committedRoom === undefined
+      ? []
+      : await roomAssociatedSessions(committedRoom, projection.activeRuns, this.references);
+    if (this.disposed || revision !== this.refreshRevision) return;
     const participants = domain.selection.kind === 'room'
       ? domain.selection.participants.map(value => participant(value))
       : [];
@@ -393,12 +401,12 @@ export class ChatroomAgentSessionConversationSourceV11 implements AgentConversat
         ...(domain.selection.secondary === undefined ? {} : { secondary: domain.selection.secondary }),
         participants,
         ...(projection.activeRuns.length === 0 ? {} : { activeRuns: projection.activeRuns }),
+        ...(associatedSessions.length === 0 ? {} : { associatedSessions }),
       };
       selection = domain.selection.multiParticipant
         ? { ...common, multiParticipant: true, participantPresentation: domain.selection.participantPresentation }
         : { ...common, multiParticipant: false, participantPresentation: 'none' };
     }
-    const committedRoom = roomId === undefined ? undefined : this.sessions.rooms.get(roomId);
     const mergedItems = [
       ...(committedRoom === undefined ? [] : roomCliShellMessages(committedRoom)),
       ...(committedRoom === undefined ? [] : roomUserShellMessages(committedRoom, projection.admittedRoomItemIds)),
