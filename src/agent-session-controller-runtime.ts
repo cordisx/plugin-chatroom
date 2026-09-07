@@ -277,7 +277,19 @@ export class ChatroomAgentSessionRuntimeController extends ChatroomAgentSessionA
     }
     const key = runKey(roomId, runId);
     try {
-      await this.mutateRoom(roomId, current => bindRoomRunSession(current, runId, result.sessionId));
+      if (run.sessionId === undefined) {
+        await this.mutateRoom(roomId, current => bindRoomRunSession(current, runId, result.sessionId));
+      } else {
+        const currentRun = this.requireRun(this.requireRoom(roomId), runId);
+        if (
+          result.sessionId !== run.sessionId || currentRun.sessionId !== run.sessionId
+          || currentRun.memberId !== run.memberId
+        ) {
+          throw new Error('Agent resume changed the existing Room run Session identity.');
+        }
+        // Resume recovers live authority, not a new Room association. Rebinding
+        // the same Session would rewrite presence and clear retained operations.
+      }
       await this.ensureCollaboration(roomId, runId);
       if (!this.isCurrent(generation)) throw new Error('Agent acquisition was replaced before publication.');
       const owner: RuntimeOwner = { handle: result.handle, disposition: result.disposition };
