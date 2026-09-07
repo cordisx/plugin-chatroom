@@ -200,6 +200,16 @@ export abstract class ChatroomAgentSessionProjectionController extends ChatroomA
     return this.localUnavailableRuns.has(runKey(roomId, runId));
   }
 
+  /** A submit may attempt exact recovery; this is not live authority or readiness. */
+  canAttemptRunRecovery(roomId: string, runId: string): boolean {
+    const room = this.rooms.get(roomId);
+    const run = room?.runs.find(value => value.runId === runId);
+    return room !== undefined && !room.archived && run?.collaborationMode === 'cli'
+      && run.sessionId !== undefined
+      && ['active', 'waiting', 'running', 'completed'].includes(run.status)
+      && this.localUnavailableRuns.get(runKey(roomId, runId)) === 'session-unavailable';
+  }
+
   /** Observer hydration reads SessionEvent replay and never claims mutation authority or writes Room state. */
   async hydrate(): Promise<void> {
     this.assertUsable();

@@ -62,6 +62,14 @@ binding before permitting a task. A different returned Session is rejected and
 its acquired handle disposed. Observer hydration remains get/subscribe only;
 it cannot recover authority, issue credentials, or write the Room document.
 
+Composer routing must preserve the recovery target before calling `resume`.
+A CLI run with an original Session and a local `session-unavailable` observation
+remains selectable for an explicit recovery attempt; it is still omitted from
+live-presence projection until restored. This selection is not authorization.
+Other unavailable CLI targets report a target error instead of falling through
+to the legacy retire-and-create path. Testing the recovery helper alone misses
+this earlier UI routing decision.
+
 The actual Host Shell uses `ChatroomAgentSessionConversationSourceV10` registered
 through `registerSourceV10`. Its predecessor source type only accepts SessionEvent
 or acknowledgement messages; do not forge an event sequence or acknowledgement
