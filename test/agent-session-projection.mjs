@@ -693,3 +693,24 @@ test('marks a Session surface replacement for one atomic Shell snapshot replacem
   assert.equal(replaced.items[0].messageId, 'user-two');
   assert.deepEqual(replaced.items[0].source, { kind: 'session-event', sessionId, eventSeq: 2 });
 });
+
+test('CLI collaboration run keeps ordinary assistant transcript out of the Room projection', () => {
+  const original = roomFixture();
+  const room = createRoom({
+    ...original,
+    runs: original.runs.map(run => ({ ...run, collaborationMode: 'cli' })),
+  });
+  assert.equal(room.runs[0].collaborationMode, 'cli');
+  const projector = new ChatroomAgentSessionProjector(room, room.runs[0], sessionId, () => 10);
+  const projected = projector.project(page('replay', [event(1, 'assistant/message', {
+    turn: 1,
+    step: 1,
+    message: {
+      id: 'private-assistant',
+      role: 'assistant',
+      content: [{ type: 'text', text: 'This is not a CLI report.' }],
+      source: { kind: 'model', provider: 'provider', model: 'model' },
+    },
+  })]));
+  assert.equal(projected.items.length, 0);
+});

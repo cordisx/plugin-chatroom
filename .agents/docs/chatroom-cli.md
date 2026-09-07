@@ -1,0 +1,65 @@
+# Explicit Chatroom reports
+
+Audience: Chatroom maintainers and Agent-tool integrators. This work is an
+experimental consumer of the Host agent-tools contract. A handler or parser
+check is not a working Host channel or an accepted native experience.
+
+The packaged [Skill](../../src/skills/chatroom/SKILL.md) describes reporting.
+Enable `cliReporting: true` in the isolated plugin configuration to opt in;
+existing configurations preserve ordinary Session-message behavior. A run that
+has entered CLI binding cannot silently downgrade when tools become unavailable.
+
+## Message ownership
+
+The Host authenticates the command and freezes its plugin generation, Session,
+and Room/member/run scope. The CLI submits text, an operation ID, and optionally
+an equal Room constraint. It never selects a sender. The handler checks current
+Room membership, exact run/Session, and archive state before every write/replay.
+
+`Room.cliMessages` is part of the existing Room document, written through the
+already-open `DurableChatroomRoomStore.compareAndSwap`. It is the message fact
+and durable idempotency evidence, not another database or a second Session
+transcript. The key includes Room, participant, member, run, Session, and
+operation ID. Equal text returns the existing message ID; changed text rejects.
+A whole-registry CAS conflict retries against the current snapshot. The bounded
+record collection rejects at capacity instead of forgetting old operation IDs.
+
+Only successfully bound CLI-mode runs suppress ordinary assistant messages in
+Room projection. Their native execution history, lifecycle, errors, and approval
+facts remain intact. Initial binding failure marks the existing member presence
+failed and prevents task submission. CLI errors never fabricate a Room report. After an observed turn ends, the
+projection shows an unreported warning if the run has no CLI message timestamped
+since that turn began. A later real report clears this derived warning. This
+reports an absence of a Room update; it does not guess a CLI failure cause.
+CLI-mode assistant mentions also do not trigger automatic cross-member sends.
+
+## Current integration boundaries
+
+The first milestone is a newly created Room/Agent: persist the real run and
+Session, bind tools, then allow the first task. Revoked CLI-bound resume remains
+fail closed until the Host supplies a supported two-phase rebind path. Ordinary
+unbound Agent resume remains independent of that limitation.
+
+The actual Host Shell uses `ChatroomAgentSessionConversationSourceV10` registered
+through `registerSourceV10`. Its predecessor source type only accepts SessionEvent
+or acknowledgement messages; do not forge an event sequence or acknowledgement
+to display a CLI fact. The v10 `plugin-command` source expresses the original Room message ID,
+identity, operation, and sequence without inventing a SessionEvent. Real
+CDP/native integration is still required before declaring this consumer ready. `test/real-cli-room.mjs` exercises the
+installed Host authority, resource deployment, executable CLI subprocess,
+socket, renderer service, Room handler and Host document persistence. Its
+explicitly substituted CDP wire and Agent ownership source limit that evidence
+to a controlled integration; no CLI execution or Room write is mocked. Fallback React-page visibility
+alone does not validate the user's Host Shell experience.
+
+## Avoid repeated integration failures
+
+- Verify `selectChatroomPageMount` and the actual Shell source; README wording
+  cannot identify the current selected runtime.
+- New Room fields must survive `createRoom`, `freezeRun`, and
+  `bindRoomRunSession`. Testing only the handler misses dropped fields on resume.
+- Source-transpilation tests with explicit file lists must include new imported
+  modules. A missing file in such a harness is not a product runtime defect.
+- CLI scripts and Skill resources need valid package-integrity coverage. Never
+  relabel Node scripts as browser modules or Markdown as an image to satisfy an
+  older artifact schema.

@@ -1,3 +1,4 @@
+import { type ChatroomCliPageMessage, roomCliPageMessages } from './room-cli-message-page.js';
 import type {
   AgentConversationActiveRunDescriptor,
   AgentConversationItem as AgentConversationItemV7,
@@ -25,7 +26,11 @@ import type { ChatroomCommandIntent, ChatroomConversationController } from './co
 import { approvalDecisionOperationId } from './room-agent-operations.js';
 import type { Room } from './room.js';
 
-export type ChatroomPageItem = AgentConversationItemV3 | AgentConversationItemV7 | ProjectedItem;
+export type ChatroomPageItem =
+  | AgentConversationItemV3
+  | AgentConversationItemV7
+  | ProjectedItem
+  | ChatroomCliPageMessage;
 
 export interface ChatroomPageSnapshot {
   readonly revision: number;
@@ -132,6 +137,7 @@ export class ChatroomPageSource {
       items: chronologicalItems([
         ...domainItems,
         ...projection.items,
+        ...(room === undefined ? [] : roomCliPageMessages(room)),
       ]),
       shortcutPolicy: this.settings.current,
     });

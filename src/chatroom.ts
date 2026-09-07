@@ -1,3 +1,5 @@
+import { ChatroomCliBindings } from './room-cli-bindings.js';
+import type { AgentTools } from '@cordisx/protocol/agent-tools/v1';
 import type { Context } from '@deepseek-ai/cordis';
 import type {
   AgentConversationShellBinding as AgentConversationShellBindingV9,
@@ -18,7 +20,7 @@ const avatarDevelopmentDependencies = () =>
 void avatarDevelopmentDependencies;
 
 import { ChatroomAgentSessionController } from './agent-session-controller.js';
-import { ChatroomAgentSessionConversationSourceV7 } from './agent-session-conversation-source-v7.js';
+import { ChatroomAgentSessionConversationSourceV10 } from './agent-session-conversation-source-v10.js';
 import { v3BindingFor } from './agent-session-conversation-source.js';
 import {
   CHATROOM_COMMAND_APPROVAL_APPROVE,
@@ -229,8 +231,13 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     entitySnapshot,
   );
   const roomStore = await DurableChatroomRoomStore.openOwnerDocuments(ctx.documents);
+  const agentTools: AgentTools | undefined = ctx.reflect.get('agentTools', false);
+  const collaboration = new ChatroomCliBindings(agentTools, roomStore, ctx.settings);
+  ctx.effect(() => () => {
+    void collaboration.dispose();
+  }, 'chatroom.cli-tools');
   const agentSession = new ChatroomAgentSessionController(
-    { agents: ctx.agents, sessions: ctx.sessions, approvals: ctx.approvals },
+    { agents: ctx.agents, sessions: ctx.sessions, approvals: ctx.approvals, collaboration },
     agent,
     roomStore,
   );
@@ -238,6 +245,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     await agentSession.hydrate();
   } catch (error) {
     await agentSession.dispose();
+    await collaboration.dispose();
     roomStore.dispose();
     throw error;
   }
@@ -481,7 +489,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     (binding: AgentConversationShellBindingV9) => {
       const domain = controller.createSource(v3BindingFor(binding), { admissionMode: 'v9' });
       let unsubscribeSettings = () => {};
-      const source = new ChatroomAgentSessionConversationSourceV7(
+      const source = new ChatroomAgentSessionConversationSourceV10(
         binding,
         domain,
         agentSession,

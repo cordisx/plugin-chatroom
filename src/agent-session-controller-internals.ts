@@ -96,7 +96,15 @@ import {
   submitChatroomPageAdmissionRouteReservation,
 } from './agent-page-admission-v2.js';
 
+/** Consumer lifecycle coordination. Implemented by the Chatroom Host-tool adapter. */
+export interface ChatroomRunCollaboration {
+  enabled(): boolean;
+  ensureBound(room: Room, run: RoomRun): Promise<void>;
+  revoke(sessionId: string): Promise<void>;
+}
+
 export interface ChatroomAgentRuntimeContext {
+  readonly collaboration?: ChatroomRunCollaboration;
   readonly agents: CordisXAgentRegistryV1;
   readonly sessions: SessionRegistry;
   readonly approvals: ApprovalServiceV1 & ApprovalServiceV2 & ApprovalServiceV3;

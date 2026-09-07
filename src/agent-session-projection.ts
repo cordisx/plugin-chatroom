@@ -1,3 +1,4 @@
+import { roomCliReportStatus } from './room-cli-report-status.js';
 import type {
   AgentConversationActiveRunDescriptor,
   AgentConversationItem,
@@ -56,7 +57,7 @@ export interface ChatroomSessionAgentFacts {
 export type ProjectedItem =
   | AgentConversationMessageItem
   | AgentConversationApprovalItemV6
-  | Extract<AgentConversationItem, { readonly kind: 'approval'; }>;
+  | Extract<AgentConversationItem, { readonly kind: 'approval' | 'status'; }>;
 type PendingApprovalItem = Extract<AgentConversationApprovalItemV6, { readonly state: 'pending'; }>;
 type ApprovalAskedFact = {
   readonly eventSeq: number;
@@ -254,10 +255,17 @@ export class ChatroomAgentSessionProjector {
   }
 
   snapshotItems(): readonly ProjectedItem[] {
+    const reportStatus = roomCliReportStatus(
+      this.room,
+      this.run,
+      [...this.events.values()],
+      eventSeq => this.presentationSequenceFor(eventSeq, 'message'),
+    );
     return Object.freeze(
       [...this.itemsByEventSeq.entries()]
         .sort(([left], [right]) => left - right)
-        .map(([, item]) => item),
+        .map(([, item]) => item)
+        .concat(reportStatus === undefined ? [] : [reportStatus]),
     );
   }
 
@@ -433,6 +441,7 @@ export class ChatroomAgentSessionProjector {
   private projectAssistantMessage(
     event: Extract<SessionEvent, { readonly type: 'assistant/message'; }>,
   ): ChatroomSessionProjectionChange | undefined {
+    if (this.run.collaborationMode === 'cli') return undefined;
     const requests = this.sourceUserMessages(event);
     const body = bodyFor(visibleAssistantContent(event.data.message.content));
     if (body === undefined) return undefined;

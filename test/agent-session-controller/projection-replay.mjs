@@ -3,7 +3,7 @@ export function registerProjectionReplayTests(harness) {
     CHATROOM_DEFAULT_AGENT_CONFIGURATION,
     ChatroomAgentSessionController,
     ChatroomAgentSessionConversationSource,
-    ChatroomAgentSessionConversationSourceV7,
+    ChatroomAgentSessionConversationSourceV10,
     ChatroomConversationController,
     DurableChatroomRoomStore,
     FakeSession,
@@ -679,7 +679,7 @@ export function registerProjectionReplayTests(harness) {
       routeSelection: { scope: 'room-or-new', selectedRoomParam: 'room' },
     };
     const domain = new ChatroomConversationController(store.rooms);
-    const source = new ChatroomAgentSessionConversationSourceV7(
+    const source = new ChatroomAgentSessionConversationSourceV10(
       binding,
       domain.createSource(binding),
       controller,
@@ -796,7 +796,7 @@ export function registerProjectionReplayTests(harness) {
 
     await subscription.handle.unsubscribe();
     source.dispose();
-    const remounted = new ChatroomAgentSessionConversationSourceV7(
+    const remounted = new ChatroomAgentSessionConversationSourceV10(
       binding,
       domain.createSource(binding),
       controller,
@@ -820,7 +820,7 @@ export function registerProjectionReplayTests(harness) {
       store,
     );
     const coldDomain = new ChatroomConversationController(store.rooms);
-    const coldSource = new ChatroomAgentSessionConversationSourceV7(
+    const coldSource = new ChatroomAgentSessionConversationSourceV10(
       binding,
       coldDomain.createSource(binding),
       coldController,

@@ -81,6 +81,7 @@ export function freezeRun(run: RoomRun, member: RoomMembership): RoomRun {
       title: run.title,
       status: run.status,
       sessionId: run.sessionId,
+      ...(run.collaborationMode === undefined ? {} : { collaborationMode: run.collaborationMode }),
       ...(run.sessionSelfIntroduction === undefined ? {} : {
         sessionSelfIntroduction: Object.freeze({ ...run.sessionSelfIntroduction }),
       }),
