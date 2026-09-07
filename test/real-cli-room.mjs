@@ -22,6 +22,8 @@ import {
 import { DurableChatroomRoomStore } from '../dist/room-store.js';
 import { addRoomRun, bindRoomRunSession, createRoom } from '../dist/room.js';
 import { ChatroomCliBindings } from '../dist/room-cli-bindings.js';
+import { projectAgentConversationShellSnapshotV7 } from '../node_modules/cordisx/packages/cli/dist/src/renderer/agent-conversation-shell-projection.js';
+import { agentSessionControllerHarness as h } from './agent-session-controller/harness.mjs';
 
 // Uses the installed exact Host candidate's test boundary. Only the CDP wire and
 // Agent ownership source are controlled; CLI, socket/auth, resource deployment,
@@ -73,13 +75,47 @@ test('real CLI process commits one authenticated Room report through Host docume
   });
   let store;
   let bindings;
+  let shell;
+  let sessionController;
+  let domain;
   try {
     store = await DurableChatroomRoomStore.openOwnerDocuments(documents);
     let room = createRoom({ id: 'room-real-cli', title: 'Real CLI integration' });
+    room = createRoom({
+      ...room,
+      participants: [
+        { id: 'human', kind: 'human', name: 'You' },
+        ...room.memberships.map(member => ({ id: member.participantId, kind: 'agent', name: member.label })),
+      ],
+    });
     const member = room.memberships[0];
     room = addRoomRun(room, { runId: 'run-real-cli', memberId: member.memberId, status: 'creating' });
     room = bindRoomRunSession(room, 'run-real-cli', 'session-simulated-agent');
     await store.upsert(room);
+    const simulated = h.runtimeHarness({ room });
+    sessionController = new h.ChatroomAgentSessionController(
+      {
+        agents: simulated.agents,
+        sessions: simulated.sessionRegistry,
+        approvals: simulated.approvals,
+      },
+      h.CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+      store,
+    );
+    const shellBinding = {
+      bindingId: 'shell-real-cli',
+      shell: 'agent-desktop',
+      ownerGeneration: 'shell-generation',
+      routeSelection: { scope: 'room-or-new', selectedRoomParam: room.id },
+    };
+    domain = new h.ChatroomConversationController(store.rooms);
+    shell = new h.ChatroomAgentSessionConversationSourceV10(
+      shellBinding,
+      domain.createSource(shellBinding),
+      sessionController,
+      'enter',
+    );
+    await shell.snapshot();
     bindings = new ChatroomCliBindings(service, store, { get: () => ({ cliReporting: true }), watch: () => () => {} });
     await bindings.ensureBound(room, room.runs[0]);
     const setup = await getAgentToolSetup('session-simulated-agent');
@@ -104,6 +140,20 @@ test('real CLI process commits one authenticated Room report through Host docume
     assert.equal(reports[0].participantId, member.participantId);
     assert.equal(reports[0].memberId, member.memberId);
     assert.equal(reports[0].messageId, first.messageId);
+    await new Promise(resolve => setImmediate(resolve));
+    const shellSnapshot = await shell.snapshot();
+    const visible = shellSnapshot.items.filter(item => item.kind === 'message' && item.messageId === first.messageId);
+    assert.equal(visible.length, 1);
+    assert.equal(visible[0].source.kind, 'plugin-command');
+    assert.equal(visible[0].source.sequence, reports[0].sequence);
+    assert.equal(visible[0].author.participantId, member.participantId);
+    assert.equal(visible[0].body[0].text.fallback, 'Accepted the assigned work.');
+    const hostModel = projectAgentConversationShellSnapshotV7('chatroom', shellSnapshot, {
+      resolve: value => value.fallback ?? value.key,
+    }, true);
+    const hostMessage = hostModel.entries.find(item => item.kind === 'message' && item.messageId === first.messageId);
+    assert.equal(hostMessage.authorId, member.participantId);
+    assert.deepEqual(hostMessage.body, ['Accepted the assigned work.']);
     await assert.rejects(promisify(execFile)(command.argv[0], [...argv, '--room', 'unauthorized-room']), error => {
       assert.equal(JSON.parse(error.stdout).code, 'unauthorized');
       return true;
@@ -117,6 +167,9 @@ test('real CLI process commits one authenticated Room report through Host docume
     await bindings.revoke('session-simulated-agent');
     await assert.rejects(promisify(execFile)(command.argv[0], argv));
   } finally {
+    shell?.dispose();
+    await sessionController?.dispose();
+    domain?.dispose();
     await bindings?.dispose();
     service.dispose();
     store?.dispose();
