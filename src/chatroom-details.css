@@ -1,0 +1,15 @@
+.cx-chatroom-identity { display: grid; gap: 24px; min-width: 0; }
+.cx-chatroom-identity__hero { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; gap: 12px; }
+.cx-chatroom-identity__hero > .cx-chatroom-avatar { width: 44px; height: 44px; }
+.cx-chatroom-identity h3 { margin: 0 0 8px; font-size: 13px; }
+.cx-chatroom-identity p { color: var(--cx-chatroom-muted); font-size: 12px; overflow-wrap: anywhere; }
+.cx-chatroom-identity__sessions { display: grid; gap: 6px; }
+.cx-chatroom-identity__sessions button { display: grid; width: 100%; min-width: 0; gap: 4px; justify-items: start; text-align: start; }
+.cx-chatroom-identity__sessions button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.cx-chatroom-identity__sessions small { color: var(--cx-chatroom-muted); }
+.cx-chatroom-settings { display: grid; gap: 16px; }
+.cx-chatroom-settings label { display: grid; gap: 8px; font-size: 12px; }
+.cx-chatroom-settings input, .cx-chatroom-settings textarea { box-sizing: border-box; width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--cx-chatroom-border); border-radius: 8px; background: var(--cx-surface, Canvas); color: inherit; font: inherit; }
+.cx-chatroom-settings textarea { resize: vertical; }
+.cx-chatroom-settings input:focus-visible, .cx-chatroom-settings textarea:focus-visible { outline: 2px solid var(--cx-primary, Highlight); outline-offset: 2px; }
+.cx-chatroom-settings p[role='alert'], .cx-chatroom-identity p[role='alert'] { color: var(--cx-danger, Mark); }
