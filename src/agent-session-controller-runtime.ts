@@ -1,3 +1,4 @@
+import { resumeChatroomSession } from './room-session-resume.js';
 import { createRoom } from './room.js';
 import { failRoomRunPresence } from './room-engagement.js';
 import {
@@ -243,11 +244,7 @@ export class ChatroomAgentSessionRuntimeController extends ChatroomAgentSessionA
     const run = this.requireRun(room, runId);
     const member = this.requireMember(room, run.memberId);
     const raw: RuntimeAcquireResult = run.sessionId !== undefined
-      ? await this.runtime.agents.resume({
-        sessionId: run.sessionId,
-        definitionSource: 'session-persisted',
-        mutationId: acquisitionMutationId('resume', roomId, runId),
-      })
+      ? await resumeChatroomSession(this.runtime, room, run)
       : run.taskBinding !== undefined
       ? await this.runtime.agents.acquireLegacyTaskBinding({
         $schema: CORDISX_AGENT_SESSION_LEGACY_ACQUIRE_SCHEMA_V1,
