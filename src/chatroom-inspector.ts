@@ -33,7 +33,7 @@ export function useChatroomInspector(root: RefObject<HTMLElement | null>, open: 
     if (element === null) return;
     const measure = () => {
       setContainerWidth(element.clientWidth);
-      if (element.clientWidth <= 760) endResize();
+      if (element.clientWidth < 900) endResize();
     };
     measure();
     const Observer = element.ownerDocument.defaultView?.ResizeObserver;
@@ -49,7 +49,7 @@ export function useChatroomInspector(root: RefObject<HTMLElement | null>, open: 
   useLayoutEffect(() => {
     if (!open || signal.aborted) endResize();
   }, [open, signal]);
-  const narrow = containerWidth > 0 && containerWidth <= 760;
+  const narrow = containerWidth > 0 && containerWidth < 900;
   const width = clampInspectorWidth(preferredWidth, containerWidth);
   const updateWidth = (next: number) => setPreferredWidth(clampInspectorWidth(next, root.current?.clientWidth ?? 0));
   const endPointer = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -66,7 +66,7 @@ export function useChatroomInspector(root: RefObject<HTMLElement | null>, open: 
       'aria-valuenow': width,
       tabIndex: narrow ? -1 : 0,
       onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => {
-        if (event.button !== 0 || !open || signal.aborted || (root.current?.clientWidth ?? 0) <= 760) return;
+        if (event.button !== 0 || !open || signal.aborted || (root.current?.clientWidth ?? 0) < 900) return;
         event.preventDefault();
         endResize();
         event.currentTarget.setPointerCapture(event.pointerId);

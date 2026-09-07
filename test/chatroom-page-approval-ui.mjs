@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const page = await readFile(new URL('../src/chatroom-timeline.tsx', import.meta.url), 'utf8');
+const page = await readFile(new URL('../src/chatroom-timeline-entries.tsx', import.meta.url), 'utf8');
 const css = await readFile(new URL('../src/chatroom-timeline.css', import.meta.url), 'utf8');
 const runtime = await readFile(new URL('../src/chatroom.ts', import.meta.url), 'utf8');
 
 test('renders approvals as Reviewer-authored, authority-targeted cards with no cancel control', () => {
-  assert.match(page, /participant=\{participants\.find\(participant => participant\.id === item\.participantId\)\}/u);
+  assert.match(page, /participant \?\? \{ id: item\.participantId/u);
   assert.match(page, /approvalAuthorityLabel\(item, participants, t\)/u);
   assert.match(page, /requester: participant\?\.name \?\? item\.participantId/u);
   assert.match(page, /item\.actions\.some\(action => action\.decision === 'approve'\)/u);

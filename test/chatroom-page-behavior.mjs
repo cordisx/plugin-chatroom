@@ -6,6 +6,9 @@ import ts from 'typescript';
 // Deterministic hook/element harness: executes the production handlers and
 // lifecycle effects without claiming browser layout or native acceptance.
 async function componentHarness(file, dependencies = {}) {
+  if (file === 'chatroom-timeline.tsx' && dependencies['./chatroom-timeline-entries.js'] === undefined) {
+    dependencies['./chatroom-timeline-entries.js'] = (await componentHarness('chatroom-timeline-entries.tsx')).exports;
+  }
   const state = [];
   const effects = [];
   let index = 0;
@@ -44,6 +47,8 @@ async function componentHarness(file, dependencies = {}) {
     fileName: file,
   }).outputText;
   const require = name => {
+    if (name === './chatroom-room-actions.js') return { ChatroomRoomActions: 'RoomActions' };
+    if (name === './chatroom-message-body.js') return { ChatroomMessageBody: 'MessageBody' };
     if (name === 'cordisx/react') return react;
     if (name === './chatroom-inspector.js') {
       return dependencies[name] ?? { useChatroomInspector: () => ({ width: 360, narrow: false, separatorProps: {} }) };
@@ -156,7 +161,7 @@ test('cold message author and reaction avatars relay persisted participant IDs a
   });
   const messageElement = all(tree, node => node.props?.item === item)[0];
   const message = messageElement.type(messageElement.props);
-  assert.equal(all(message, node => node.type === 'MarkdownViewer')[0].props.source, '**cold history**');
+  assert.equal(all(message, node => node.type === 'MessageBody')[0].props.source, '**cold history**');
   for (const element of all(message, node => typeof node.type === 'function' && node.props.participant !== undefined)) {
     element.type(element.props).props.onClick();
   }
@@ -171,7 +176,7 @@ test('page opens details without active runs, filters members, returns and sends
     activeRuns: [],
     shortcutPolicy: 'enter',
     participants: [
-      { participantId: 'agent', role: 'agent', displayName: { fallback: 'Agent' } },
+      { participantId: 'agent', role: 'agent', displayName: { fallback: 'Worker' } },
       { participantId: 'human', role: 'human', displayName: { fallback: 'Human' } },
     ],
   };
@@ -182,7 +187,9 @@ test('page opens details without active runs, filters members, returns and sends
     './chatroom-room-settings.js': { ChatroomRoomSettings: 'RoomSettings' },
     './chatroom-composer.js': { ChatroomComposer: 'Composer' },
   });
+  const navigations = [];
   const props = {
+    navigation: { navigate: async target => navigations.push(target) },
     params: { roomId: 'room' },
     t,
     details: {},
@@ -196,6 +203,13 @@ test('page opens details without active runs, filters members, returns and sends
     return tree;
   };
   let tree = render();
+  await all(tree, node => node.type === 'RoomActions')[0].props.onDeleted();
+  assert.deepEqual(navigations, [{ id: 'new-room' }]);
+  all(tree, node => node.props?.children === 'room.settings')[0].props.onClick();
+  tree = render();
+  all(tree, node => node.type === 'RoomSettings')[0].props.onSaved();
+  tree = render();
+  assert.equal(byClass(tree, 'cx-chatroom-inspector'), undefined);
   let restored = false;
   tree.props.onFocusCapture({
     target: {
@@ -211,6 +225,28 @@ test('page opens details without active runs, filters members, returns and sends
   tree = render();
   assert.equal(all(tree, node => node.props?.className === 'cx-chatroom-members__member').length, 1);
   assert.ok(all(tree, node => node.type === 'small').some(node => node.props.children === 'members.status.unknown'));
+  byClass(tree, 'cx-chatroom-members__search').props.onChange({ currentTarget: { value: 'aGeNt' } });
+  tree = render();
+  assert.equal(
+    all(tree, node => node.props?.className === 'cx-chatroom-members__member').length,
+    1,
+    'role is searchable independently of display name',
+  );
+  let searchFocused = false;
+  byClass(tree, 'cx-chatroom-members__search').props.ref.current = {
+    focus: () => {
+      searchFocused = true;
+    },
+  };
+  byClass(tree, 'cx-chatroom-members__search').props.onKeyDown({
+    key: 'Escape',
+    preventDefault() {},
+    stopPropagation() {},
+  });
+  tree = render();
+  assert.equal(byClass(tree, 'cx-chatroom-members__search').props.value, '');
+  assert.equal(searchFocused, true);
+  assert.ok(byClass(tree, 'cx-chatroom-inspector'), 'first Escape clears search without closing');
   byClass(tree, 'cx-chatroom-members__search').props.onChange({ currentTarget: { value: 'no match' } });
   assert.ok(all(render(), node => node.type === 'p').some(node => node.props.children === 'members.empty'));
   byClass(tree, 'cx-chatroom-members__search').props.onChange({ currentTarget: { value: '' } });
@@ -223,7 +259,7 @@ test('page opens details without active runs, filters members, returns and sends
   assert.equal(composer.props.participants[0].mentionAlias, 'stable-agent-target');
   assert.equal(
     composer.props.participants[0].name,
-    'Agent',
+    'Worker',
     'canonical mention target does not replace the display name',
   );
   all(tree, node => node.type === 'button' && node.props['aria-label'] === 'members.title')[0].props.onClick();
@@ -345,7 +381,7 @@ test('inspector resize clamps pointer/keyboard width and preserves it across det
   assert.equal(render().width, 324, 'same panel width survives navigation and close/reopen');
   view = render();
   view.separatorProps.onPointerDown(pointer(3, 500));
-  root.current.clientWidth = 700;
+  root.current.clientWidth = 899;
   measure();
   view = render();
   assert.equal(view.narrow, true);
@@ -514,6 +550,8 @@ test('narrow inspector contains keyboard focus, makes the header inert and respe
   all(tree, node => node.type === 'Timeline')[0].props.onParticipantClick('persisted-agent');
   tree = render();
   assert.equal(byClass(tree, 'cx-chatroom-header').props.inert, true);
+  assert.equal(byClass(tree, 'cx-chatroom-conversation').props.inert, true);
+  assert.ok(byClass(tree, 'cx-chatroom-inspector__scrim'));
   const panel = byClass(tree, 'cx-chatroom-inspector');
   assert.equal(panel.props['aria-modal'], true);
   const focused = [];
@@ -527,4 +565,134 @@ test('narrow inspector contains keyboard focus, makes the header inert and respe
   assert.ok(byClass(render(), 'cx-chatroom-inspector'), 'nested controls may consume Escape');
   tree.props.onKeyDown({ key: 'Escape', defaultPrevented: false, preventDefault() {}, stopPropagation() {} });
   assert.equal(byClass(render(), 'cx-chatroom-inspector'), undefined);
+});
+
+test('message grouping, author mentions, readable state and keyboard context preserve historical facts', async () => {
+  const harness = await componentHarness('chatroom-timeline-entries.tsx');
+  const calls = [];
+  const item = {
+    kind: 'message',
+    itemId: 'm',
+    timestamp: '2026-09-08T00:00:00Z',
+    author: {
+      participantId: 'agent',
+      role: 'agent',
+      displayName: { fallback: 'Author' },
+      agentIdentity: { agentId: 'a', revision: 1 },
+    },
+    body: [{ text: { fallback: 'Original body' } }],
+    runState: 'running',
+    deliveryState: 'delivered',
+    reactions: [{
+      reactionId: 'r',
+      actorParticipantId: 'reviewer',
+      state: 'completed',
+      value: { kind: 'emoji', emoji: '👍' },
+    }],
+  };
+  const props = {
+    item,
+    participants: [{ id: 'reviewer', name: 'Reviewer' }],
+    t,
+    copyAvailable: true,
+    onCopy() {},
+    onMentionParticipant: id => calls.push(id),
+    onOpenActions: (...args) => calls.push(args),
+  };
+  let tree = harness.render(harness.exports.MessageItem, props);
+  assert.equal(
+    all(tree, node => node.props?.role === 'status').length,
+    0,
+    'historical running alone is not live status',
+  );
+  byClass(tree, 'cx-chatroom-message__author').props.onClick();
+  assert.equal(calls[0], 'agent');
+  tree.props.onKeyDown({ key: 'F10', shiftKey: true });
+  assert.equal(calls[1][2], 'Original body');
+  assert.equal(
+    all(tree, node => node.props?.role === 'listitem')[0].props['aria-label'],
+    'Reviewer: 👍 · timeline.reaction.completed',
+  );
+  tree = harness.render(harness.exports.MessageItem, { ...props, previous: item, next: item });
+  assert.equal(tree.props['data-group-start'], false);
+  assert.equal(byClass(tree, 'cx-chatroom-message__author'), undefined);
+  assert.ok(byClass(tree, 'cx-chatroom-message__avatar-placeholder'));
+  tree = harness.render(harness.exports.MessageItem, {
+    ...props,
+    previous: { ...item, author: { ...item.author, agentIdentity: { agentId: 'a', revision: 2 } } },
+  });
+  assert.equal(tree.props['data-group-start'], true, 'revision boundaries start a new group');
+  for (
+    const [runState, deliveryState, expected] of [['stopped', 'delivered', 'timeline.run.stopped'], [
+      'failed',
+      'delivered',
+      'timeline.run.failed',
+    ], [undefined, 'pending', 'timeline.delivery.pending']]
+  ) {
+    tree = harness.render(harness.exports.MessageItem, { ...props, item: { ...item, runState, deliveryState } });
+    assert.equal(all(tree, node => node.props?.role === 'status')[0].props.children, expected);
+  }
+});
+
+test('approval body copy, diagnostics, mention, individual decision availability and completion focus', async () => {
+  const harness = await componentHarness('chatroom-timeline-entries.tsx');
+  const calls = [];
+  let focused = false;
+  const item = {
+    kind: 'approval',
+    itemId: 'approval',
+    participantId: 'author',
+    state: 'pending',
+    reason: 'Exact reason',
+    diagnostic: { fallback: 'Diagnostic' },
+    actions: [{ decision: 'approve' }],
+  };
+  const props = {
+    item,
+    participant: { id: 'author', name: 'Author' },
+    participants: [],
+    roomId: 'room',
+    source: {
+      decideApproval: async (...args) => {
+        calls.push(args);
+        return true;
+      },
+    },
+    t,
+    copyAvailable: true,
+    onCopy: text => calls.push(text),
+    onMentionParticipant: id => calls.push(id),
+    onOpenActions: (...args) => calls.push(args),
+  };
+  const render = () => {
+    const tree = harness.render(harness.exports.ApprovalItem, props);
+    tree.props.ref.current = {
+      focus: () => {
+        focused = true;
+      },
+      contains: () => true,
+    };
+    harness.flush();
+    return tree;
+  };
+  let tree = render();
+  byClass(tree, 'cx-chatroom-approval__copy').props.onClick({ currentTarget: {} });
+  assert.equal(calls[0], 'Exact reason');
+  byClass(tree, 'cx-chatroom-message__author').props.onClick();
+  assert.equal(calls[1], 'author');
+  tree.props.onKeyDown({ key: 'ContextMenu' });
+  assert.equal(calls[2][2], 'Exact reason');
+  assert.ok(all(tree, node => node.props?.role === 'status').some(node => node.props.children === 'Diagnostic'));
+  const decisions = all(tree, node => node.type === 'Button');
+  assert.equal(decisions.length, 1, 'do not invent a deny or cancel action');
+  decisions[0].props.onFocus();
+  decisions[0].props.onClick();
+  decisions[0].props.onClick();
+  assert.deepEqual(calls[3], ['room', 'approval', 'approved']);
+  assert.equal(calls.length, 4, 'synchronous pending guard prevents duplicate submission');
+  props.item = { ...item, state: 'approved' };
+  tree = render();
+  assert.equal(focused, true);
+  assert.equal(all(tree, node => node.type === 'Button').length, 0);
+  harness.unmount();
 });

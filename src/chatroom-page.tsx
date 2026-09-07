@@ -21,6 +21,7 @@ import './chatroom-page.css';
 import type { ChatroomPageDetails } from './chatroom-page-details.js';
 import { ChatroomMemberDetails } from './chatroom-member-details.js';
 import { ChatroomRoomSettings } from './chatroom-room-settings.js';
+import { ChatroomRoomActions } from './chatroom-room-actions.js';
 import { ChatroomTimeline } from './chatroom-timeline.js';
 import { ChatroomComposer } from './chatroom-composer.js';
 import { useChatroomInspector } from './chatroom-inspector.js';
@@ -70,6 +71,7 @@ export function ChatroomPage(
   const membersTrigger = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const restoreFocus = useRef(false);
+  const memberSearchInput = useRef<HTMLInputElement>(null);
   const inspectorHeading = useRef<HTMLHeadingElement>(null);
   const inspectorId = useId();
   const closeInspector = () => {
@@ -82,7 +84,7 @@ export function ChatroomPage(
   };
   const openParticipant = (participantId: string) => {
     if (details === undefined) {
-      setMemberSearch('');
+      setMemberSearch(participantId);
       setInspector({ kind: 'members' });
     } else setInspector({ kind: 'identity', participantId });
   };
@@ -159,7 +161,10 @@ export function ChatroomPage(
   const members = participants.filter(participant => participant.role === 'agent');
   const composerMembers = members.filter(participant => participant.mentionAlias !== undefined);
   const search = memberSearch.trim().toLocaleLowerCase();
-  const visibleMembers = members.filter(participant => participant.name.toLocaleLowerCase().includes(search));
+  const visibleMembers = members.filter(participant =>
+    participant.name.toLocaleLowerCase().includes(search) || participant.id.toLocaleLowerCase().includes(search)
+    || 'agent'.includes(search)
+  );
   const selectedParticipant = inspector?.kind === 'identity'
     ? participants.find(participant => participant.id === inspector.participantId)
     : undefined;
@@ -183,6 +188,15 @@ export function ChatroomPage(
         if (inspector === undefined) returnFocus.current = event.target;
       }}
     >
+      {narrow && inspector !== undefined && (
+        <button
+          type="button"
+          className="cx-chatroom-inspector__scrim"
+          tabIndex={-1}
+          aria-label={props.t('members.close')}
+          onClick={closeInspector}
+        />
+      )}
       <header className="cx-chatroom-header" inert={narrow && inspector !== undefined}>
         <button
           type="button"
@@ -232,6 +246,16 @@ export function ChatroomPage(
               {props.t('room.settings')}
             </button>
           )}
+          {snapshot.room !== undefined && details !== undefined && (
+            <ChatroomRoomActions
+              room={snapshot.room}
+              details={details}
+              t={props.t}
+              onDeleted={async () => {
+                await props.navigation.navigate({ id: 'new-room' });
+              }}
+            />
+          )}
           {headerActions.map(action => (
             <button
               key={action.id}
@@ -248,7 +272,7 @@ export function ChatroomPage(
         </div>
       </header>
       <main className="cx-chatroom-main">
-        <div className="cx-chatroom-conversation">
+        <div className="cx-chatroom-conversation" inert={narrow && inspector !== undefined}>
           {actionError && <div className="cx-chatroom-page__error" role="alert">{props.t('page.action.failed')}</div>}
           <ChatroomTimeline
             key={roomId ?? 'new'}
@@ -321,7 +345,7 @@ export function ChatroomPage(
                   type="button"
                   className="cx-chatroom-header__action"
                   aria-label={props.t('members.back')}
-                  onClick={openMembers}
+                  onClick={() => setInspector({ kind: 'members' })}
                 >
                   ← {props.t('members.title')}
                 </button>
@@ -342,6 +366,7 @@ export function ChatroomPage(
                   <ChatroomRoomSettings
                     key={snapshot.room.id}
                     roomId={snapshot.room.id}
+                    onSaved={() => setInspector(undefined)}
                     details={details}
                     t={props.t}
                   />
@@ -358,60 +383,85 @@ export function ChatroomPage(
                 )
                 : (
                   <div className="cx-chatroom-members">
-                    <input
-                      className="cx-chatroom-members__search"
-                      type="search"
-                      value={memberSearch}
-                      aria-label={props.t('members.search')}
-                      placeholder={props.t('members.search')}
-                      onChange={event => setMemberSearch(event.currentTarget.value)}
-                    />
-                    {visibleMembers.length === 0 ? <p>{props.t('members.empty')}</p> : (
-                      <ul>
-                        {visibleMembers.map(participant => {
-                          const active = snapshot.activeRuns.find(run => run.participantId === participant.id);
-                          return (
-                            <li key={participant.id}>
-                              <button
-                                type="button"
-                                className="cx-chatroom-members__member"
-                                disabled={details === undefined}
-                                onClick={() => openParticipant(participant.id)}
-                              >
-                                <ChatroomAvatar participant={participant} />
-                                <span>
-                                  <strong>{participant.name}</strong>
-                                  <small>
-                                    {active === undefined
-                                      ? props.t('members.status.unknown')
-                                      : props.t(`members.status.${active.lifecycle.phase}`)}
-                                  </small>
-                                </span>
-                                <i data-state={active?.lifecycle.phase ?? 'unknown'} aria-hidden="true" />
-                              </button>
-                              <button
-                                type="button"
-                                className="cx-chatroom-header__action"
-                                aria-label={props.t('members.mention', { name: participant.name })}
-                                disabled={participant.mentionAlias === undefined}
-                                title={participant.mentionAlias === undefined
-                                  ? props.t('composer.mention-unavailable')
-                                  : undefined}
-                                onClick={() => {
-                                  setMentionRequest({
-                                    participantId: participant.id,
-                                    sequence: ++mentionSequence.current,
-                                  });
-                                  setInspector(undefined);
-                                }}
-                              >
-                                @
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
+                    <div className="cx-chatroom-members__search-row">
+                      <input
+                        ref={memberSearchInput}
+                        className="cx-chatroom-members__search"
+                        type="search"
+                        value={memberSearch}
+                        aria-label={props.t('members.search')}
+                        placeholder={props.t('members.search')}
+                        onChange={event => setMemberSearch(event.currentTarget.value)}
+                        onKeyDown={event => {
+                          if (event.key !== 'Escape' || memberSearch === '') return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setMemberSearch('');
+                          memberSearchInput.current?.focus();
+                        }}
+                      />
+                      {memberSearch !== '' && (
+                        <button
+                          type="button"
+                          className="cx-chatroom-header__action"
+                          aria-label={props.t('members.search.clear')}
+                          onClick={() => {
+                            setMemberSearch('');
+                            memberSearchInput.current?.focus();
+                          }}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                    {visibleMembers.length === 0
+                      ? <p role="status">{props.t(search === '' ? 'members.none' : 'members.empty')}</p>
+                      : (
+                        <ul>
+                          {visibleMembers.map(participant => {
+                            const active = snapshot.activeRuns.find(run => run.participantId === participant.id);
+                            return (
+                              <li key={participant.id}>
+                                <button
+                                  type="button"
+                                  className="cx-chatroom-members__member"
+                                  disabled={details === undefined}
+                                  onClick={() => openParticipant(participant.id)}
+                                >
+                                  <ChatroomAvatar participant={participant} />
+                                  <span>
+                                    <strong>{participant.name}</strong>
+                                    <small>
+                                      {active === undefined
+                                        ? props.t('members.status.unknown')
+                                        : props.t(`members.status.${active.lifecycle.phase}`)}
+                                    </small>
+                                  </span>
+                                  <i data-state={active?.lifecycle.phase ?? 'unknown'} aria-hidden="true" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="cx-chatroom-header__action"
+                                  aria-label={props.t('members.mention', { name: participant.name })}
+                                  disabled={participant.mentionAlias === undefined}
+                                  title={participant.mentionAlias === undefined
+                                    ? props.t('composer.mention-unavailable')
+                                    : undefined}
+                                  onClick={() => {
+                                    setMentionRequest({
+                                      participantId: participant.id,
+                                      sequence: ++mentionSequence.current,
+                                    });
+                                    setInspector(undefined);
+                                  }}
+                                >
+                                  @
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
                   </div>
                 )}
             </div>
