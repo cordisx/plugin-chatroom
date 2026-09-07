@@ -31,7 +31,7 @@ for a bounded Chatroom cache; sidebar navigation receives only the generic
 `{ kind: "image", image }` value, or a semantic icon while no capture exists.
 
 The distributable runtime is a closed ESM graph. Plugin activation loads the
-small registration entry only. Mounting the Room loads its page module and
+small registration entry only. On the plugin-page fallback, mounting the Room loads its page module and
 stylesheet; the OneWorks renderer module and renderer-only stylesheet remain
 deferred until a resolved avatar is actually displayed. Closing and reopening
 the page creates a fresh React mount while the immutable module request is
@@ -168,6 +168,9 @@ records. External Channel runtime integration remains out of scope for this
 version.
 
 ## Development
+
+For missing history, cold-start identity, source changes or CLI evidence, see
+the [Room runtime debugging guide](.agents/docs/runtime-debugging.md).
 
 Requires Node.js 22 or newer.
 
