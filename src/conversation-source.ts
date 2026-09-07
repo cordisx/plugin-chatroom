@@ -53,6 +53,7 @@ export class ChatroomConversationController {
     readonly configuration: ChatroomAgentConfiguration = CHATROOM_DEFAULT_AGENT_CONFIGURATION,
     private readonly persistDirectRoom?: (room: Room) => Promise<void>,
     private readonly isRunLocallyUnavailable: (roomId: string, runId: string) => boolean = () => false,
+    private readonly canAttemptRunRecovery: (roomId: string, runId: string) => boolean = () => false,
   ) {
     this.rooms = rooms instanceof ChatroomRoomRegistry ? rooms : new ChatroomRoomRegistry(rooms);
     const projectionPort = {
@@ -434,6 +435,17 @@ export class ChatroomConversationController {
         ...('mention' in resolution ? { mention: resolution.mention } : {}),
       };
     }
+    const blocked = resolution.recipients.find(recipient =>
+      recipient.createRun
+      && room.runs.some(run =>
+        run.memberId === recipient.memberId && run.collaborationMode === 'cli' && run.sessionId !== undefined
+        && this.isRunLocallyUnavailable(room.id, run.runId)
+      )
+    );
+    if (blocked !== undefined) {
+      // Missing recovery authority must never become an implicit replacement identity.
+      return { error: 'missing', mention: `@${blocked.memberId}` };
+    }
     const deliveries: ChatroomCommandDelivery[] = [];
     for (const recipient of resolution.recipients) {
       let runId = recipient.runId;
@@ -501,7 +513,10 @@ export class ChatroomConversationController {
   private locallyUnavailableRunIds(room: Room): ReadonlySet<string> {
     return new Set(
       room.runs
-        .filter(run => this.isRunLocallyUnavailable(room.id, run.runId))
+        .filter(run =>
+          this.isRunLocallyUnavailable(room.id, run.runId)
+          && !this.canAttemptRunRecovery(room.id, run.runId)
+        )
         .map(run => run.runId),
     );
   }

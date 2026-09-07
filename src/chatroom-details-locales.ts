@@ -1,4 +1,14 @@
 export const chatroomDetailsEnglish = {
+  'task.executor': 'Assigned to',
+  'task.workspace': 'Workspace',
+  'task.workspace.selected': 'Selected task workspace',
+  'task.creation': 'Creation',
+  'task.creation.accepted': 'Task created',
+  'task.creation.pending': 'Awaiting creation result',
+  'task.creation.unavailable': 'Creation could not be confirmed',
+  'task.reports': 'Agent reports',
+  'task.reports.empty': 'No Agent report yet',
+  'task.unconfirmed': 'Unconfirmed tasks',
   'identity.introduction': 'Introduction',
   'identity.pending': 'Fetching details…',
   'identity.introduction.unavailable': 'Introduction unavailable',
@@ -16,6 +26,16 @@ export const chatroomDetailsEnglish = {
 };
 
 export const chatroomDetailsChinese = {
+  'task.executor': '执行者',
+  'task.workspace': '工作目录',
+  'task.workspace.selected': '所选任务的工作目录',
+  'task.creation': '创建结果',
+  'task.creation.accepted': '任务已创建',
+  'task.creation.pending': '等待创建结果',
+  'task.creation.unavailable': '尚未确认创建结果',
+  'task.reports': 'Agent 回报',
+  'task.reports.empty': '暂无 Agent 回报',
+  'task.unconfirmed': '待确认任务',
   'identity.introduction': '介绍',
   'identity.pending': '正在获取详情…',
   'identity.introduction.unavailable': '暂无介绍',

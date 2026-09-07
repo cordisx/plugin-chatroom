@@ -189,6 +189,7 @@ export function bindRoomRunSession(room: Room, runId: string, sessionId: Session
     memberId: run.memberId,
     title: run.title,
     sessionId,
+    ...(run.collaborationMode === undefined ? {} : { collaborationMode: run.collaborationMode }),
     status: 'active',
     ...(run.sessionSelfIntroduction === undefined ? {} : {
       sessionSelfIntroduction: run.sessionSelfIntroduction,

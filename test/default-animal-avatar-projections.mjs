@@ -11,6 +11,8 @@ const sourceFiles = [
   'engagement-config',
   'room',
   'room-model',
+  'room-cli-message-model',
+  'room-task-model',
   'room-snapshot-values',
   'room-snapshot',
   'room-engagement',

@@ -167,6 +167,11 @@ The domain reserves both room-scoped and member-scoped opaque `ChannelLink`
 records. External Channel runtime integration remains out of scope for this
 version.
 
+## Explicit Agent reports
+
+The experimental [CLI integration guide](.agents/docs/chatroom-cli.md) covers
+opt-in reports, the packaged Skill, Room persistence, and current runtime gaps.
+
 ## Development
 
 For missing history, cold-start identity, source changes or CLI evidence, see

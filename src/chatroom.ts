@@ -1,3 +1,7 @@
+import { createRoomTaskBootstrap } from './room-task-bootstrap.js';
+import type { AgentTasks } from '@cordisx/protocol/agent-task/v1';
+import { ChatroomCliBindings } from './room-cli-bindings.js';
+import type { AgentTools } from '@cordisx/protocol/agent-tools/v1';
 import type { Context } from '@deepseek-ai/cordis';
 import type { AgentPageComposerCommandContext } from '@cordisx/protocol/agent-page-admission/v2';
 import { ChatroomComposerSettings, Config, configApplies } from './composer-settings.js';
@@ -47,6 +51,8 @@ export type ChatroomMessages =
     undefined
   >
   & {
+    'task.start': undefined;
+    'room.prepare': undefined;
     'members.mention': { readonly name: string; };
     'navigation.title': undefined;
     'navigation.description': undefined;
@@ -208,8 +214,23 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     entitySnapshot,
   );
   const roomStore = await DurableChatroomRoomStore.openOwnerDocuments(ctx.documents);
+  const prepareRoom = createRoomTaskBootstrap(roomStore, agent);
+  ctx.commands.register(
+    { id: 'room.prepare', title: message('room.prepare', 'Prepare Room'), public: true },
+    command => prepareRoom(command.arguments, command.signal),
+  );
+  const agentTools: AgentTools | undefined = ctx.reflect.get('agentTools', false);
+  const agentTasks: AgentTasks | undefined = ctx.reflect.get('agentTasks', false);
+  const collaboration = new ChatroomCliBindings(agentTools, roomStore, ctx.settings, agentTasks);
+  ctx.commands.register(
+    { id: 'task.start', title: message('task.start', 'Start Leader task'), public: true },
+    command => collaboration.startTask(command.arguments, command.signal),
+  );
+  ctx.effect(() => () => {
+    void collaboration.dispose();
+  }, 'chatroom.cli-tools');
   const agentSession = new ChatroomAgentSessionController(
-    { agents: ctx.agents, sessions: ctx.sessions, approvals: ctx.approvals },
+    { agents: ctx.agents, sessions: ctx.sessions, approvals: ctx.approvals, entities: ctx.entities, collaboration },
     agent,
     roomStore,
   );
@@ -217,6 +238,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     await agentSession.hydrate();
   } catch (error) {
     await agentSession.dispose();
+    await collaboration.dispose();
     roomStore.dispose();
     throw error;
   }
@@ -225,6 +247,8 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     locale: 'en',
     default: true,
     messages: {
+      'task.start': 'Start Leader task',
+      'room.prepare': 'Prepare Room',
       ...chatroomDetailsEnglish,
       ...chatroomPageEnglish,
       ...chatroomComposerEn,
@@ -301,6 +325,8 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
     namespace: 'chatroom',
     locale: 'zh-CN',
     messages: {
+      'task.start': '启动 Leader 任务',
+      'room.prepare': '准备房间',
       ...chatroomDetailsChinese,
       ...chatroomPageChinese,
       ...chatroomComposerZhCN,
@@ -381,6 +407,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       await roomStore.upsert(room);
     },
     (roomId, runId) => agentSession.isRunLocallyUnavailable(roomId, runId),
+    (roomId, runId) => agentSession.canAttemptRunRecovery(roomId, runId),
   );
   const composerSettings = new ChatroomComposerSettings(ctx.settings);
   const product = ChatroomProductBase.attach(roomStore);

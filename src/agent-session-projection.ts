@@ -1,3 +1,4 @@
+import { roomCliReportStatus } from './room-cli-report-status.js';
 import type {
   AgentConversationActiveRunDescriptor,
   AgentConversationItem,
@@ -56,7 +57,7 @@ export interface ChatroomSessionAgentFacts {
 export type ProjectedItem =
   | AgentConversationMessageItem
   | AgentConversationApprovalItemV6
-  | Extract<AgentConversationItem, { readonly kind: 'approval'; }>;
+  | Extract<AgentConversationItem, { readonly kind: 'approval' | 'status'; }>;
 type PendingApprovalItem = Extract<AgentConversationApprovalItemV6, { readonly state: 'pending'; }>;
 type ApprovalAskedFact = {
   readonly eventSeq: number;
@@ -254,10 +255,17 @@ export class ChatroomAgentSessionProjector {
   }
 
   snapshotItems(): readonly ProjectedItem[] {
+    const reportStatus = roomCliReportStatus(
+      this.room,
+      this.run,
+      [...this.events.values()],
+      eventSeq => this.presentationSequenceFor(eventSeq, 'message'),
+    );
     return Object.freeze(
       [...this.itemsByEventSeq.entries()]
         .sort(([left], [right]) => left - right)
-        .map(([, item]) => item),
+        .map(([, item]) => item)
+        .concat(reportStatus === undefined ? [] : [reportStatus]),
     );
   }
 
@@ -272,6 +280,23 @@ export class ChatroomAgentSessionProjector {
     const event = this.events.get(item.source.eventSeq);
     if (event?.type !== 'user/message' || event.data.id !== item.messageId) return undefined;
     return this.admissionMessageLinkFor(event.data);
+  }
+
+  /** The Room display already used by this exact projected Session user event. */
+  representedRoomItemId(item: ProjectedItem): string | undefined {
+    if (item.kind !== 'message' || item.source.kind !== 'session-event') return undefined;
+    const event = this.events.get(item.source.eventSeq);
+    if (event?.type !== 'user/message' || event.data.id !== item.messageId) return undefined;
+    return this.roomDisplayForMessage(event.data)?.itemId;
+  }
+
+  /** Known authoritative replacements also fence the durable history fallback. */
+  supersededAdmissionRoomItemIds(): readonly string[] {
+    return [...this.events.values()].flatMap(event => {
+      if (event.type !== 'user/message' || !this.surfaceReplacedEventSeqs.has(event.seq)) return [];
+      const link = this.admissionMessageLinkFor(event.data);
+      return link === undefined ? [] : [link.itemId];
+    });
   }
 
   updateLiveApprovalQuestion(question: ApprovalQuestionV2): void {
@@ -367,15 +392,7 @@ export class ChatroomAgentSessionProjector {
       message.source.kind === 'plugin'
       && roomMessageCorrelation === undefined && admissionLink === undefined
     ) return undefined;
-    const durableDisplayId = roomMessageCorrelation?.id ?? admissionLink?.itemId;
-    const durableDisplay = durableDisplayId === undefined
-      ? undefined
-      : this.room.items.find(item =>
-        item.kind === 'message'
-        && item.itemId === durableDisplayId
-        && item.author.role === 'human'
-        && item.semantic.purpose === 'conversation'
-      );
+    const durableDisplay = this.roomDisplayForMessage(message);
     if (admissionLink !== undefined && durableDisplay?.kind !== 'message') return undefined;
     // The Session fact retains the parsed Agent payload. Chatroom's durable
     // Room message owns only its display association. In the admitted identity
@@ -412,6 +429,19 @@ export class ChatroomAgentSessionProjector {
     });
   }
 
+  private roomDisplayForMessage(message: UserMessage) {
+    const correlation = message.source.kind === 'plugin' ? message.source.correlation : undefined;
+    const displayId = correlation?.namespace === 'chatroom.room-message'
+      ? correlation.id
+      : this.admissionMessageLinkFor(message)?.itemId;
+    return displayId === undefined
+      ? undefined
+      : this.room.items.find(item =>
+        item.kind === 'message' && item.itemId === displayId
+        && item.author.role === 'human' && item.semantic.purpose === 'conversation'
+      );
+  }
+
   private admissionMessageLinkFor(message: UserMessage): RoomAdmissionMessageLink | undefined {
     if (message.source.kind !== 'plugin') return undefined;
     const member = this.member();
@@ -433,6 +463,7 @@ export class ChatroomAgentSessionProjector {
   private projectAssistantMessage(
     event: Extract<SessionEvent, { readonly type: 'assistant/message'; }>,
   ): ChatroomSessionProjectionChange | undefined {
+    if (this.run.collaborationMode === 'cli') return undefined;
     const requests = this.sourceUserMessages(event);
     const body = bodyFor(visibleAssistantContent(event.data.message.content));
     if (body === undefined) return undefined;

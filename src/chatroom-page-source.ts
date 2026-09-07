@@ -1,3 +1,4 @@
+import { type ChatroomCliPageMessage, roomCliPageMessages } from './room-cli-message-page.js';
 import type {
   AgentConversationActiveRunDescriptor,
   AgentConversationItem as AgentConversationItemV7,
@@ -25,7 +26,11 @@ import type { ChatroomCommandIntent, ChatroomConversationController } from './co
 import { approvalDecisionOperationId } from './room-agent-operations.js';
 import type { Room } from './room.js';
 
-export type ChatroomPageItem = AgentConversationItemV3 | AgentConversationItemV7 | ProjectedItem;
+export type ChatroomPageItem =
+  | AgentConversationItemV3
+  | AgentConversationItemV7
+  | ProjectedItem
+  | ChatroomCliPageMessage;
 
 export interface ChatroomPageSnapshot {
   readonly revision: number;
@@ -126,11 +131,9 @@ export class ChatroomPageSource {
     const projection = room === undefined
       ? { activeRuns: [], items: [] }
       : this.sessions.projectionForRoom(room.id);
-    const projectedMessageIds = new Set(
-      projection.items.flatMap(item => item.kind === 'message' ? [item.messageId] : []),
-    );
+    const representedRoomItems = new Set(projection.admittedRoomItemIds ?? []);
     const domainItems = model?.items.filter(item => {
-      if (item.kind === 'message') return !projectedMessageIds.has(item.messageId);
+      if (item.kind === 'message') return !representedRoomItems.has(item.itemId);
       if (item.kind !== 'approval') return true;
       return room?.playgroundAgentApprovals?.some(approval => approval.itemId === item.itemId) === true;
     }) ?? [];
@@ -148,6 +151,7 @@ export class ChatroomPageSource {
       items: chronologicalItems([
         ...domainItems,
         ...projection.items,
+        ...(room === undefined ? [] : roomCliPageMessages(room)),
       ], projection.admissionAppendAnchors),
       shortcutPolicy: this.settings.current,
     });

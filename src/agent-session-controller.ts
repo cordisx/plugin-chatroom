@@ -11,7 +11,7 @@ export {
   type ChatroomRoomSessionProjectionV6,
   type ChatroomSessionObservation,
 } from './agent-session-controller-internals.js';
-import { ChatroomAgentSessionRuntimeController } from './agent-session-controller-runtime.js';
+import { ChatroomAgentSessionTaskController } from './agent-session-controller-task.js';
 
 /**
  * Chatroom domain orchestration over the public Agent/Session runtime.
@@ -19,4 +19,4 @@ import { ChatroomAgentSessionRuntimeController } from './agent-session-controlle
  * answerers, replay pages, and SessionEvent projections remain process-local;
  * SessionEvent remains the durable fact.
  */
-export class ChatroomAgentSessionController extends ChatroomAgentSessionRuntimeController {}
+export class ChatroomAgentSessionController extends ChatroomAgentSessionTaskController {}

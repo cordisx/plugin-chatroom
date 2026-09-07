@@ -12,10 +12,11 @@
     "entities",
     "cordisx-package.json",
     "runtime-manifest.json",
-    "THIRD_PARTY_NOTICES.md"
+    "THIRD_PARTY_NOTICES.md",
+    "cordisx-agent-tools.json"
   ],
   "scripts": {
-    "build": "node scripts/clean-build-output.mjs && tsc -p tsconfig.json && vite build --config vite.config.mjs && node scripts/verify-runtime-bundle.mjs && node scripts/copy-build-assets.mjs",
+    "build": "node scripts/clean-build-output.mjs && tsc -p tsconfig.json && vite build --config vite.config.mjs && node scripts/verify-runtime-bundle.mjs && node scripts/copy-build-assets.mjs && node scripts/copy-agent-tool-assets.mjs",
     "check:fast": "npm run lint:staged && npm run lint:css && npm run typecheck && npm run build && npm test",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test test/*.mjs",
@@ -34,7 +35,7 @@
   },
   "devDependencies": {
     "@cordisx/eslint-config": "github:cordisx/cordisxmono#c63c2e8c2ba7e11502934a52ad2ce3734e804cdc",
-    "@cordisx/protocol": "github:cordisx/cordisx-protocol#3f0dbcd8b04ae83c920d2d913ac2c313af5f83f1",
+    "@cordisx/protocol": "github:cordisx/cordisx-protocol#9425e90dcc5085dcd262fd68467544cad761ed93",
     "@deepseek-ai/cordis": "4.0.1",
     "@deepseek-ai/schemastery": "3.18.1",
     "@oneworks/avatar": "1.0.0-rc.9",
@@ -46,7 +47,7 @@
     "@vitejs/plugin-react": "6.1.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
-    "cordisx": "github:cordisx/cordisx#f0ab469202549912995f72122d441eeec463d2ab",
+    "cordisx": "github:cordisx/cordisx#697585244c8af56ba1fa092e8f3e68a6fe761859",
     "dprint": "0.57.1",
     "esbuild": "^0.28.2",
     "eslint": "9.39.4",
@@ -56,5 +57,8 @@
     "stylelint": "17.15.0",
     "typescript": "^5.9.2",
     "vite": "8.2.2"
+  },
+  "bin": {
+    "cordisx-chatroom": "./dist/agent-tools/cli/chatroom.mjs"
   }
 }

@@ -3,6 +3,8 @@ import { Button, MarkdownViewer } from 'cordisx/ui';
 import type { CordisXReactPageProps } from 'cordisx/contracts';
 import type { EntityRecord } from '@cordisx/protocol/entities/v1';
 
+import { ChatroomTaskDetails } from './chatroom-task-details.js';
+import { projectRoomTasks } from './room-task-projection.js';
 import { ChatroomAvatar } from './avatar.js';
 import { type ChatroomPageDetails, memberSessions } from './chatroom-page-details.js';
 import type { ChatroomPageSnapshot } from './chatroom-page-source.js';
@@ -46,6 +48,8 @@ export function ChatroomMemberDetails({ snapshot, participantId, details, t }: {
     ?? entity?.definition.promptSections?.filter(section => section.kind === 'introduction')
       .map(section => section.text).join('\n\n');
   const sessions = memberSessions(room, participantId, snapshot.activeRuns);
+  const tasks = projectRoomTasks(room).filter(task => task.participantId === participantId);
+  const unassignedTasks = tasks.filter(task => task.sessionId === undefined);
   const open = async (sessionId: typeof sessions[number]['sessionId']) => {
     if (opening !== undefined) return;
     setOpening(sessionId);
@@ -89,12 +93,21 @@ export function ChatroomMemberDetails({ snapshot, participantId, details, t }: {
                   <span>{session.title || t('identity.session.untitled')}</span>
                   {session.phase === undefined ? null : <small>{t(`members.status.${session.phase}`)}</small>}
                 </Button>
+                {tasks.filter(task => task.sessionId === session.sessionId).map(task => (
+                  <ChatroomTaskDetails key={task.runId} task={task} t={t} />
+                ))}
               </li>
             ))}
           </ul>
         )}
         {error && <p role="alert">{t('identity.session.open-failed')}</p>}
       </section>
+      {unassignedTasks.length > 0 && (
+        <section>
+          <h3>{t('task.unconfirmed')}</h3>
+          {unassignedTasks.map(task => <ChatroomTaskDetails key={task.runId} task={task} t={t} />)}
+        </section>
+      )}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { freezeTaskDelegation } from './room-task-model.js';
 import type { AgentLoopTaskBinding } from '@cordisx/protocol/agent-loop/v4';
 import {
   agentAvatarForDefinition,
@@ -36,6 +37,7 @@ export const presenceEventKey = (participantId: string, memberId: string, runId:
   createChatroomOpaqueId('member-presence', participantId, memberId, runId);
 
 export function freezeRun(run: RoomRun, member: RoomMembership): RoomRun {
+  const delegation = run.delegation === undefined ? {} : { delegation: freezeTaskDelegation(run.delegation) };
   const presence = run.presence ?? {
     eventKey: presenceEventKey(member.participantId, run.memberId, run.runId),
     participantId: member.participantId,
@@ -76,11 +78,13 @@ export function freezeRun(run: RoomRun, member: RoomMembership): RoomRun {
   });
   if (run.sessionId !== undefined) {
     return Object.freeze({
+      ...delegation,
       runId: run.runId,
       memberId: run.memberId,
       title: run.title,
       status: run.status,
       sessionId: run.sessionId,
+      ...(run.collaborationMode === undefined ? {} : { collaborationMode: run.collaborationMode }),
       ...(run.sessionSelfIntroduction === undefined ? {} : {
         sessionSelfIntroduction: Object.freeze({ ...run.sessionSelfIntroduction }),
       }),
@@ -89,6 +93,7 @@ export function freezeRun(run: RoomRun, member: RoomMembership): RoomRun {
   }
   return Object.freeze({
     ...run,
+    ...delegation,
     ...(run.taskBinding === undefined ? {} : { taskBinding: freezeTaskBinding(run.taskBinding) }),
     ...(run.detailsUrl === undefined ? {} : { detailsUrl: Object.freeze({ ...run.detailsUrl }) }),
     ...(run.rebind === undefined ? {} : {
