@@ -219,6 +219,10 @@ export class ChatroomAgentSessionRuntimeController extends ChatroomAgentSessionA
     roomId: string,
     runId: string,
   ): Promise<RuntimeOwner | RuntimeAcquireFailure> {
+    const task = this.requireRun(this.requireRoom(roomId), runId).delegation;
+    if (task !== undefined && task.result?.status !== 'accepted') {
+      throw new Error('Delegated task requires Host reconciliation before continuation.');
+    }
     const key = runKey(roomId, runId);
     const retained = this.owners.get(key);
     if (retained !== undefined) {
@@ -243,9 +247,6 @@ export class ChatroomAgentSessionRuntimeController extends ChatroomAgentSessionA
     const room = this.requireRoom(roomId);
     const run = this.requireRun(room, runId);
     const member = this.requireMember(room, run.memberId);
-    if (run.delegation !== undefined && run.delegation.result?.status !== 'accepted') {
-      throw new Error('Delegated task requires Host reconciliation before continuation.');
-    }
     const raw: RuntimeAcquireResult = run.sessionId !== undefined
       ? await resumeChatroomSession(this.runtime, room, run)
       : run.taskBinding !== undefined
@@ -359,7 +360,7 @@ export class ChatroomAgentSessionRuntimeController extends ChatroomAgentSessionA
       }));
   }
 
-  private async ensureOwnerApprovalRegistrations(
+  protected async ensureOwnerApprovalRegistrations(
     roomId: string,
     runId: string,
     handle: AgentHandle,

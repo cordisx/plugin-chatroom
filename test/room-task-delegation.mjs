@@ -301,3 +301,33 @@ test('public Room preparation uses configured membership and persists no Session
   assert.equal((await prepare({ ...input, caller: 'fake' })).code, 'invalid-input');
   store.dispose();
 });
+
+test('legacy controller cannot create a second Session for a pending or partial delegation', async () => {
+  const { agentSessionControllerHarness: h } = await import('./agent-session-controller/harness.mjs');
+  for (const partial of [false, true]) {
+    const { store, scope, input } = fixture();
+    const taskHandler = new ChatroomTaskHandler(store, {
+      async createAndSubmit(request) {
+        return {
+          status: 'unavailable',
+          operationId: request.operationId,
+          code: 'reconciliation-required',
+          ...(partial ? { sessionId: 'partial-child' } : {}),
+        };
+      },
+    });
+    const result = await taskHandler.handle(scope, input);
+    const room = store.rooms.get(scope.roomId);
+    const runtime = h.runtimeHarness({ room });
+    const controller = new h.ChatroomAgentSessionController(
+      { agents: runtime.agents, sessions: runtime.sessionRegistry, approvals: runtime.approvals },
+      h.CHATROOM_DEFAULT_AGENT_CONFIGURATION,
+      store,
+    );
+    await assert.rejects(controller.sendToRoom(room.id, result.runId, 'followup-item', 'Continue'), /reconciliation/);
+    assert.equal(runtime.creates.length, 0);
+    assert.equal(runtime.resumes.length, 0);
+    await controller.dispose();
+    store.dispose();
+  }
+});
