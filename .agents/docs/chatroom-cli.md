@@ -40,6 +40,14 @@ Session, bind tools, then allow the first task. Revoked CLI-bound resume remains
 fail closed until the Host supplies a supported two-phase rebind path. Ordinary
 unbound Agent resume remains independent of that limitation.
 
+When the Host accepts a same-Session resume, Chatroom verifies the returned
+Session against the current Room run and skips `bindRoomRunSession`. Restoring
+live authority must not rewrite presence coordinates or clear retained delivery,
+outbox, or approval operations. It then waits for a newly issued Host tool
+binding before permitting a task. A different returned Session is rejected and
+its acquired handle disposed. Observer hydration remains get/subscribe only;
+it cannot recover authority, issue credentials, or write the Room document.
+
 The actual Host Shell uses `ChatroomAgentSessionConversationSourceV10` registered
 through `registerSourceV10`. Its predecessor source type only accepts SessionEvent
 or acknowledgement messages; do not forge an event sequence or acknowledgement
