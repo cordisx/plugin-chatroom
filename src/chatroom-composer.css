@@ -1,0 +1,126 @@
+.cx-chatroom-input {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  margin: 0;
+  padding: 12px;
+  color: var(--cx-text, CanvasText);
+  background: var(--cx-surface, Canvas);
+  border: 1px solid
+    var(--cx-border, color-mix(in srgb, currentColor 15%, transparent));
+  border-radius: 16px;
+}
+
+.cx-chatroom-input__editor {
+  position: relative;
+  min-width: 0;
+}
+
+.cx-chatroom-input textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 36px;
+  max-height: 160px;
+  padding: 6px;
+  resize: none;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.cx-chatroom-input textarea:focus-visible {
+  outline: 2px solid var(--cx-primary, Highlight);
+  outline-offset: 1px;
+}
+.cx-chatroom-input textarea:disabled {
+  opacity: 0.6;
+}
+.cx-chatroom-input__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cx-chatroom-input__spacer {
+  flex: 1;
+}
+.cx-chatroom-input__hint,
+.cx-chatroom-input__status,
+.cx-chatroom-input__error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.cx-chatroom-input__hint, .cx-chatroom-input__status {
+  color: var(--cx-muted, GrayText);
+}
+.cx-chatroom-input__status:empty {
+  display: none;
+}
+.cx-chatroom-input__error {
+  color: var(--cx-danger, #c94a42);
+}
+
+.cx-chatroom-input__mentions {
+  position: absolute;
+  z-index: 2;
+  bottom: calc(100% + 8px);
+  inset-inline: 0;
+  display: grid;
+  max-height: 220px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--cx-border, GrayText);
+  border-radius: 10px;
+  background: var(--cx-surface, Canvas);
+  box-shadow: 0 4px 16px color-mix(in srgb, currentcolor 12%, transparent);
+}
+.cx-chatroom-input__mentions button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  background: transparent;
+  text-align: start;
+  font: inherit;
+  cursor: pointer;
+}
+.cx-chatroom-input__mentions button[aria-selected="true"],
+.cx-chatroom-input__mentions button:hover {
+  background: color-mix(in srgb, currentcolor 10%, transparent);
+}
+.cx-chatroom-input__mentions button:focus-visible {
+  outline: 2px solid var(--cx-primary, Highlight);
+  outline-offset: -2px;
+}
+.cx-chatroom-input__mentions button > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cx-chatroom-input__mentions p {
+  margin: 0;
+  padding: 8px;
+}
+.cx-chatroom-input__avatar {
+  display: block;
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+
+@media (width <= 480px) {
+  .cx-chatroom-input {
+    padding: 8px;
+  }
+  .cx-chatroom-input__hint {
+    font-size: 11px;
+  }
+}
