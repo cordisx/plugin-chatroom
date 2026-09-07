@@ -1,3 +1,4 @@
+import type { JsonValue } from '@cordisx/protocol/sessions/v1';
 import type { AgentToolBindingHandle, AgentTools } from '@cordisx/protocol/agent-tools/v1';
 import type { ChatroomRunCollaboration } from './agent-session-controller-internals.js';
 import type { ChatroomSettingsService } from './composer-settings.js';
@@ -33,11 +34,11 @@ export class ChatroomCliBindings implements ChatroomRunCollaboration {
     private readonly settings: ChatroomSettingsService,
   ) {
     const send = createChatroomCliMessageHandler(store);
-    this.unregister = tools?.register({ id: 'send' }, async ({ binding, input, signal }) => {
+    this.unregister = tools?.register({ id: 'send' }, async ({ binding, input, signal }): Promise<JsonValue> => {
       if (this.disposed || !this.enabled() || signal.aborted) return { status: 'rejected', code: 'unavailable' };
       const scope = scopeFromBinding(binding.sessionId, binding.scope);
       if (scope === undefined) return { status: 'rejected', code: 'unauthorized' };
-      return { ...await send(scope, input, signal) };
+      return await send(scope, input, signal);
     });
     this.unsubscribe = store.rooms.subscribe(() => this.revokeInvalid());
     this.unwatch = settings.watch(() => this.revokeInvalid());
