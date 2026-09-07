@@ -70,11 +70,26 @@ Other unavailable CLI targets report a target error instead of falling through
 to the legacy retire-and-create path. Testing the recovery helper alone misses
 this earlier UI routing decision.
 
-The actual Host Shell uses `ChatroomAgentSessionConversationSourceV10` registered
-through `registerSourceV10`. Its predecessor source type only accepts SessionEvent
+The actual Host Shell uses `ChatroomAgentSessionConversationSourceV11` registered
+through `registerSourceV11`. Its predecessor source type only accepts SessionEvent
 or acknowledgement messages; do not forge an event sequence or acknowledgement
 to display a CLI fact. The v10 `plugin-command` source expresses the original Room message ID,
-identity, operation, and sequence without inventing a SessionEvent. Real
+identity, operation, and sequence without inventing a SessionEvent.
+Shell v11 additionally uses `room-user-message` for a persisted human submission
+with an exact accepted admission link when no verified Session projection covers
+it. This preserves its original Room message ID, text, timestamp, and sequence;
+`sent` means the submission was accepted, not that an Agent completed execution.
+The original Room document is never rewritten for this display. Real Session
+replay takes precedence using its validated Room item association, and known
+surface replacements fence superseded history. Matching text is not a dedupe key.
+
+Room IDs are local to the owner home/profile/source. Two homes containing
+`room-1` can reference different Sessions and different real replies; restoring
+one must never merge or translate the other's history. A sidebar summary can
+remain visible because it reads `Room.items` directly while the main Shell source
+previously filtered the same human item. Inspect both persisted records and the
+selected projection before attributing missing bubbles to data loss.
+Real
 CDP/native integration is still required before declaring this consumer ready. `test/real-cli-room.mjs` exercises the
 installed Host authority, resource deployment, executable CLI subprocess,
 socket, renderer service, Room handler and Host document persistence. Its

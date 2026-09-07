@@ -218,6 +218,8 @@ export interface RuntimeSubscription {
 }
 
 export interface ChatroomRoomSessionProjection {
+  /** Room item IDs represented or superseded by verified Session admission facts. */
+  readonly admittedRoomItemIds?: readonly string[];
   readonly activeRuns: readonly ReturnType<ChatroomAgentSessionProjector['activeRun']>[];
   readonly items: readonly ProjectedItem[];
   /**

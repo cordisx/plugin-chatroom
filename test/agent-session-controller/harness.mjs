@@ -7,7 +7,7 @@ import {
   ChatroomAgentSessionController,
 } from '../../dist/agent-session-controller.js';
 import { ChatroomAgentSessionConversationSource } from '../../dist/agent-session-conversation-source.js';
-import { ChatroomAgentSessionConversationSourceV10 } from '../../dist/agent-session-conversation-source-v10.js';
+import { ChatroomAgentSessionConversationSourceV11 } from '../../dist/agent-session-conversation-source-v11.js';
 import { CHATROOM_COMMAND_SUBMIT } from '../../dist/conversation-model.js';
 import { ChatroomConversationController } from '../../dist/conversation-source.js';
 import {
@@ -497,7 +497,7 @@ export const agentSessionControllerHarness = Object.freeze({
   CHATROOM_DEFAULT_AGENT_CONFIGURATION,
   ChatroomAgentSessionController,
   ChatroomAgentSessionConversationSource,
-  ChatroomAgentSessionConversationSourceV10,
+  ChatroomAgentSessionConversationSourceV11,
   ChatroomConversationController,
   DurableChatroomRoomStore,
   FakeApprovals,
