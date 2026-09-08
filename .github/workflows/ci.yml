@@ -74,7 +74,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --allow-git=all
       - name: Run the complete owner gate
         run: npm run check
       - name: Record job evidence
@@ -128,7 +128,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci --ignore-scripts --allow-git=root
+      - run: npm ci --ignore-scripts --allow-git=all
       - name: Typecheck the plugin
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -185,7 +185,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci --ignore-scripts --allow-git=root
+      - run: npm ci --ignore-scripts --allow-git=all
       - name: Build, then run tests against the build
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}

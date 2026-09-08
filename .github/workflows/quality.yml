@@ -27,8 +27,8 @@ jobs:
           cache: npm
       - run: npm install --global npm@12.0.2 --registry=https://registry.npmjs.org
       - run: test "$(npm --version)" = "12.0.2"
-      # Permit only the exact Git dependencies declared at the project root.
-      - run: npm ci --ignore-scripts --allow-git=root
+      # The exact lock includes formal transitive CordisX plugin repositories.
+      - run: npm ci --ignore-scripts --allow-git=all
       - name: Check affected formatting
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
