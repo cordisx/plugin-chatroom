@@ -1,8 +1,8 @@
 # Explicit Chatroom reports
 
-Audience: Chatroom maintainers and Agent-tool integrators. This work is an
-experimental consumer of the Host agent-tools contract. A handler or parser
-check is not a working Host channel or an accepted native experience.
+Audience: Chatroom maintainers and Agent-tool integrators. This branch consumes
+the formal Host agent-tools contract. A handler or parser check is not a working
+native Host channel or an accepted product experience.
 
 The packaged [Skill](../../src/skills/chatroom/SKILL.md) describes reporting.
 Enable `cliReporting: true` in the isolated plugin configuration to opt in;
@@ -70,37 +70,36 @@ Other unavailable CLI targets report a target error instead of falling through
 to the legacy retire-and-create path. Testing the recovery helper alone misses
 this earlier UI routing decision.
 
-The retained Host Shell adapter uses `ChatroomAgentSessionConversationSourceV10`
-registered through `registerSourceV10`. Its `plugin-command` message source
-expresses a CLI report's original Room message ID, identity, operation and
-sequence without inventing a SessionEvent. Shell 11/12 experimental adapters are
-not required by this delivery.
+The direct `ChatroomPageSource` projection maps a `plugin-command` item to its
+original Room message ID, identity, operation and sequence without inventing a
+SessionEvent. Chatroom mounts this projection through its body-only public React
+page and does not register a Host conversation Shell source.
 
 `unprojectedAdmittedHumanMessages` exposes persisted human submissions with an
 exact accepted admission link when no verified Session projection covers them.
-The plugin page can display those original Room facts. Real Session replay
-retains precedence using validated Room item associations; surface replacements
-fence superseded history. Matching text is not a dedupe key. The Shell 10 adapter
+The plugin page displays those original Room facts. Real Session replay retains
+precedence using validated Room item associations; page source replacements
+fence superseded history. Matching text is not a dedupe key. The page projection
 does not relabel these facts as SessionEvents to display them.
 
 Room IDs are local to the owner home/profile/source. Two homes containing
 `room-1` can reference different Sessions and different real replies; restoring
 one must never merge or translate the other's history. A sidebar summary can
-remain visible because it reads `Room.items` directly while the main Shell source
-previously filtered the same human item. Inspect both persisted records and the
-selected projection before attributing missing bubbles to data loss.
-Real
-CDP/native integration is still required before declaring this consumer ready. `test/real-cli-room.mjs` exercises the
-installed Host authority, resource deployment, executable CLI subprocess,
-socket, renderer service, Room handler and Host document persistence. Its
-explicitly substituted CDP wire and Agent ownership source limit that evidence
-to a controlled integration; no CLI execution or Room write is mocked. Fallback React-page visibility
-alone does not validate the user's Host Shell experience.
+remain visible because it reads `Room.items` directly while an older projection
+may have filtered the same human item. Inspect both persisted records and the
+selected page projection before attributing missing bubbles to data loss.
+Real CDP/native integration is still required before declaring this consumer
+ready. `test/real-cli-room.mjs` exercises the installed Host authority, resource
+deployment, executable CLI subprocess, socket, renderer service, Room handler
+and Host document persistence. Its explicitly substituted CDP wire and Agent
+ownership source limit that evidence to a controlled integration; no CLI
+execution or Room write is mocked. React-page visibility alone does not validate
+the user's native Chatroom experience.
 
 ## Avoid repeated integration failures
 
-- Verify `selectChatroomPageMount` and the actual Shell source; README wording
-  cannot identify the current selected runtime.
+- Verify the `ctx.pages.register` body-only entry and the actual
+  `ChatroomPageSource`; README wording cannot identify the current runtime.
 - New Room fields must survive `createRoom`, `freezeRun`, and
   `bindRoomRunSession`. Testing only the handler misses dropped fields on resume.
 - Source-transpilation tests with explicit file lists must include new imported
@@ -212,5 +211,5 @@ non-task Session approvals retain their existing route and correlation checks.
 
 Manifest schema and source equality checks verify this consumer declaration,
 including task-only and route-only variants and rejected duplicate/arbitrary
-selectors. They do not prove Host authorization. The final compatible Host must
-also verify both branches through its actual broker and native execution.
+selectors. Formal Host CI verifies both branches through its actual broker. A
+real native execution and human decision are still required for product acceptance.
