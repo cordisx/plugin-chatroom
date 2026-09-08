@@ -1,11 +1,12 @@
 import type {
   Agent,
+  AgentAcquireResult,
   AgentAdmission,
   AgentHandle,
   AgentMessageDiscardResult,
   AgentMutationResult,
 } from '@cordisx/protocol/agents/v1';
-import type { EntityAgentAcquireResult } from '@cordisx/protocol/entities/v1';
+import type { EntityAgentAcquireResult, EntityRegistry } from '@cordisx/protocol/entities/v1';
 import {
   CORDISX_AGENT_SESSION_LEGACY_ACQUIRE_CONTRACT_V1,
   CORDISX_AGENT_SESSION_LEGACY_ACQUIRE_SCHEMA_V1,
@@ -96,7 +97,16 @@ import {
   submitChatroomPageAdmissionRouteReservation,
 } from './agent-page-admission-v2.js';
 
+/** Consumer lifecycle coordination. Implemented by the Chatroom Host-tool adapter. */
+export interface ChatroomRunCollaboration {
+  enabled(): boolean;
+  ensureBound(room: Room, run: RoomRun): Promise<void>;
+  revoke(sessionId: string): Promise<void>;
+}
+
 export interface ChatroomAgentRuntimeContext {
+  readonly collaboration?: ChatroomRunCollaboration;
+  readonly entities?: Pick<EntityRegistry, 'snapshot'>;
   readonly agents: CordisXAgentRegistryV1;
   readonly sessions: SessionRegistry;
   readonly approvals: ApprovalServiceV1 & ApprovalServiceV2 & ApprovalServiceV3;
@@ -208,6 +218,8 @@ export interface RuntimeSubscription {
 }
 
 export interface ChatroomRoomSessionProjection {
+  /** Room item IDs represented or superseded by verified Session admission facts. */
+  readonly admittedRoomItemIds?: readonly string[];
   readonly activeRuns: readonly ReturnType<ChatroomAgentSessionProjector['activeRun']>[];
   readonly items: readonly ProjectedItem[];
   /**
@@ -226,8 +238,12 @@ export interface ChatroomRoomSessionProjectionV6 {
   readonly items: readonly import('@cordisx/protocol/agent-conversation-shell/v6').AgentConversationItem[];
 }
 
-export type RuntimeAcquireResult = EntityAgentAcquireResult | CordisXAgentSessionLegacyAcquireResultV1;
+export type RuntimeAcquireResult =
+  | EntityAgentAcquireResult
+  | AgentAcquireResult
+  | CordisXAgentSessionLegacyAcquireResultV1;
 export type RuntimeAcquireFailure =
+  | Exclude<AgentAcquireResult, { readonly status: 'accepted'; }>
   | Exclude<EntityAgentAcquireResult, { readonly status: 'accepted'; }>
   | Exclude<CordisXAgentSessionLegacyAcquireResultV1, { readonly status: 'accepted'; }>;
 

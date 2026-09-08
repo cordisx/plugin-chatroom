@@ -18,35 +18,30 @@ const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const packageManifest = JSON.parse(readFileSync(path.join(repositoryRoot, 'cordisx-package.json'), 'utf8'));
 const protocolEntry = new URL(import.meta.resolve('@cordisx/protocol/entities/v1'));
 const schemaNames = [
-  'ui-common.v1.schema.json',
-  'channel-common.v1.schema.json',
-  'host-dom-common.v1.schema.json',
-  'platform-session.v1.schema.json',
-  'route.v2.schema.json',
-  'session-common.v1.schema.json',
-  'agent-loop-common.v1.schema.json',
-  'agents-common.v1.schema.json',
-  'agent-avatar.v1.schema.json',
-  'platform-model.v1.schema.json',
-  'agent-definition.v1.schema.json',
-  'plugin-lifecycle-common.v1.schema.json',
-  'entity-common.v1.schema.json',
+  'plugin-package.v12.schema.json',
+  'plugin-manifest.v12.schema.json',
   'entity-file.v1.schema.json',
   'entity-template-declaration.v1.schema.json',
-  'plugin-package.v5.schema.json',
-  'plugin-manifest.v5.schema.json',
-  'plugin-manifest.v6.schema.json',
-  'plugin-package.v6.schema.json',
-  'plugin-manifest.v8.schema.json',
-  'plugin-package.v8.schema.json',
+  'agent-definition.v1.schema.json',
 ];
 const ajv = new Ajv2020({ allErrors: true, strict: true, allowUnionTypes: true });
 addFormats(ajv);
-const schemas = new Map(schemaNames.map(name => {
+const schemas = new Map();
+function loadSchema(name) {
+  if (schemas.has(name)) return;
   const schema = JSON.parse(readFileSync(new URL(`../schemas/${name}`, protocolEntry), 'utf8'));
+  schemas.set(name, schema);
   ajv.addSchema(schema);
-  return [name, schema];
-}));
+  const visit = value => {
+    if (value === null || typeof value !== 'object') return;
+    if (typeof value.$ref === 'string' && !value.$ref.startsWith('#')) {
+      loadSchema(path.basename(value.$ref.split('#')[0]));
+    }
+    Object.values(value).forEach(visit);
+  };
+  visit(schema);
+}
+schemaNames.forEach(loadSchema);
 
 const validate = (name, value) => {
   const validator = ajv.getSchema(schemas.get(name).$id);
@@ -128,13 +123,13 @@ const materializeTemplate = declaration => {
   };
 };
 
-test('package v8 declares unique schema-valid production and Playground entity templates', () => {
-  validate('plugin-package.v8.schema.json', packageManifest);
+test('package v12 declares unique schema-valid production and Playground entity templates', () => {
+  validate('plugin-package.v12.schema.json', packageManifest);
   const runtimeManifest = JSON.parse(readFileSync(
     path.join(repositoryRoot, packageManifest.runtimeManifest.path),
     'utf8',
   ));
-  validate('plugin-manifest.v8.schema.json', runtimeManifest);
+  validate('plugin-manifest.v12.schema.json', runtimeManifest);
   assert.equal(packageManifest.entityTemplates.length, 18);
   assert.deepEqual(packageManifest.entityTemplates.map(item => item.agentId), [
     'chatroom.generalist',
@@ -200,15 +195,15 @@ test('templates preserve every accepted definition field while revision becomes 
   }
 });
 
-test('package pins the exact Protocol bootstrap-route and Host runtime releases with exact manifest bytes', () => {
+test('package pins the exact formal Protocol and Host revisions with exact manifest bytes', () => {
   const packageJson = JSON.parse(readFileSync(path.join(repositoryRoot, 'package.json'), 'utf8'));
   assert.equal(
     packageJson.devDependencies['@cordisx/protocol'],
-    'github:cordisx/cordisx-protocol#3f0dbcd8b04ae83c920d2d913ac2c313af5f83f1',
+    'github:cordisx/cordisx-protocol#c2f6f8e4bf4a638bf4627c9c567792f2fedbcfd6',
   );
   assert.equal(
     packageJson.devDependencies.cordisx,
-    'github:cordisx/cordisx#f0ab469202549912995f72122d441eeec463d2ab',
+    'github:cordisx/cordisx#65aae075f2614a1d38efcadf827439f41c7fe9f3',
   );
   assert.equal(packageJson.main, packageManifest.entry);
   assert.equal(packageManifest.entry, './dist/runtime/chatroom.js');
@@ -220,7 +215,7 @@ test('package pins the exact Protocol bootstrap-route and Host runtime releases 
   );
   assert.equal(
     packageManifest.compatibility.protocolSchemas.includes(
-      'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v8.schema.json',
+      'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v12.schema.json',
     ),
     true,
   );
@@ -249,4 +244,39 @@ test('built package entry delegates only through the declared runtime graph', ()
   assert.ok(entry.length > 0);
   assert.equal(/(?:from|import)\s+["']@cordisx\/protocol/u.test(entry), false);
   assert.equal(entry.includes('team-architecture-page.css"'), false);
+});
+
+test('real manifest accepts independent route and task scope branches and rejects duplicate or arbitrary selectors', () => {
+  const actual = JSON.parse(readFileSync(path.join(repositoryRoot, packageManifest.runtimeManifest.path), 'utf8'));
+  const validator = ajv.getSchema(schemas.get('plugin-manifest.v12.schema.json').$id);
+  validate('plugin-manifest.v12.schema.json', actual);
+  const tools = JSON.parse(readFileSync(path.join(repositoryRoot, 'src/cordisx-agent-tools.json'), 'utf8'));
+  const request = actual.capabilities.find(capability => capability.name === 'approvals.request');
+  const answer = actual.capabilities.find(capability => capability.name === 'approvals.answer');
+  assert.equal(tools.commands.some(command => command.id === request.scope.task.commandId), true);
+  assert.deepEqual(answer.scope.taskRequester, request.scope.task);
+  for (const branch of ['route', 'task']) {
+    const single = structuredClone(actual);
+    for (const capability of single.capabilities) {
+      if (capability.name === 'approvals.request') delete capability.scope[branch === 'route' ? 'task' : 'sessionIds'];
+      if (capability.name === 'approvals.answer') {
+        delete capability.scope[branch === 'route' ? 'taskRequester' : 'authorityRequester'];
+      }
+    }
+    validate('plugin-manifest.v12.schema.json', single);
+  }
+  const duplicate = structuredClone(actual);
+  duplicate.capabilities.push(structuredClone(request));
+  assert.equal(validator(duplicate), false);
+  for (
+    const scope of [
+      { task: { kind: 'agent-task-command', commandId: 'send', roomId: 'caller-room' } },
+      { task: { kind: 'agent-task-command', commandId: 'send' }, sessionIds: ['arbitrary-session'] },
+      { taskRequester: { kind: 'agent-task-command', commandId: 'send' } },
+    ]
+  ) {
+    const invalid = structuredClone(actual);
+    invalid.capabilities.find(capability => capability.name === 'approvals.request').scope = scope;
+    assert.equal(validator(invalid), false);
+  }
 });

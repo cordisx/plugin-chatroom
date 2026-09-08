@@ -167,7 +167,8 @@ test('ships introduction, personality, and memory with isolated runtime/filter d
     ['member', 'mention-only'],
   ]);
   assert.deepEqual(selected.promptSections.map(section => section.kind), ['introduction', 'personality', 'memory']);
-  assert.deepEqual(selected.tools, { include: ['read', 'search'], exclude: ['external-channel'] });
+  assert.deepEqual(selected.skills, ['chatroom']);
+  assert.deepEqual(selected.tools, { exclude: ['external-channel'] });
   assert.deepEqual(selected.mcpServers, { exclude: ['external-channel'] });
   assert.deepEqual(selected.runtimeDefaults, { adapterId: 'codex', effort: 'medium' });
   assert.deepEqual(parsed.definitions.map(item => item.avatar), [

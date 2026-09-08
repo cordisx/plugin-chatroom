@@ -344,19 +344,7 @@ export function registerFailureMigrationTests(harness) {
   test('explicit mention stays in the durable Room display while Agent admission receives stripped dispatch text', async () => {
     const domain = new ChatroomConversationController();
     domain.rooms.upsert(createRoom({ id: 'room', title: 'Room' }));
-    domain.createSource({
-      bindingId: 'binding-display',
-      shell: 'agent-desktop',
-      ownerGeneration: 'owner-1',
-      routeSelection: { scope: 'room-or-new', selectedRoomParam: 'room' },
-    });
-    const intent = domain.handle({
-      binding: { bindingId: 'binding-display', ownerGeneration: 'owner-1' },
-      generation: 'owner-1',
-      scope: 'composer-submit',
-      command: { id: CHATROOM_COMMAND_SUBMIT },
-      submitPayload: '@Reviewer 请回复：显式路由成功。',
-    });
+    const intent = domain.submitMessage('room', '@Reviewer 请回复：显式路由成功。');
     assert.equal(intent.kind, 'send-message');
     assert.deepEqual(intent.deliveries.map(delivery => delivery.memberId), ['reviewer']);
     assert.equal(intent.dispatchText, '请回复：显式路由成功。');

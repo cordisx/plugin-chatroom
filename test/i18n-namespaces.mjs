@@ -4,12 +4,15 @@ import test from 'node:test';
 
 test('keeps base Chatroom and Manager catalogs in independent namespaces', async () => {
   const chatroom = await readFile(new URL('../src/chatroom.ts', import.meta.url), 'utf8');
+  const composer = await readFile(new URL('../src/chatroom-composer-locales.ts', import.meta.url), 'utf8');
   const manager = await readFile(new URL('../src/manager-chat.ts', import.meta.url), 'utf8');
   const collection = await readFile(new URL('../src/room-manager-collection.ts', import.meta.url), 'utf8');
 
   assert.match(chatroom, /namespace: 'chatroom',[\s\S]*?'navigation\.title': '新建房间'/u);
-  assert.match(chatroom, /'composer\.shortcut\.enter': 'Enter 发送'/u);
-  assert.match(chatroom, /'composer\.shortcut\.mod-enter': 'Command\/Ctrl\+Enter 发送'/u);
+  assert.match(chatroom, /\.\.\.chatroomComposerEn/u);
+  assert.match(chatroom, /\.\.\.chatroomComposerZhCN/u);
+  assert.match(composer, /'composer\.shortcut\.enter': 'Enter 发送 · Shift\+Enter 换行'/u);
+  assert.match(composer, /'composer\.shortcut\.mod-enter': '⌘\/Ctrl\+Enter 发送 · Shift\+Enter 换行'/u);
   assert.match(chatroom, /'agent\.approval\.unavailable': 'Approval unavailable'/u);
   assert.match(chatroom, /'agent\.approval\.unavailable': '审批不可用'/u);
   assert.equal(

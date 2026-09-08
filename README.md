@@ -11,17 +11,14 @@ member run; it never parses, constructs, or emulates a Connector handle.
 
 ## Status
 
-The plugin contributes through the public CordisX page API. Its current
-[page selector](src/chatroom-page-surface.ts) prefers the Host Conversation
-Shell when that public service exists; otherwise it mounts the lazy plugin
-React page. Chatroom provides Room state and actions; on the Shell path, Host
-renders the conversation and details. CordisX owns the page seat, route, shared
-React runtime, lifecycle, and application chrome in both paths. Chatroom never
-fabricates a reply or exposes opaque runtime handles as product copy.
+See [Room UI ownership](.agents/docs/room-ui-ownership.md) for the renderer boundary
+and the separate native migration gates.
 
-Moving the business UI back into the plugin is tracked in
-[issue #74](https://github.com/cordisx/plugin-chatroom/issues/74); that planned
-migration is not the current implementation.
+The plugin contributes a body-only React page through the public CordisX page
+API. Chatroom owns its title, timeline, member panel, composer, approval cards,
+and direct OneWorks Avatar rendering. CordisX still owns the page seat, route,
+shared React runtime, lifecycle, and application chrome. Chatroom never
+fabricates a reply or projects opaque runtime handles.
 
 Each Room freezes a cycle-free membership forest with any number of leaders.
 Role and attention policy are independent: ordinary messages fan out to every
@@ -57,6 +54,20 @@ React/ReactDOM singletons, replacement fencing, and stylesheet cleanup.
 Out of scope: host adapters, credentials, external channels, automation,
 application chrome, arbitrary Host DOM access, rich-media messages, and Agent
 execution.
+
+## Start a task
+
+Use **New task** in the Room header to select a Leader, describe the task, and
+enter an absolute working directory (for example `/Users/me/project`). From a
+new Room page, this prepares a Room before starting the task. In an existing
+Room, existing conversations keep their Session and workspace associations.
+Ordinary messages continue through the composer.
+
+A task whose creation result is uncertain retains its input for a retry using
+the same operation. Check the Room task details before changing the request.
+This entry does not select a default directory, change an existing Session's
+workspace, or automatically create a worktree. Native acceptance of the new
+page remains part of the [migration gates](.agents/docs/room-ui-ownership.md).
 
 ## Agent configuration
 
@@ -169,6 +180,11 @@ sidebar image contract.
 The domain reserves both room-scoped and member-scoped opaque `ChannelLink`
 records. External Channel runtime integration remains out of scope for this
 version.
+
+## Explicit Agent reports
+
+The experimental [CLI integration guide](.agents/docs/chatroom-cli.md) covers
+opt-in reports, the packaged Skill, Room persistence, and current runtime gaps.
 
 ## Development
 

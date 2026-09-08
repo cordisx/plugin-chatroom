@@ -1,3 +1,6 @@
+import type { AgentStatus } from '@cordisx/protocol/agents/v1';
+import type { CordisXCommands } from 'cordisx/contracts';
+import { type ChatroomCliPageMessage, roomCliPageMessages } from './room-cli-message-page.js';
 import type {
   AgentConversationActiveRunDescriptor,
   AgentConversationItem as AgentConversationItemV7,
@@ -25,7 +28,11 @@ import type { ChatroomCommandIntent, ChatroomConversationController } from './co
 import { approvalDecisionOperationId } from './room-agent-operations.js';
 import type { Room } from './room.js';
 
-export type ChatroomPageItem = AgentConversationItemV3 | AgentConversationItemV7 | ProjectedItem;
+export type ChatroomPageItem =
+  | AgentConversationItemV3
+  | AgentConversationItemV7
+  | ProjectedItem
+  | ChatroomCliPageMessage;
 
 export interface ChatroomPageSnapshot {
   readonly revision: number;
@@ -66,13 +73,26 @@ function stableItemOrder(left: ChatroomPageItem, right: ChatroomPageItem): numbe
   return left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0;
 }
 
-function chronologicalItems(items: readonly ChatroomPageItem[]): readonly ChatroomPageItem[] {
+function chronologicalItems(
+  items: readonly ChatroomPageItem[],
+  anchors: readonly Readonly<{ itemId: string; appendAfterItemId: string; }>[] = [],
+): readonly ChatroomPageItem[] {
   const stable = [...items].sort(stableItemOrder);
   const timed = stable
     .filter(item => itemTime(item) !== undefined)
     .sort((left, right) => itemTime(left)! - itemTime(right)! || stableItemOrder(left, right));
   let timedIndex = 0;
-  return Object.freeze(stable.map(item => itemTime(item) === undefined ? item : timed[timedIndex++]));
+  const ordered = stable.map(item => itemTime(item) === undefined ? item : timed[timedIndex++]);
+  // Preserve the owner-verified admission fence across live updates and cold replay.
+  for (const anchor of anchors) {
+    const index = ordered.findIndex(item => item.itemId === anchor.itemId);
+    const predecessor = ordered.findIndex(item => item.itemId === anchor.appendAfterItemId);
+    if (index < 0 || predecessor < 0 || index > predecessor) continue;
+    const [item] = ordered.splice(index, 1);
+    const nextPredecessor = ordered.findIndex(candidate => candidate.itemId === anchor.appendAfterItemId);
+    ordered.splice(nextPredecessor + 1, 0, item!);
+  }
+  return Object.freeze(ordered.map((item, sequence) => item.sequence === sequence ? item : { ...item, sequence }));
 }
 
 /**
@@ -85,6 +105,10 @@ export class ChatroomPageSource {
   private readonly unsubscribeRooms: () => void;
   private readonly unsubscribeProjection: () => void;
   private readonly unsubscribeSettings: () => void;
+  private readonly observedStatuses = new Map<string, ReadonlyMap<string, AgentStatus>>();
+  private readonly watchedRooms = new Set<string>();
+  private readonly hydrationRevisions = new Map<string, number>();
+  private readonly hydrations = new Map<string, Promise<void>>();
   private revision = 0;
   private disposed = false;
 
@@ -92,10 +116,32 @@ export class ChatroomPageSource {
     private readonly conversation: ChatroomConversationController,
     private readonly sessions: ChatroomAgentSessionController,
     private readonly settings: ChatroomComposerSettings,
+    private readonly commands?: Pick<CordisXCommands, 'execute'>,
   ) {
-    this.unsubscribeRooms = conversation.rooms.subscribe(() => this.refresh());
-    this.unsubscribeProjection = sessions.subscribeProjection(() => this.refresh());
+    this.unsubscribeRooms = conversation.rooms.subscribe(roomId => this.refreshRoom(roomId));
+    this.unsubscribeProjection = sessions.subscribeProjection(roomId => this.refreshRoom(roomId));
     this.unsubscribeSettings = settings.subscribe(() => this.refresh());
+  }
+
+  /** Executes only an action still present on the current Room projection. */
+  async executeMessageAction(roomId: string, itemId: string, actionId: string): Promise<void> {
+    if (this.disposed) throw new Error('Chatroom page source is disposed.');
+    const item = this.getSnapshot(roomId).items.find(candidate =>
+      candidate.kind === 'message' && candidate.itemId === itemId
+    );
+    const action = item?.kind === 'message'
+      ? item.actions.find(candidate => candidate.id === actionId)
+      : undefined;
+    if (action === undefined || this.commands === undefined) {
+      throw new Error('Message action is unavailable.');
+    }
+    if (action.disabled.value) {
+      throw new Error(action.disabled.reason?.fallback ?? 'Message action is disabled.');
+    }
+    await this.commands.execute(
+      action.command,
+      JSON.stringify(['room-message-action', roomId, itemId, action.id]),
+    );
   }
 
   getSnapshot(roomId: string | undefined): ChatroomPageSnapshot {
@@ -110,11 +156,15 @@ export class ChatroomPageSource {
     const projection = room === undefined
       ? { activeRuns: [], items: [] }
       : this.sessions.projectionForRoom(room.id);
-    const projectedMessageIds = new Set(
-      projection.items.flatMap(item => item.kind === 'message' ? [item.messageId] : []),
-    );
+    const representedRoomItems = new Set(projection.admittedRoomItemIds ?? []);
     const domainItems = model?.items.filter(item => {
-      if (item.kind === 'message') return !projectedMessageIds.has(item.messageId);
+      // A returned task creation result supersedes its old pending invitation.
+      // Keep business status untouched: it also fences routing and safe retries.
+      if (item.kind === 'member-presence' && (item.state === 'inviting' || item.state === 'creating')) {
+        const run = room?.runs.find(candidate => candidate.runId === item.runId);
+        if (run?.delegation?.result !== undefined) return false;
+      }
+      if (item.kind === 'message') return !representedRoomItems.has(item.itemId);
       if (item.kind !== 'approval') return true;
       return room?.playgroundAgentApprovals?.some(approval => approval.itemId === item.itemId) === true;
     }) ?? [];
@@ -128,11 +178,15 @@ export class ChatroomPageSource {
           ? model.selection.participants.map(participant => Object.freeze({ ...participant }))
           : [],
       ),
-      activeRuns: Object.freeze([...projection.activeRuns]),
+      activeRuns: Object.freeze(projection.activeRuns.flatMap(run => {
+        const phase = this.observedStatuses.get(room?.id ?? '')?.get(run.sessionId);
+        return phase === 'running' ? [{ ...run, lifecycle: { phase } }] : [];
+      })),
       items: chronologicalItems([
         ...domainItems,
         ...projection.items,
-      ]),
+        ...(room === undefined ? [] : roomCliPageMessages(room)),
+      ], projection.admissionAppendAnchors),
       shortcutPolicy: this.settings.current,
     });
     this.cache.set(key, snapshot);
@@ -141,8 +195,40 @@ export class ChatroomPageSource {
 
   async hydrate(roomId: string | undefined): Promise<void> {
     if (this.disposed || roomId === undefined || this.conversation.rooms.get(roomId) === undefined) return;
-    await this.sessions.hydrateRoom(roomId);
-    if (!this.disposed) this.refresh();
+    this.watchedRooms.add(roomId);
+    const pending = this.hydrations.get(roomId);
+    if (pending !== undefined) return await pending;
+    // A lease can close while another run is replaying. Drain notifications
+    // after the current pass so the first run is replayed under its new lease.
+    const operation = Promise.resolve().then(async () => {
+      let revision: number;
+      do {
+        revision = this.hydrationRevisions.get(roomId) ?? 0;
+        await this.sessions.hydrateRoom(roomId);
+        const statuses = new Map<string, AgentStatus>();
+        for (const run of this.conversation.rooms.get(roomId)?.runs ?? []) {
+          if (run.sessionId === undefined) continue;
+          try {
+            const agent = await this.sessions.getObservedAgent(roomId, run.runId);
+            if (agent?.id === run.sessionId && agent.status?.status === 'available') {
+              statuses.set(run.sessionId, agent.status.value);
+            }
+          } catch {
+            // An unavailable runtime remains unknown; replay is not live status.
+          }
+        }
+        if (!this.disposed && revision === (this.hydrationRevisions.get(roomId) ?? 0)) {
+          this.observedStatuses.set(roomId, statuses);
+        }
+      } while (!this.disposed && revision !== (this.hydrationRevisions.get(roomId) ?? 0));
+      if (!this.disposed) this.refresh();
+    });
+    this.hydrations.set(roomId, operation);
+    try {
+      await operation;
+    } finally {
+      if (this.hydrations.get(roomId) === operation) this.hydrations.delete(roomId);
+    }
   }
 
   subscribe(listener: () => void): () => void {
@@ -154,8 +240,8 @@ export class ChatroomPageSource {
   }
 
   /**
-   * Draft v2 handler-side fixture. The future Host page adapter alone creates
-   * this context; page React code never supplies an origin or local binding.
+   * The public Host page adapter alone creates this command context;
+   * page React code never supplies an origin or local binding.
    * It intentionally has no direct Agent send fallback.
    */
   async handlePageComposerCommand(
@@ -305,7 +391,20 @@ export class ChatroomPageSource {
     this.unsubscribeProjection();
     this.unsubscribeSettings();
     this.cache.clear();
+    this.watchedRooms.clear();
+    this.observedStatuses.clear();
+    this.hydrationRevisions.clear();
     this.listeners.clear();
+  }
+
+  private refreshRoom(roomId: string): void {
+    this.observedStatuses.delete(roomId);
+    this.refresh();
+    if (this.disposed || !this.watchedRooms.has(roomId)) return;
+    this.hydrationRevisions.set(roomId, (this.hydrationRevisions.get(roomId) ?? 0) + 1);
+    // Keep the last verified snapshot when an observer replay is unavailable.
+    // A later notification or explicit page hydration can retry it.
+    void this.hydrate(roomId).catch(() => {});
   }
 
   private refresh(): void {

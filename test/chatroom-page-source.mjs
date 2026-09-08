@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { ChatroomPageSource } from '../dist/chatroom-page-source.js';
-import { ChatroomRoomRegistry, createRoom } from '../dist/room.js';
+import { addRoomRun, bindRoomRunSession, ChatroomRoomRegistry, createRoom } from '../dist/room.js';
 
-function harness({ rooms = [], projection = { activeRuns: [], items: [] }, intent } = {}) {
+function harness({ rooms = [], projection = { activeRuns: [], items: [] }, intent, commands } = {}) {
   const registry = new ChatroomRoomRegistry(rooms);
   const projectionListeners = new Set();
   const settingsListeners = new Set();
@@ -58,7 +58,7 @@ function harness({ rooms = [], projection = { activeRuns: [], items: [] }, inten
       return () => settingsListeners.delete(listener);
     },
   };
-  const source = new ChatroomPageSource(conversation, sessions, settings);
+  const source = new ChatroomPageSource(conversation, sessions, settings, commands);
   return { calls, conversation, projectionListeners, registry, sessions, settingsListeners, source };
 }
 
@@ -101,6 +101,49 @@ test('merges replayed Session items, exposes participants, hydrates and invalida
   run.source.dispose();
 });
 
+test('message actions execute only from the current Room projection through owner commands', async () => {
+  const calls = [];
+  const action = {
+    id: 'inspect:message',
+    label: { key: 'inspect', fallback: 'Inspect' },
+    command: { id: 'inspect-message', arguments: { itemId: projectedMessage.itemId } },
+    disabled: { value: false },
+  };
+  const message = { ...projectedMessage, itemId: 'projected:item', actions: [action] };
+  const run = harness({
+    rooms: [createRoom({ id: 'room-a', title: 'Room A' })],
+    projection: { activeRuns: [], items: [message] },
+    commands: {
+      async execute(...args) {
+        calls.push(args);
+      },
+    },
+  });
+  await run.source.executeMessageAction('room-a', message.itemId, action.id);
+  assert.deepEqual(calls, [[
+    action.command,
+    JSON.stringify(['room-message-action', 'room-a', message.itemId, action.id]),
+  ]]);
+  await assert.rejects(run.source.executeMessageAction('room-a', message.itemId, 'missing'));
+  run.projectionListeners.forEach(listener => listener('room-a'));
+  const currentCommand = { id: 'inspect-current', arguments: { revision: 2 } };
+  run.sessions.projectionForRoom = () => ({
+    activeRuns: [],
+    items: [{ ...message, actions: [{ ...action, command: currentCommand }] }],
+  });
+  await run.source.executeMessageAction('room-a', message.itemId, action.id);
+  assert.equal(calls[1][0], currentCommand, 'execution re-resolves the action from the current projection');
+  run.projectionListeners.forEach(listener => listener('room-a'));
+  run.sessions.projectionForRoom = () => ({
+    activeRuns: [],
+    items: [{ ...message, actions: [{ ...action, disabled: { value: true, reason: { fallback: 'Denied' } } }] }],
+  });
+  await assert.rejects(run.source.executeMessageAction('room-a', message.itemId, action.id), /Denied/);
+  assert.equal(calls.length, 2);
+  run.source.dispose();
+  await assert.rejects(run.source.executeMessageAction('room-a', message.itemId, action.id), /disposed/);
+});
+
 test('routes current and legacy approval decisions to exact Session or playground owners', async () => {
   const regular = harness({ rooms: [createRoom({ id: 'room-a', title: 'Room A' })] });
   assert.equal(await regular.source.decideApproval('room-a', 'approval-a', 'approved'), true);
@@ -140,4 +183,97 @@ test('detaches Room, Session, and settings listeners on disposal', async () => {
   assert.equal(run.projectionListeners.size, 0);
   assert.equal(run.settingsListeners.size, 0);
   assert.equal('submit' in run.source, false, 'page source exposes no direct Agent dispatch fallback');
+});
+
+test('member status comes from an available live Agent observation, never historical lifecycle', async () => {
+  const room = bindRoomRunSession(
+    addRoomRun(createRoom({ id: 'room-a', title: 'Room A' }), {
+      runId: 'review-run',
+      memberId: 'reviewer',
+      title: 'Reviewer',
+      status: 'creating',
+    }),
+    'review-run',
+    'session-a',
+  );
+  const descriptor = {
+    runId: 'review-run',
+    memberId: 'reviewer',
+    sessionId: 'session-a',
+    participantId: room.memberships.find(member => member.memberId === 'reviewer').participantId,
+    lifecycle: { phase: 'running' },
+  };
+  const h = harness({ rooms: [room], projection: { activeRuns: [descriptor], items: [] } });
+  let status = { status: 'unavailable', code: 'whole-agent-idle-unobservable' };
+  h.sessions.getObservedAgent = async () => ({ id: 'session-a', status });
+  assert.deepEqual(h.source.getSnapshot('room-a').activeRuns, []);
+  await h.source.hydrate('room-a');
+  assert.deepEqual(h.source.getSnapshot('room-a').activeRuns, []);
+  status = { status: 'available', value: 'idle' };
+  await h.source.hydrate('room-a');
+  assert.deepEqual(h.source.getSnapshot('room-a').activeRuns, []);
+  status = { status: 'available', value: 'running' };
+  await h.source.hydrate('room-a');
+  assert.equal(h.source.getSnapshot('room-a').activeRuns[0].lifecycle.phase, 'running');
+  status = { status: 'unavailable', code: 'connection-replaced' };
+  h.projectionListeners.forEach(listener => listener('room-a'));
+  assert.deepEqual(h.source.getSnapshot('room-a').activeRuns, []);
+  await h.source.hydrate('room-a');
+  assert.deepEqual(h.source.getSnapshot('room-a').activeRuns, []);
+  h.source.dispose();
+});
+
+test('returned task creation results suppress only their own stale pending presence without changing Room facts', () => {
+  let room = createRoom({ id: 'room-a', title: 'Room A' });
+  const member = room.memberships.find(value => value.memberId === 'leader');
+  for (
+    const [runId, code] of [
+      ['denied', 'permission-denied'],
+      ['unknown', 'reconciliation-required'],
+      ['host-unavailable', 'host-unavailable'],
+      ['pending', undefined],
+    ]
+  ) {
+    const hostOperation = `host-${runId}`;
+    room = addRoomRun(room, {
+      runId,
+      memberId: member.memberId,
+      title: runId,
+      status: 'creating',
+      delegation: {
+        operationId: `caller-${runId}`,
+        text: 'Review the project',
+        source: { kind: 'room', roomId: room.id },
+        request: {
+          operationId: hostOperation,
+          definition: member.definition,
+          context: { kind: 'directory', cwd: '/project' },
+          text: 'Review the project',
+          tool: {
+            commandId: 'send',
+            scope: {
+              roomId: room.id,
+              participantId: member.participantId,
+              memberId: member.memberId,
+              runId,
+              taskOperationId: hostOperation,
+            },
+          },
+        },
+        ...(code === undefined ? {} : { result: { status: 'unavailable', operationId: hostOperation, code } }),
+      },
+    });
+  }
+  room = addRoomRun(room, { runId: 'ordinary', memberId: member.memberId, title: 'Ordinary', status: 'creating' });
+  const before = JSON.stringify(room);
+  const h = harness({ rooms: [room] });
+  const snapshot = h.source.getSnapshot(room.id);
+  assert.deepEqual(snapshot.items.filter(item => item.kind === 'member-presence').map(item => item.runId), [
+    'pending',
+    'ordinary',
+  ]);
+  assert.deepEqual(snapshot.activeRuns, []);
+  assert.equal(JSON.stringify(h.registry.get(room.id)), before);
+  assert.ok(h.registry.get(room.id).runs.every(run => run.status === 'creating' && run.presence.state === 'creating'));
+  h.source.dispose();
 });

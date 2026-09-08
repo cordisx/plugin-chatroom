@@ -2,8 +2,7 @@ export function registerProjectionReplayTests(harness) {
   const {
     CHATROOM_DEFAULT_AGENT_CONFIGURATION,
     ChatroomAgentSessionController,
-    ChatroomAgentSessionConversationSource,
-    ChatroomAgentSessionConversationSourceV7,
+    mountChatroomPageSource,
     ChatroomConversationController,
     DurableChatroomRoomStore,
     FakeSession,
@@ -165,28 +164,16 @@ export function registerProjectionReplayTests(harness) {
     session.replay = replay;
     const store = DurableChatroomRoomStore.memory([room]);
     const durableBefore = JSON.stringify(store.rooms.get('room'));
-    const binding = {
-      bindingId: 'binding-hydration',
-      shell: 'agent-desktop',
-      ownerGeneration: 'owner-hydration',
-      routeSelection: { scope: 'room-or-new', selectedRoomParam: 'room' },
-    };
     const domain = new ChatroomConversationController([room]);
     const controller = new ChatroomAgentSessionController(
       { agents: harness.agents, sessions: harness.sessionRegistry, approvals: harness.approvals },
       CHATROOM_DEFAULT_AGENT_CONFIGURATION,
       store,
     );
-    const mount = () =>
-      new ChatroomAgentSessionConversationSource(
-        binding,
-        domain.createSource(binding),
-        controller,
-        'enter',
-      );
+    const mount = () => mountChatroomPageSource(domain, controller);
 
-    const firstSource = mount();
-    const first = await firstSource.snapshot();
+    const firstSource = await mount();
+    const first = firstSource.getSnapshot('room');
     const visible = first.items.map(item => [item.itemId, item.sequence]);
     const approval = first.items.find(item => item.kind === 'approval');
     const success = first.items.find(item => item.kind === 'message' && item.messageId === 'reviewer-success');
@@ -205,10 +192,10 @@ export function registerProjectionReplayTests(harness) {
       approval.itemId,
       success.itemId,
     ]);
-    assert.equal(first.selection.activeRuns[0].lifecycle.phase, 'active');
+    assert.deepEqual(first.activeRuns, [], 'completed replay without a live Agent has no current runtime status');
     assert.equal(harness.creates.length, 0);
     assert.equal(harness.resumes.length, 0);
-    assert.equal(controller.ownerHandleCount, 0, 'Shell hydration never claims Agent mutation ownership');
+    assert.equal(controller.ownerHandleCount, 0, 'Page hydration never claims Agent mutation ownership');
     assert.equal(harness.handles.length, 0, 'completed Session replay never reconstructs a live Agent handle');
     assert.equal(
       JSON.stringify(store.rooms.get('room')),
@@ -225,8 +212,10 @@ export function registerProjectionReplayTests(harness) {
       'permission replacement retains exact SessionEvent display facts until durable replay replaces them',
     );
 
-    const secondSource = mount();
-    const [second, concurrent] = await Promise.all([secondSource.snapshot(), secondSource.snapshot()]);
+    const secondSource = await mount();
+    const second = secondSource.getSnapshot('room');
+    const concurrent = secondSource.getSnapshot('room');
+    assert.equal(second, concurrent, 'page reads reuse the same immutable revision');
     assert.deepEqual(second.items.map(item => [item.itemId, item.sequence]), visible);
     assert.deepEqual(concurrent.items.map(item => [item.itemId, item.sequence]), visible);
     assert.equal(session.observers.length, 2, 'concurrent remount reads share one replay subscription');
@@ -251,7 +240,7 @@ export function registerProjectionReplayTests(harness) {
     await session.emitLive([liveSuccess]);
     session.replay.push(liveSuccess);
     await new Promise(resolve => setImmediate(resolve));
-    const afterLive = await secondSource.snapshot();
+    const afterLive = secondSource.getSnapshot('room');
     assert.equal(
       afterLive.items.filter(item =>
         item.kind === 'message'
@@ -269,13 +258,8 @@ export function registerProjectionReplayTests(harness) {
       CHATROOM_DEFAULT_AGENT_CONFIGURATION,
       store,
     );
-    const reloadedSource = new ChatroomAgentSessionConversationSource(
-      binding,
-      domain.createSource(binding),
-      reloadedController,
-      'enter',
-    );
-    const reloaded = await reloadedSource.snapshot();
+    const reloadedSource = await mountChatroomPageSource(domain, reloadedController);
+    const reloaded = reloadedSource.getSnapshot('room');
     assert.deepEqual(
       reloaded.items.map(item => [item.itemId, item.sequence]),
       durableReplayVisible,
@@ -366,26 +350,14 @@ export function registerProjectionReplayTests(harness) {
     ];
     await sessionA.emitLive(eventsA);
 
-    const binding = {
-      bindingId: 'binding-two-runs',
-      shell: 'agent-desktop',
-      ownerGeneration: 'owner-two-runs',
-      routeSelection: { scope: 'room-or-new', selectedRoomParam: 'room' },
-    };
     const domain = new ChatroomConversationController(store.rooms);
-    const source = new ChatroomAgentSessionConversationSource(
-      binding,
-      domain.createSource(binding),
-      controller,
-      'enter',
-    );
-    const before = await source.snapshot();
+    const source = await mountChatroomPageSource(domain, controller);
+    const before = source.getSnapshot('room');
     const pending = before.items.find(item => item.kind === 'approval');
     assert.equal(pending.state, 'pending');
     const stableA = before.items.map(item => [item.itemId, item.sequence]);
-    const subscription = await source.subscribe(before.snapshotSequence);
-    assert.equal(subscription.result.status, 'accepted');
-    const pages = subscription.handle.pages[Symbol.asyncIterator]();
+    const snapshots = [];
+    const unsubscribe = source.subscribe(() => snapshots.push(source.getSnapshot('room')));
 
     const sessionB = new FakeSession(sessionBId, [
       sessionEvent(sessionBId, 0, 'turn/start', { turn: 1 }),
@@ -435,6 +407,7 @@ export function registerProjectionReplayTests(harness) {
     );
     await store.upsert(withRunB);
     const durableAfterRunB = JSON.stringify(store.rooms.get('room'));
+    const hydrating = source.hydrate('room');
     await sessionBRequested;
 
     // Model a Host permission replacement at the vulnerable point: refresh has
@@ -451,8 +424,13 @@ export function registerProjectionReplayTests(harness) {
     await sessionA.close('permission-revoked');
     releaseSessionB();
 
-    const page = (await pages.next()).value;
-    const visible = page.updates[0].snapshot.items;
+    await hydrating;
+    await new Promise(resolve => setImmediate(resolve));
+    const visible = source.getSnapshot('room').items;
+    assert.ok(snapshots.length > 0);
+    for (const snapshot of snapshots) {
+      assert.ok(snapshot.items.some(item => item.itemId === pending.itemId));
+    }
     const replayedApproval = visible.find(item => item.itemId === pending.itemId);
     assert.equal(replayedApproval.state, 'denied');
     assert.deepEqual(replayedApproval.actions, []);
@@ -472,7 +450,7 @@ export function registerProjectionReplayTests(harness) {
     );
     assert.equal(controller.isRunLocallyUnavailable('room', 'review-run'), false);
 
-    await subscription.handle.unsubscribe();
+    unsubscribe();
     source.dispose();
     await controller.dispose();
 
@@ -484,13 +462,8 @@ export function registerProjectionReplayTests(harness) {
       CHATROOM_DEFAULT_AGENT_CONFIGURATION,
       store,
     );
-    const coldSource = new ChatroomAgentSessionConversationSource(
-      binding,
-      domain.createSource(binding),
-      coldController,
-      'enter',
-    );
-    const cold = await coldSource.snapshot();
+    const coldSource = await mountChatroomPageSource(domain, coldController);
+    const cold = coldSource.getSnapshot('room');
     assert.deepEqual(
       cold.items.map(item => [item.itemId, item.sequence]),
       visible.map(item => [item.itemId, item.sequence]),
@@ -509,7 +482,7 @@ export function registerProjectionReplayTests(harness) {
     store.dispose();
   });
 
-  test('a terminal V7 rejection retains the complete Room projection through same-Session route replacement', async () => {
+  test('a terminal rejection retains the complete Room projection through same-Session route replacement', async () => {
     const reviewerSessionId = 'cx-session.reviewer-terminal';
     const leadSessionId = 'cx-session.lead-terminal';
     const aTimestamp = new Date(1_001).toISOString();
@@ -672,20 +645,9 @@ export function registerProjectionReplayTests(harness) {
     await leadSession.emitLive(leadBEvents);
     leadSession.replay.push(...leadBEvents);
 
-    const binding = {
-      bindingId: 'binding-terminal-reject',
-      shell: 'agent-desktop',
-      ownerGeneration: 'owner-terminal-reject',
-      routeSelection: { scope: 'room-or-new', selectedRoomParam: 'room' },
-    };
     const domain = new ChatroomConversationController(store.rooms);
-    const source = new ChatroomAgentSessionConversationSourceV7(
-      binding,
-      domain.createSource(binding),
-      controller,
-      'enter',
-    );
-    const before = await source.snapshot();
+    const source = await mountChatroomPageSource(domain, controller);
+    const before = source.getSnapshot('room');
     const beforeIds = before.items.map(item => item.itemId);
     assert.equal(beforeIds.length, 5);
     assert.equal(beforeIds[1], delegation.itemId);
@@ -721,7 +683,7 @@ export function registerProjectionReplayTests(harness) {
       rejectionResult,
     ];
     reviewerSession.replay.push(...approvalEvents);
-    const terminal = await source.snapshot();
+    const terminal = source.getSnapshot('room');
     const rejectionItem = terminal.items.find(item =>
       item.kind === 'message'
       && item.messageId === 'reviewer-rejection-result'
@@ -752,12 +714,8 @@ export function registerProjectionReplayTests(harness) {
       );
     };
 
-    // Subscribe only after the six-item terminal source snapshot is established.
-    // This makes each subsequent page an exact lifecycle replacement caused by
-    // the Route fence, rather than a queued pre-terminal update.
-    const subscription = await source.subscribe(terminal.snapshotSequence);
-    assert.equal(subscription.result.status, 'accepted');
-    const pages = subscription.handle.pages[Symbol.asyncIterator]();
+    const snapshots = [];
+    const unsubscribe = source.subscribe(() => snapshots.push(source.getSnapshot('room')));
 
     const originalGet = harness.sessionRegistry.get;
     harness.sessionRegistry.get = async id =>
@@ -766,43 +724,28 @@ export function registerProjectionReplayTests(harness) {
         : await originalGet(id);
     await reviewerSession.close('route-replaced');
     await new Promise(resolve => setImmediate(resolve));
-    const afterReviewerRouteFence = await source.snapshot();
+    const afterReviewerRouteFence = source.getSnapshot('room');
     assertTerminalSnapshot(
       afterReviewerRouteFence,
       'Reviewer route replacement cannot replace the terminal Room snapshot with domain-only facts',
     );
-    const reviewerRoutePage = await pages.next();
-    assert.equal(reviewerRoutePage.done, false);
-    assert.equal(reviewerRoutePage.value.updates[0].kind, 'snapshot-replaced');
-    assertTerminalSnapshot(
-      reviewerRoutePage.value.updates[0].snapshot,
-      'Reviewer route replacement stream page retains the terminal Room timeline',
-    );
+    assert.ok(snapshots.length > 0);
+    snapshots.splice(0).forEach(snapshot => assertTerminalSnapshot(snapshot, 'Reviewer route subscriber'));
 
     await leadSession.close('route-replaced');
     await new Promise(resolve => setImmediate(resolve));
-    const afterLeadRouteFence = await source.snapshot();
+    const afterLeadRouteFence = source.getSnapshot('room');
     assertTerminalSnapshot(
       afterLeadRouteFence,
       'Lead route replacement cannot remove admitted A/B or Reviewer terminal facts',
     );
-    const leadRoutePage = await pages.next();
-    assert.equal(leadRoutePage.done, false);
-    assert.equal(leadRoutePage.value.updates[0].kind, 'snapshot-replaced');
-    assertTerminalSnapshot(
-      leadRoutePage.value.updates[0].snapshot,
-      'Lead route replacement stream page retains the complete terminal Room timeline',
-    );
+    assert.ok(snapshots.length > 0);
+    snapshots.splice(0).forEach(snapshot => assertTerminalSnapshot(snapshot, 'Lead route subscriber'));
 
-    await subscription.handle.unsubscribe();
+    unsubscribe();
     source.dispose();
-    const remounted = new ChatroomAgentSessionConversationSourceV7(
-      binding,
-      domain.createSource(binding),
-      controller,
-      'enter',
-    );
-    const roundTrip = await remounted.snapshot();
+    const remounted = await mountChatroomPageSource(domain, controller);
+    const roundTrip = remounted.getSnapshot('room');
     assertTerminalSnapshot(
       roundTrip,
       'Room/Task remount retains the exact cached terminal SessionEvent projection until replay is available',
@@ -820,13 +763,8 @@ export function registerProjectionReplayTests(harness) {
       store,
     );
     const coldDomain = new ChatroomConversationController(store.rooms);
-    const coldSource = new ChatroomAgentSessionConversationSourceV7(
-      binding,
-      coldDomain.createSource(binding),
-      coldController,
-      'enter',
-    );
-    const cold = await coldSource.snapshot();
+    const coldSource = await mountChatroomPageSource(coldDomain, coldController);
+    const cold = coldSource.getSnapshot('room');
     assertTerminalSnapshot(
       cold,
       'cold replay rebuilds the same terminal item ids and append fence without a second ledger',
@@ -859,7 +797,7 @@ export function registerProjectionReplayTests(harness) {
     await store.upsert(replacementRoom);
     await coldController.hydrateRoom('room');
     await new Promise(resolve => setImmediate(resolve));
-    const replacement = await coldSource.snapshot();
+    const replacement = coldSource.getSnapshot('room');
     assert.equal(
       replacement.items.some(item => item.itemId === pending.itemId),
       false,

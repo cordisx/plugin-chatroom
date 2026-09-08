@@ -13,7 +13,7 @@
   "extends": [
     {
       "agentId": "chatroom.generalist",
-      "revision": "sha256:d575374eff842409dc411d39812ec65657067446ffd991475efba6a497ec38f0"
+      "revision": "sha256:465dfd16f23c23896e41a8ade8088efe0e3f4ec2002706c3dc127898f4fc4505"
     }
   ],
   "inherit": {

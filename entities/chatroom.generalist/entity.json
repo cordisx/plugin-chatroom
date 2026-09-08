@@ -40,9 +40,8 @@
     "chatroom.room-isolation",
     "chatroom.no-fabricated-replies"
   ],
-  "skills": [],
+  "skills": ["chatroom"],
   "tools": {
-    "include": ["read", "search"],
     "exclude": ["external-channel"]
   },
   "mcpServers": {

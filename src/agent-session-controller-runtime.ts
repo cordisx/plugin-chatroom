@@ -1,3 +1,6 @@
+import { resumeChatroomSession } from './room-session-resume.js';
+import { createRoom } from './room.js';
+import { failRoomRunPresence } from './room-engagement.js';
 import {
   acquireErrorCode,
   acquisitionMutationId,
@@ -216,10 +219,19 @@ export class ChatroomAgentSessionRuntimeController extends ChatroomAgentSessionA
     roomId: string,
     runId: string,
   ): Promise<RuntimeOwner | RuntimeAcquireFailure> {
+    const task = this.requireRun(this.requireRoom(roomId), runId).delegation;
+    if (task !== undefined && task.result?.status !== 'accepted') {
+      throw new Error('Delegated task requires Host reconciliation before continuation.');
+    }
     const key = runKey(roomId, runId);
     const retained = this.owners.get(key);
     if (retained !== undefined) {
-      await this.ensureOwnerApprovalRegistrations(roomId, runId, retained.handle);
+      if (task === undefined) {
+        await this.ensureCollaboration(roomId, runId);
+        await this.ensureOwnerApprovalRegistrations(roomId, runId, retained.handle);
+      } else if (!this.runtime.collaboration?.enabled()) {
+        throw new Error('Chatroom task collaboration is unavailable.');
+      }
       this.localUnavailableRuns.delete(key);
       return { handle: retained.handle, disposition: 'retained' };
     }
@@ -240,11 +252,7 @@ export class ChatroomAgentSessionRuntimeController extends ChatroomAgentSessionA
     const run = this.requireRun(room, runId);
     const member = this.requireMember(room, run.memberId);
     const raw: RuntimeAcquireResult = run.sessionId !== undefined
-      ? await this.runtime.agents.resume({
-        sessionId: run.sessionId,
-        definitionSource: 'session-persisted',
-        mutationId: acquisitionMutationId('resume', roomId, runId),
-      })
+      ? await resumeChatroomSession(this.runtime, room, run)
       : run.taskBinding !== undefined
       ? await this.runtime.agents.acquireLegacyTaskBinding({
         $schema: CORDISX_AGENT_SESSION_LEGACY_ACQUIRE_SCHEMA_V1,
@@ -274,7 +282,20 @@ export class ChatroomAgentSessionRuntimeController extends ChatroomAgentSessionA
     }
     const key = runKey(roomId, runId);
     try {
-      await this.mutateRoom(roomId, current => bindRoomRunSession(current, runId, result.sessionId));
+      if (run.sessionId === undefined) {
+        await this.mutateRoom(roomId, current => bindRoomRunSession(current, runId, result.sessionId));
+      } else {
+        const currentRun = this.requireRun(this.requireRoom(roomId), runId);
+        if (
+          result.sessionId !== run.sessionId || currentRun.sessionId !== run.sessionId
+          || currentRun.memberId !== run.memberId
+        ) {
+          throw new Error('Agent resume changed the existing Room run Session identity.');
+        }
+        // Resume recovers live authority, not a new Room association. Rebinding
+        // the same Session would rewrite presence and clear retained operations.
+      }
+      await this.ensureCollaboration(roomId, runId);
       if (!this.isCurrent(generation)) throw new Error('Agent acquisition was replaced before publication.');
       const owner: RuntimeOwner = { handle: result.handle, disposition: result.disposition };
       this.owners.set(key, owner);
@@ -309,7 +330,41 @@ export class ChatroomAgentSessionRuntimeController extends ChatroomAgentSessionA
     return { handle: result.handle, disposition: result.disposition };
   }
 
-  private async ensureOwnerApprovalRegistrations(
+  private async ensureCollaboration(roomId: string, runId: string): Promise<void> {
+    let room = this.requireRoom(roomId);
+    let run = this.requireRun(room, runId);
+    const collaboration = this.runtime.collaboration;
+    if ((collaboration === undefined || !collaboration.enabled()) && run.collaborationMode === undefined) return;
+    try {
+      if (collaboration === undefined) throw new Error('Chatroom CLI binding service is unavailable.');
+      // A failed initial binding remains explicitly required, never a plain-agent fallback.
+      if (run.collaborationMode === undefined) {
+        await this.setCollaborationMode(roomId, runId, 'cli-pending');
+        room = this.requireRoom(roomId);
+        run = this.requireRun(room, runId);
+      }
+      await collaboration.ensureBound(room, run);
+      if (run.collaborationMode !== 'cli') await this.setCollaborationMode(roomId, runId, 'cli');
+    } catch (error) {
+      await this.mutateRoom(roomId, current =>
+        failRoomRunPresence(current, runId, {
+          code: 'chatroom-cli-binding-unavailable',
+          retryable: true,
+          diagnostic: 'Chatroom reporting is unavailable; no task was submitted.',
+        }));
+      throw error;
+    }
+  }
+
+  private async setCollaborationMode(roomId: string, runId: string, mode: 'cli-pending' | 'cli'): Promise<void> {
+    await this.mutateRoom(roomId, current =>
+      createRoom({
+        ...current,
+        runs: current.runs.map(value => value.runId === runId ? { ...value, collaborationMode: mode } : value),
+      }));
+  }
+
+  protected async ensureOwnerApprovalRegistrations(
     roomId: string,
     runId: string,
     handle: AgentHandle,
@@ -383,7 +438,10 @@ export class ChatroomAgentSessionRuntimeController extends ChatroomAgentSessionA
         const projection = projector.project(page);
         await this.observe({ roomId, runId, page, projection });
         for (const listener of this.projectionListeners) listener(roomId);
-        if (page.phase === 'live' && this.owners.has(key)) {
+        if (
+          page.phase === 'live' && this.owners.has(key)
+          && this.requireRun(currentRoom, runId).collaborationMode !== 'cli'
+        ) {
           for (const event of page.events) {
             if (event.type === 'assistant/message') {
               await this.dispatchAgentMentions(roomId, runId, event.seq, event.data.message.content);
@@ -643,7 +701,8 @@ export class ChatroomAgentSessionRuntimeController extends ChatroomAgentSessionA
     ]);
   }
 
-  private disposeOwner(key: string, handle: AgentHandle): Promise<AgentMutationResult<'dispose'>> {
+  private async disposeOwner(key: string, handle: AgentHandle): Promise<AgentMutationResult<'dispose'>> {
+    await this.runtime.collaboration?.revoke(handle.agent.session.id);
     return handle.dispose({ mutationId: createChatroomOpaqueId('agent-dispose', key) });
   }
 

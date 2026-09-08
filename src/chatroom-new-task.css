@@ -1,0 +1,92 @@
+.cx-chatroom-new-task {
+  box-sizing: border-box;
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 24px;
+  overflow: auto;
+  border: 1px solid var(--cx-border, GrayText);
+  border-radius: 16px;
+  color: var(--cx-text, CanvasText);
+  background: var(--cx-surface, Canvas);
+  box-shadow: 0 16px 48px color-mix(in srgb, currentColor 16%, transparent);
+  font: inherit;
+}
+.cx-chatroom-new-task::backdrop {
+  background: color-mix(in srgb, CanvasText 28%, transparent);
+}
+.cx-chatroom-new-task__form {
+  display: grid;
+  gap: 16px;
+}
+.cx-chatroom-new-task__header,
+.cx-chatroom-new-task__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cx-chatroom-new-task__header {
+  justify-content: space-between;
+}
+.cx-chatroom-new-task__header h2 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.4;
+}
+.cx-chatroom-new-task__actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.cx-chatroom-new-task label {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  font-size: 13px;
+}
+.cx-chatroom-new-task input,
+.cx-chatroom-new-task textarea,
+.cx-chatroom-new-task select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--cx-border, GrayText);
+  border-radius: 8px;
+  color: inherit;
+  background: var(--cx-surface, Canvas);
+  font: inherit;
+  line-height: 1.5;
+}
+.cx-chatroom-new-task textarea {
+  resize: vertical;
+  max-height: 240px;
+}
+.cx-chatroom-new-task input:focus-visible,
+.cx-chatroom-new-task textarea:focus-visible,
+.cx-chatroom-new-task select:focus-visible {
+  outline: 2px solid var(--cx-primary, Highlight);
+  outline-offset: 2px;
+}
+.cx-chatroom-new-task input:disabled,
+.cx-chatroom-new-task textarea:disabled,
+.cx-chatroom-new-task select:disabled {
+  opacity: 0.6;
+}
+.cx-chatroom-new-task__hint,
+.cx-chatroom-new-task__error {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.cx-chatroom-new-task__hint {
+  color: var(--cx-muted, GrayText);
+}
+.cx-chatroom-new-task__error {
+  color: var(--cx-danger, #c94a42);
+}
+@media (max-width: 420px) {
+  .cx-chatroom-new-task {
+    padding: 16px;
+  }
+}

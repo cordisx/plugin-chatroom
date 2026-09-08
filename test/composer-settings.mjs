@@ -35,12 +35,14 @@ function settingsFixture(initial) {
   };
 }
 
-test('Config declares one live closed shortcut setting with the accepted default and localized copy', () => {
+test('Config declares live collaboration and closed shortcut settings with the accepted default and localized copy', () => {
   assert.equal(configApplies, 'live');
   assert.equal(CHATROOM_DEFAULT_COMPOSER_SHORTCUT_POLICY, 'enter');
-  assert.deepEqual(Config({}), { shortcutPolicy: 'enter' });
-  assert.deepEqual(Config({ shortcutPolicy: 'mod-enter' }), { shortcutPolicy: 'mod-enter' });
+  assert.deepEqual(Config({}), { cliReporting: false, shortcutPolicy: 'enter' });
+  assert.deepEqual(Config({ shortcutPolicy: 'mod-enter' }), { cliReporting: false, shortcutPolicy: 'mod-enter' });
   assert.throws(() => Config({ shortcutPolicy: 'future' }));
+  assert.equal(Config({ cliReporting: true }).cliReporting, true);
+  assert.throws(() => Config({ cliReporting: 'true' }));
 
   const envelope = JSON.parse(JSON.stringify(Config));
   const field = envelope.refs[envelope.refs[envelope.uid].dict.shortcutPolicy];

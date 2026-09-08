@@ -6,8 +6,7 @@ import {
   assertChatroomAdmissionDeliveriesAccepted,
   ChatroomAgentSessionController,
 } from '../../dist/agent-session-controller.js';
-import { ChatroomAgentSessionConversationSource } from '../../dist/agent-session-conversation-source.js';
-import { ChatroomAgentSessionConversationSourceV7 } from '../../dist/agent-session-conversation-source-v7.js';
+import { ChatroomPageSource } from '../../dist/chatroom-page-source.js';
 import { CHATROOM_COMMAND_SUBMIT } from '../../dist/conversation-model.js';
 import { ChatroomConversationController } from '../../dist/conversation-source.js';
 import {
@@ -492,12 +491,20 @@ function runtimeHarness({
   };
 }
 
+async function mountChatroomPageSource(conversation, sessions, roomId = 'room') {
+  const source = new ChatroomPageSource(conversation, sessions, {
+    current: 'enter',
+    subscribe: () => () => {},
+  });
+  await source.hydrate(roomId);
+  return source;
+}
+
 export const agentSessionControllerHarness = Object.freeze({
   CHATROOM_COMMAND_SUBMIT,
   CHATROOM_DEFAULT_AGENT_CONFIGURATION,
   ChatroomAgentSessionController,
-  ChatroomAgentSessionConversationSource,
-  ChatroomAgentSessionConversationSourceV7,
+  mountChatroomPageSource,
   ChatroomConversationController,
   DurableChatroomRoomStore,
   FakeApprovals,

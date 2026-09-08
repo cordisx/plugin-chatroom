@@ -1,6 +1,6 @@
 {
-  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-package.v8.schema.json",
-  "schemaVersion": 8,
+  "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-package.v12.schema.json",
+  "schemaVersion": 12,
   "id": "chatroom",
   "version": "0.1.0",
   "entry": "./dist/runtime/chatroom.js",
@@ -13,106 +13,106 @@
   "compatibility": {
     "runtimeAbi": 1,
     "protocolSchemas": [
-      "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v8.schema.json",
+      "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v12.schema.json",
       "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/entity-file.v1.schema.json"
     ]
   },
   "dependencies": [],
   "runtimeManifest": {
     "path": "./runtime-manifest.json",
-    "schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v8.schema.json",
-    "digest": "sha256:49da1d03d3bda5bbdad148594212cec49f2dee1b644c710c2d041b1f900da618"
+    "schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-manifest.v12.schema.json",
+    "digest": "sha256:04c3ec3e49f3bec98b27f23037323c171219e3c9e87e312e14177cf88c900d36"
   },
   "entityTemplates": [
     {
       "agentId": "chatroom.generalist",
       "entityPath": "./entities/chatroom.generalist/entity.json",
-      "digest": "sha256:d575374eff842409dc411d39812ec65657067446ffd991475efba6a497ec38f0"
+      "digest": "sha256:465dfd16f23c23896e41a8ade8088efe0e3f4ec2002706c3dc127898f4fc4505"
     },
     {
       "agentId": "chatroom.reviewer",
       "entityPath": "./entities/chatroom.reviewer/entity.json",
-      "digest": "sha256:5c52ac24a8eb4592c0919336fbc804bd117741c22b108af030c83b8ef590512d"
+      "digest": "sha256:1ff0e8023cc1eef473f45c830945eecbd07e7f6a41591827ced1013a3fbec2c4"
     },
     {
       "agentId": "chatroom.integrator",
       "entityPath": "./entities/chatroom.integrator/entity.json",
-      "digest": "sha256:cf89bc7dc1406f57369a29cfda1ad0bd826ea84f02b845a0660d36f7d269004b"
+      "digest": "sha256:fb79e675608826f5a024e49a2e7e3f86486f92208492d8740652a3deff81f079"
     },
     {
       "agentId": "chatroom.documentation",
       "entityPath": "./entities/chatroom.documentation/entity.json",
-      "digest": "sha256:64e5a6f1268a792380318e419520c7bdea9695ead0a0d08dfc30565b9273d045"
+      "digest": "sha256:e177e93409ff5deca10d42325b87efdd65944e5ec08ef2f43c863548cc53ff5d"
     },
     {
       "agentId": "chatroom.qa",
       "entityPath": "./entities/chatroom.qa/entity.json",
-      "digest": "sha256:161da39865680f98bad1aef6aab6036b0d9921dfe7a88150d9252c06cce7d521"
+      "digest": "sha256:6ee66a2d218d94a1a47923023269f55c35105eb80848dfca912884103986bc43"
     },
     {
       "agentId": "chatroom.playground.product-research",
       "entityPath": "./entities/chatroom.playground.product-research/entity.json",
-      "digest": "sha256:ac788190620404ce52b07c1150bc0fa1610682f9eef090a5ab44cf4cdfaa02bd"
+      "digest": "sha256:b97706cdcc4e7129a0cc7a0f1963fd2bc03faa14954bc31b740a4541413d2869"
     },
     {
       "agentId": "chatroom.playground.product-design",
       "entityPath": "./entities/chatroom.playground.product-design/entity.json",
-      "digest": "sha256:d2fc6b87e090cf6e348f1b8ca1882c126246bdef117f834afa76007177f654bb"
+      "digest": "sha256:87933c301806a1be22da3e680e344e38fb3648b6fdef627a4ca381d339cf8b80"
     },
     {
       "agentId": "chatroom.playground.compliance",
       "entityPath": "./entities/chatroom.playground.compliance/entity.json",
-      "digest": "sha256:c90feceada178a31e1e564578f788230088be759f1ce9050b9ba2f443269820c"
+      "digest": "sha256:9d70e7f7d4c215737751c544bd4200bb0b57814bc524af069e5d8407a8ab9de1"
     },
     {
       "agentId": "chatroom.playground.localization",
       "entityPath": "./entities/chatroom.playground.localization/entity.json",
-      "digest": "sha256:99da6f5366be492309dd724a26174d1a2010372d0e91f2955614c1f42753b615"
+      "digest": "sha256:b5aea4a6354153226804852c7136596ccac1e5dd084b3f6052e187ead7814fae"
     },
     {
       "agentId": "chatroom.playground.knowledge-base",
       "entityPath": "./entities/chatroom.playground.knowledge-base/entity.json",
-      "digest": "sha256:d164ed1dee03a66f0f4ba6abd9661b3cff4223b7d2986136f71151d92f05555e"
+      "digest": "sha256:1a81c9e02c5359aadd8591d3ef5c53d4a6153af30a18da57df4b77a464239b92"
     },
     {
       "agentId": "chatroom.playground.frontend",
       "entityPath": "./entities/chatroom.playground.frontend/entity.json",
-      "digest": "sha256:b0bae3818233a684e225658a896f959fe24f7517f8b68cfa05015705a642b664"
+      "digest": "sha256:4e29cb390d6031b49722c0291cf1d24273f0eebe6afa3c7e914cba5fba09cb15"
     },
     {
       "agentId": "chatroom.playground.design-system",
       "entityPath": "./entities/chatroom.playground.design-system/entity.json",
-      "digest": "sha256:0dba6b02611a84dc9cfb48a877a2744bf1690211201b78b956e88709156016dd"
+      "digest": "sha256:82a98b667ed227d640e3145585dceb9d34c271f176892caff6e2a704dd7cc934"
     },
     {
       "agentId": "chatroom.playground.backend",
       "entityPath": "./entities/chatroom.playground.backend/entity.json",
-      "digest": "sha256:07bcb9c9cc9b31b315cd9b3ccfaa7fb6282ea98e7fb8fda6e4f50204ac0959b9"
+      "digest": "sha256:ab8b707a8de62574f48d12ca0882d4e33f340d30395aedf16773e81376b70ef4"
     },
     {
       "agentId": "chatroom.playground.api-platform",
       "entityPath": "./entities/chatroom.playground.api-platform/entity.json",
-      "digest": "sha256:846f51fe922f22673f9e221e8c71824faeae974666b75f2dcda62220875acd1f"
+      "digest": "sha256:44ae54ed2d898b0e399d6bc68759abe14e6c2031a59e2ad4927c792fda618038"
     },
     {
       "agentId": "chatroom.playground.data-platform",
       "entityPath": "./entities/chatroom.playground.data-platform/entity.json",
-      "digest": "sha256:23fbb27ef5c1ca357105a9a4ad8158cbe7b289487e051e2c6bbb9b0b5936ea3f"
+      "digest": "sha256:7c3b688ea63b60baa340d8849f624f6c4054f81f9f8e8da3bbab65613e6d61ba"
     },
     {
       "agentId": "chatroom.playground.infrastructure",
       "entityPath": "./entities/chatroom.playground.infrastructure/entity.json",
-      "digest": "sha256:193330a4c9da475fd1891bb177a61756f9b7e0ae7e4bd4ad85a0110d2c99ba45"
+      "digest": "sha256:d48c7c5584a5c8b5fda363d12c961885701cbe62bb69bfc0c2a2848a31f21611"
     },
     {
       "agentId": "chatroom.playground.automation",
       "entityPath": "./entities/chatroom.playground.automation/entity.json",
-      "digest": "sha256:014ff8d9685be705fc55a9aa915545f8389fc57c5e1c4e6f48ecf267fa715218"
+      "digest": "sha256:dc6e05b117c9374ad7afb3ac10a873a70df7cb871b1172d89cd27be675c14af5"
     },
     {
       "agentId": "chatroom.playground.release-validation",
       "entityPath": "./entities/chatroom.playground.release-validation/entity.json",
-      "digest": "sha256:4016dbedc1c598a7a0b14a842b5e338393d5e7e231afcb855816c0d1631225ec"
+      "digest": "sha256:ef9c3fb4210d58766ab1e91ebdae7025f79c8d663698b14a50e2159da53a17a9"
     }
   ]
 }

@@ -26,7 +26,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - run: npm ci --ignore-scripts
+      - run: npm ci --ignore-scripts --allow-git=all
       - name: Install the exact shared audit provider
         run: |
           git init --quiet "$RUNNER_TEMP/quality-policy"

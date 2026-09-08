@@ -1,12 +1,9 @@
-import { ChatroomAgentLoopController } from './agent-loop-controller.js';
 import { ChatroomAgentSessionController } from './agent-session-controller.js';
 import { ChatroomConversationController } from './conversation-source.js';
 import { createChatroomOpaqueId } from './room.js';
 
-import { ChatroomPlaygroundRoomSimulationOwner } from './playground-room-agent-loop-owner.js';
 import { ChatroomAgentSessionRoomSimulationOwner } from './playground-room-agent-session-owner.js';
 import { type PlaygroundRoomSimulationBridgeService } from './playground-room-simulation-contract.js';
-export { ChatroomPlaygroundRoomSimulationOwner } from './playground-room-agent-loop-owner.js';
 export { ChatroomAgentSessionRoomSimulationOwner } from './playground-room-agent-session-owner.js';
 export {
   PLAYGROUND_ROOM_SIMULATION_BINDING_CONTRACT,
@@ -47,26 +44,6 @@ export function registerChatroomAgentSessionRoomSimulationOwner(
   return () => {
     unregister();
     owner.dispose();
-  };
-}
-
-export function registerChatroomPlaygroundRoomSimulationOwner(
-  service: PlaygroundRoomSimulationBridgeService,
-  conversation: ChatroomConversationController,
-  agentLoop: ChatroomAgentLoopController,
-): () => void {
-  let unregisterOwner: (() => void) | undefined;
-  let owner: ChatroomPlaygroundRoomSimulationOwner | undefined;
-  const unsubscribeGeneration = conversation.subscribeOwnerGeneration(ownerGeneration => {
-    unregisterOwner?.();
-    owner?.dispose();
-    owner = new ChatroomPlaygroundRoomSimulationOwner(ownerGeneration, conversation, agentLoop);
-    unregisterOwner = service.register(owner);
-  });
-  return () => {
-    unsubscribeGeneration();
-    unregisterOwner?.();
-    owner?.dispose();
   };
 }
 

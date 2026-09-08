@@ -1,7 +1,7 @@
 {
   "$schema": "https://dprint.dev/schemas/v0.json",
   "includes": [
-    "**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,json,jsonc,md}"
+    "**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,json,jsonc,md,css,scss,sass,less}"
   ],
   // Formatting excludes build outputs and the npm-generated lock; source generators and tests remain included.
   "excludes": [
@@ -14,6 +14,7 @@
     "cordisx-package.json"
   ],
   "extends": "https://raw.githubusercontent.com/cordisx/cordisxmono/c63c2e8c2ba7e11502934a52ad2ce3734e804cdc/tooling/quality/dprint/code.json",
+  "plugins": ["https://plugins.dprint.dev/g-plane/malva-v0.16.0.wasm"],
   "typescript": {
     "jsx.quoteStyle": "preferDouble",
     "semiColons": "always"

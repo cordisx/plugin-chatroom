@@ -6,7 +6,7 @@
   "name": "Release Validation",
   "description": "Validates release readiness for the Playground team.",
   "extends": [
-    { "agentId": "chatroom.qa", "revision": "sha256:161da39865680f98bad1aef6aab6036b0d9921dfe7a88150d9252c06cce7d521" }
+    { "agentId": "chatroom.qa", "revision": "sha256:6ee66a2d218d94a1a47923023269f55c35105eb80848dfca912884103986bc43" }
   ],
   "inherit": {
     "promptSections": "append",

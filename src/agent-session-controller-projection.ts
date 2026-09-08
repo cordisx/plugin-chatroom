@@ -34,6 +34,7 @@ export abstract class ChatroomAgentSessionProjectionController extends ChatroomA
     if (room === undefined) return { activeRuns: [], items: [] };
     const projectors = room.runs.flatMap(run => {
       const projector = this.projectors.get(runKey(roomId, run.runId));
+      projector?.updateDomain(room, run);
       return projector === undefined ? [] : [projector];
     });
     const linkedByItemId = new Map<string, {
@@ -68,12 +69,25 @@ export abstract class ChatroomAgentSessionProjectionController extends ChatroomA
         )
         .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0),
     );
+    const admittedRoomItemIds = [
+      ...new Set([
+        ...linkedByItemId.keys(),
+        ...projectors.flatMap(projector =>
+          projector.snapshotItems().flatMap(item => {
+            const itemId = projector.representedRoomItemId(item);
+            return itemId === undefined ? [] : [itemId];
+          })
+        ),
+        ...projectors.flatMap(projector => projector.supersededAdmissionRoomItemIds()),
+      ]),
+    ];
     return Object.freeze({
       activeRuns: Object.freeze(projectors.map(projector => projector.activeRun())),
       // One Room human item may be admitted to N exact targets. Keep every
       // durable Session/message link for replay/fencing, but expose one stable
       // canonical SessionEvent projection rather than duplicating it N times.
       items: Object.freeze(items),
+      ...(admittedRoomItemIds.length === 0 ? {} : { admittedRoomItemIds: Object.freeze(admittedRoomItemIds) }),
       ...(admissionAppendAnchors.length === 0 ? {} : { admissionAppendAnchors }),
     });
   }
@@ -199,6 +213,16 @@ export abstract class ChatroomAgentSessionProjectionController extends ChatroomA
     return this.localUnavailableRuns.has(runKey(roomId, runId));
   }
 
+  /** A submit may attempt exact recovery; this is not live authority or readiness. */
+  canAttemptRunRecovery(roomId: string, runId: string): boolean {
+    const room = this.rooms.get(roomId);
+    const run = room?.runs.find(value => value.runId === runId);
+    return room !== undefined && !room.archived && run?.collaborationMode === 'cli'
+      && run.sessionId !== undefined
+      && ['active', 'waiting', 'running', 'completed'].includes(run.status)
+      && this.localUnavailableRuns.get(runKey(roomId, runId)) === 'session-unavailable';
+  }
+
   /** Observer hydration reads SessionEvent replay and never claims mutation authority or writes Room state. */
   async hydrate(): Promise<void> {
     this.assertUsable();
@@ -283,9 +307,11 @@ export abstract class ChatroomAgentSessionProjectionController extends ChatroomA
     }
     const current = this.requireRun(this.requireRoom(roomId), runId);
     if (
-      current.sessionSelfIntroduction === undefined
-      || !this.observedMessageIds.get(acquired.handle.agent.session.id)
-        ?.has(current.sessionSelfIntroduction.requestMessageId)
+      current.delegation === undefined && (
+        current.sessionSelfIntroduction === undefined
+        || !this.observedMessageIds.get(acquired.handle.agent.session.id)
+          ?.has(current.sessionSelfIntroduction.requestMessageId)
+      )
     ) {
       const introduction = await this.requestMemberSelfIntroduction(roomId, runId);
       if (

@@ -1,24 +1,31 @@
+import { ChatroomNewTaskEntry } from './chatroom-new-task-entry.js';
 import {
-  type FormEvent,
-  type KeyboardEvent,
+  type CSSProperties,
   useCallback,
   useEffect,
+  useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from 'cordisx/react';
-import { AttachmentPlaceholder, Button, EmptyState, MarkdownViewer } from 'cordisx/ui';
+import { EmptyState } from 'cordisx/ui';
 import type { CordisXReactPageProps } from 'cordisx/contracts';
-import type { AgentPageComposerCommandAdapter } from '@cordisx/protocol/agent-page-admission/v2';
 
 import { ChatroomAvatar } from './avatar.js';
 import { roomAvatarFingerprint } from './avatar-fingerprint.js';
 import { ChatroomCompositeAvatar } from './composite-avatar.js';
-import { CHATROOM_COMMAND_SUBMIT } from './conversation-model.js';
-import type { ChatroomPageItem, ChatroomPageSource } from './chatroom-page-source.js';
+import type { ChatroomPageSource } from './chatroom-page-source.js';
 import type { ChatroomSidebarImageCache, ChatroomSidebarImageCapture } from './sidebar-image-cache.js';
 import './chatroom-page.css';
+import type { ChatroomPageDetails } from './chatroom-page-details.js';
+import { ChatroomMemberDetails } from './chatroom-member-details.js';
+import { ChatroomRoomSettings } from './chatroom-room-settings.js';
+import { ChatroomRoomActions } from './chatroom-room-actions.js';
+import { ChatroomTimeline } from './chatroom-timeline.js';
+import { ChatroomComposer } from './chatroom-composer.js';
+import { useChatroomInspector } from './chatroom-inspector.js';
 
 type Translate = CordisXReactPageProps['t'];
 
@@ -29,333 +36,97 @@ const display = (value: { readonly key: string; readonly fallback: string; }, t:
   return value.fallback;
 };
 
-type PageParticipant = Readonly<{
-  id: string;
-  name: string;
-  avatar?: Parameters<typeof ChatroomAvatar>[0]['participant']['avatar'];
-}>;
-
-function MessageItem({ item, participants, t }: {
-  readonly item: Extract<ChatroomPageItem, { readonly kind: 'message'; }>;
-  readonly participants: readonly PageParticipant[];
-  readonly t: Translate;
-}) {
-  const author = display(item.author.displayName, t);
-  const body = item.body.map(block => display(block.text, t)).join('\n\n');
-  const human = item.author.role === 'human';
-  return (
-    <article className="cx-chatroom-message" data-role={item.author.role} aria-live={item.ariaLive}>
-      {!human && (
-        <ChatroomAvatar
-          participant={{
-            id: item.author.participantId,
-            name: author,
-            ...(item.author.avatar === undefined ? {} : { avatar: item.author.avatar }),
-          }}
-        />
-      )}
-      <div className="cx-chatroom-message__content">
-        {!human && <div className="cx-chatroom-message__author">{author}</div>}
-        <div className="cx-chatroom-message__bubble">
-          <MarkdownViewer source={body} aria-label={author} />
-        </div>
-        <div className="cx-chatroom-message__meta">
-          <time dateTime={item.timestamp}>
-            {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </time>
-          {item.deliveryState === 'failed' && <span>{t('timeline.delivery.failed')}</span>}
-          {item.runState === 'running' && <span>{t('timeline.run.running')}</span>}
-        </div>
-        {item.reactions.length === 0 ? null : (
-          <div className="cx-chatroom-message__reactions">
-            {item.reactions.map(reaction => {
-              const actor = participants.find(participant => participant.id === reaction.actorParticipantId);
-              const value = reaction.value.kind === 'emoji' ? reaction.value.emoji : reaction.value.token;
-              return (
-                <span key={reaction.reactionId} data-state={reaction.state}>
-                  <ChatroomAvatar
-                    participant={actor ?? {
-                      id: reaction.actorParticipantId,
-                      name: reaction.actorParticipantId,
-                    }}
-                  />
-                  <span aria-label={`${actor?.name ?? reaction.actorParticipantId}: ${value}`}>{value}</span>
-                </span>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </article>
-  );
+export interface ChatroomPageHeaderAction {
+  readonly id: string;
+  readonly label: string;
+  readonly disabled?: boolean;
+  readonly disabledReason?: string;
+  readonly run: () => void | Promise<void>;
 }
 
-function StatusItem({ item, participant, t }: {
-  readonly item: Exclude<ChatroomPageItem, { readonly kind: 'message' | 'approval'; }>;
-  readonly participant?: PageParticipant;
-  readonly t: Translate;
-}) {
-  if (item.kind === 'status') {
-    return (
-      <div className="cx-chatroom-status" data-state={item.state} aria-live={item.ariaLive}>
-        {display(item.label, t)}
-      </div>
-    );
-  }
-  return (
-    <div className="cx-chatroom-status cx-chatroom-status--member" data-state={item.state}>
-      <ChatroomAvatar participant={participant ?? { id: item.participantId, name: item.participantId }} />
-      <span>
-        {participant?.name ?? item.participantId} · {t('timeline.member.presence', { state: item.state })}
-        {item.diagnostic === undefined ? null : ` · ${display(item.diagnostic, t)}`}
-      </span>
-    </div>
-  );
-}
+type Inspector = { readonly kind: 'members' | 'settings'; } | {
+  readonly kind: 'identity';
+  readonly participantId: string;
+};
 
-function approvalReason(item: Extract<ChatroomPageItem, { readonly kind: 'approval'; }>, t: Translate): string {
-  if ('reason' in item) {
-    if (typeof item.reason === 'string') return item.reason;
-    if (
-      item.reason !== null && typeof item.reason === 'object' && 'text' in item.reason
-      && typeof item.reason.text === 'string'
-    ) return item.reason.text;
-    if (item.reason !== null && typeof item.reason === 'object' && 'summary' in item.reason) {
-      const summary = item.reason.summary;
-      return typeof summary === 'string' ? summary : JSON.stringify(summary);
-    }
-    return JSON.stringify(item.reason);
-  }
-  return 'rationale' in item && item.rationale !== undefined
-    ? display(item.rationale, t)
-    : t('approval.reason.unavailable');
-}
-
-function approvalAuthorityLabel(
-  item: Extract<ChatroomPageItem, { readonly kind: 'approval'; }>,
-  participants: readonly PageParticipant[],
-  t: Translate,
-): string {
-  if (
-    !('authority' in item) || item.authority === undefined || item.authority === null
-    || typeof item.authority !== 'object'
-  ) return t('approval.target.unavailable');
-  const authority = item.authority as { readonly participantId?: unknown; readonly memberId?: unknown; };
-  const participantId = typeof authority.participantId === 'string' ? authority.participantId : undefined;
-  const memberId = typeof authority.memberId === 'string' ? authority.memberId : undefined;
-  if (participantId === undefined || memberId === undefined) return t('approval.target.unavailable');
-  // The authority fact is carried by the item itself. This is presentation
-  // lookup only: it never resolves a Lead from a display name or live Agent.
-  return participants.find(participant => participant.id === participantId)?.name ?? memberId;
-}
-
-function ApprovalItem({ item, participant, participants, roomId, source, t }: {
-  readonly item: Extract<ChatroomPageItem, { readonly kind: 'approval'; }>;
-  readonly participant?: PageParticipant;
-  readonly participants: readonly PageParticipant[];
-  readonly roomId: string;
-  readonly source: ChatroomPageSource;
-  readonly t: Translate;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(false);
-  const decide = async (decision: 'approved' | 'denied') => {
-    if (busy || item.state !== 'pending') return;
-    setBusy(true);
-    setError(false);
-    try {
-      if (!await source.decideApproval(roomId, item.itemId, decision)) setError(true);
-    } catch {
-      setError(true);
-    } finally {
-      setBusy(false);
-    }
+export function ChatroomPage(
+  { source, imageCache, details, headerActions = [], copyText, ...props }: CordisXReactPageProps & {
+    readonly source: ChatroomPageSource;
+    readonly imageCache: ChatroomSidebarImageCache;
+    readonly details?: ChatroomPageDetails;
+    readonly copyText?: (text: string) => Promise<void>;
+    readonly headerActions?: readonly ChatroomPageHeaderAction[];
+  },
+) {
+  const [inspector, setInspector] = useState<Inspector>();
+  const root = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLElement>(null);
+  const { width, narrow, separatorProps } = useChatroomInspector(root, inspector !== undefined, props.signal);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [mentionRequest, setMentionRequest] = useState<{ participantId: string; sequence: number; }>();
+  const [actionError, setActionError] = useState(false);
+  const [busyAction, setBusyAction] = useState<string>();
+  const actionPending = useRef(false);
+  const actionGeneration = useRef(0);
+  const mentionSequence = useRef(0);
+  const membersTrigger = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const restoreFocus = useRef(false);
+  const memberSearchInput = useRef<HTMLInputElement>(null);
+  const inspectorHeading = useRef<HTMLHeadingElement>(null);
+  const inspectorId = useId();
+  const closeInspector = () => {
+    restoreFocus.current = true;
+    setInspector(undefined);
   };
-  const canDecide = item.state === 'pending'
-    && item.actions.some(action => action.decision === 'approve')
-    && item.actions.some(action => action.decision === 'deny' || action.decision === 'reject');
-  const authority = approvalAuthorityLabel(item, participants, t);
-  return (
-    <article className="cx-chatroom-approval" data-state={item.state}>
-      <header>
-        <ChatroomAvatar participant={participant ?? { id: item.participantId, name: item.participantId }} />
-        <div>
-          <strong>{t('approval.title')}</strong>
-          <small>
-            {t('approval.target', {
-              requester: participant?.name ?? item.participantId,
-              authority,
-            })}
-          </small>
-          <span>{t(`approval.state.${item.state}`)}</span>
-        </div>
-      </header>
-      <p>{approvalReason(item, t)}</p>
-      {!canDecide ? null : (
-        <div className="cx-chatroom-approval__actions">
-          <Button
-            type="button"
-            className="cx-chatroom-approval__action"
-            variant="primary"
-            disabled={busy}
-            aria-label={t('approval.approve')}
-            title={t('approval.approve')}
-            onClick={() => void decide('approved')}
-          >
-            <span aria-hidden="true">✓</span>
-          </Button>
-          <Button
-            type="button"
-            className="cx-chatroom-approval__action"
-            variant="secondary"
-            disabled={busy}
-            aria-label={t('approval.deny')}
-            title={t('approval.deny')}
-            onClick={() => void decide('denied')}
-          >
-            <span aria-hidden="true">×</span>
-          </Button>
-        </div>
-      )}
-      {error && <p role="alert" className="cx-chatroom-error">{t('approval.decision.failed')}</p>}
-    </article>
-  );
-}
-
-function Timeline({ items, participants, roomId, source, t }: {
-  readonly items: readonly ChatroomPageItem[];
-  readonly participants: readonly PageParticipant[];
-  readonly roomId?: string;
-  readonly source: ChatroomPageSource;
-  readonly t: Translate;
-}) {
-  const endRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' });
-  }, [items]);
-  return (
-    <section className="cx-chatroom-timeline" aria-label={t('timeline.label')}>
-      {items.length === 0
-        ? <EmptyState title={t('timeline.empty.title')} description={t('timeline.empty.description')} />
-        : items.map(item =>
-          item.kind === 'message'
-            ? <MessageItem key={item.itemId} item={item} participants={participants} t={t} />
-            : item.kind === 'approval' && roomId !== undefined
-            ? (
-              <ApprovalItem
-                key={item.itemId}
-                item={item}
-                participant={participants.find(participant => participant.id === item.participantId)}
-                participants={participants}
-                roomId={roomId}
-                source={source}
-                t={t}
-              />
-            )
-            : item.kind === 'approval'
-            ? null
-            : (
-              <StatusItem
-                key={item.itemId}
-                item={item}
-                participant={item.kind === 'member-presence'
-                  ? participants.find(participant => participant.id === item.participantId)
-                  : undefined}
-                t={t}
-              />
-            )
-        )}
-      <div ref={endRef} />
-    </section>
-  );
-}
-
-function Composer({ source, shortcutPolicy, pageComposer, signal, t }: {
-  readonly source: ChatroomPageSource;
-  readonly shortcutPolicy: 'enter' | 'mod-enter';
-  readonly pageComposer?: AgentPageComposerCommandAdapter;
-  readonly signal: AbortSignal;
-  readonly t: Translate;
-}) {
-  const [draft, setDraft] = useState('');
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string>();
-  const composing = useRef(false);
-  const send = async () => {
-    if (sending || draft.trim() === '' || signal.aborted) return;
-    setSending(true);
-    setError(undefined);
+  const openMembers = () => {
+    setMemberSearch('');
+    setInspector({ kind: 'members' });
+  };
+  const openParticipant = (participantId: string) => {
+    if (details === undefined) {
+      setMemberSearch(participantId);
+      setInspector({ kind: 'members' });
+    } else setInspector({ kind: 'identity', participantId });
+  };
+  const runHeaderAction = async (action: ChatroomPageHeaderAction) => {
+    if (action.disabled || actionPending.current || props.signal.aborted) return;
+    actionPending.current = true;
+    setBusyAction(action.id);
+    setActionError(false);
+    const generation = actionGeneration.current;
     try {
-      if (pageComposer === undefined) {
-        setError(t('composer.unavailable'));
-        return;
+      await action.run();
+    } catch {
+      if (generation === actionGeneration.current && !props.signal.aborted) setActionError(true);
+    } finally {
+      if (generation === actionGeneration.current && !props.signal.aborted) {
+        actionPending.current = false;
+        setBusyAction(undefined);
       }
-      source.pageComposerCompletion(
-        await pageComposer.execute({
-          $schema:
-            'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-page-composer-command-request.v1.schema.json',
-          contract: 'cordisx.agent-page-composer-command-request/v1',
-          schemaVersion: 1,
-          command: { id: CHATROOM_COMMAND_SUBMIT },
-          submitPayload: draft,
-        }),
-      );
-      if (signal.aborted) return;
-      setDraft('');
-    } catch {
-      if (!signal.aborted) setError(t('composer.send-failed'));
-    } finally {
-      if (!signal.aborted) setSending(false);
     }
   };
-  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    void send();
-  };
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (composing.current || event.nativeEvent.isComposing) return;
-    const modified = event.metaKey || event.ctrlKey;
-    const shouldSend = event.key === 'Enter'
-      && (shortcutPolicy === 'enter' ? !event.shiftKey && !modified : modified);
-    if (!shouldSend) return;
-    event.preventDefault();
-    void send();
-  };
-  return (
-    <form className="cx-chatroom-composer" onSubmit={onSubmit}>
-      <AttachmentPlaceholder className="cx-chatroom-composer__attachment" size={32} />
-      <textarea
-        value={draft}
-        rows={1}
-        maxLength={32_768}
-        placeholder={t('composer.placeholder')}
-        aria-label={t('composer.placeholder')}
-        disabled={sending}
-        onChange={event => setDraft(event.currentTarget.value)}
-        onCompositionStart={() => {
-          composing.current = true;
-        }}
-        onCompositionEnd={() => {
-          composing.current = false;
-        }}
-        onKeyDown={onKeyDown}
-      />
-      <Button type="submit" variant="primary" disabled={sending || draft.trim() === ''}>
-        {sending ? t('composer.sending') : t('composer.send')}
-      </Button>
-      <div className="cx-chatroom-composer__hint">
-        {shortcutPolicy === 'enter' ? t('composer.shortcut.enter') : t('composer.shortcut.mod-enter')}
-      </div>
-      {error && <div role="alert" className="cx-chatroom-error">{error}</div>}
-    </form>
-  );
-}
-
-export function ChatroomPage({ source, imageCache, ...props }: CordisXReactPageProps & {
-  readonly source: ChatroomPageSource;
-  readonly imageCache: ChatroomSidebarImageCache;
-}) {
   const roomId = typeof props.params.roomId === 'string' ? props.params.roomId : undefined;
+  useEffect(() => {
+    setInspector(undefined);
+    setMemberSearch('');
+    setMentionRequest(undefined);
+    setActionError(false);
+    setBusyAction(undefined);
+    actionPending.current = false;
+    actionGeneration.current += 1;
+    return () => {
+      actionGeneration.current += 1;
+    };
+  }, [roomId, source, props.signal]);
+  useLayoutEffect(() => {
+    if (inspector !== undefined) inspectorHeading.current?.focus({ preventScroll: true });
+    else if (restoreFocus.current) {
+      restoreFocus.current = false;
+      // Restore after the narrow layout has made the conversation visible.
+      (returnFocus.current ?? membersTrigger.current)?.focus({ preventScroll: true });
+    }
+  }, [inspector, narrow]);
   const subscribe = useCallback((listener: () => void) => source.subscribe(listener), [source]);
   const getSnapshot = useCallback(() => source.getSnapshot(roomId), [roomId, source]);
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
@@ -365,9 +136,12 @@ export function ChatroomPage({ source, imageCache, ...props }: CordisXReactPageP
   const participants = useMemo(() =>
     snapshot.participants.map(participant => ({
       id: participant.participantId,
+      role: participant.role,
+      mentionAlias: snapshot.room?.memberships.find(member => member.participantId === participant.participantId)
+        ?.memberId,
       name: display(participant.displayName, props.t),
       ...(participant.avatar === undefined ? {} : { avatar: participant.avatar }),
-    })), [props.t, snapshot.participants]);
+    })), [props.t, snapshot.participants, snapshot.room?.memberships]);
   const avatarFingerprint = roomAvatarFingerprint(participants);
   const capture = useMemo<ChatroomSidebarImageCapture | undefined>(() =>
     snapshot.room === undefined
@@ -385,59 +159,324 @@ export function ChatroomPage({ source, imageCache, ...props }: CordisXReactPageP
     );
   }
   const roomTitle = snapshot.room?.title ?? props.t('page.title');
+  const members = participants.filter(participant => participant.role === 'agent');
+  const composerMembers = members.filter(participant => participant.mentionAlias !== undefined);
+  const search = memberSearch.trim().toLocaleLowerCase();
+  const visibleMembers = members.filter(participant =>
+    participant.name.toLocaleLowerCase().includes(search) || participant.id.toLocaleLowerCase().includes(search)
+    || 'agent'.includes(search)
+  );
+  const selectedParticipant = inspector?.kind === 'identity'
+    ? participants.find(participant => participant.id === inspector.participantId)
+    : undefined;
+  const inspectorTitle = inspector?.kind === 'settings'
+    ? props.t('room.settings')
+    : selectedParticipant?.name ?? props.t('members.title');
   return (
-    <div className="cx-chatroom-page">
-      <header className="cx-chatroom-header">
-        <ChatroomCompositeAvatar
-          participants={participants}
-          size="header"
-          onSnapshot={capture === undefined ? undefined : publishSnapshot}
+    <div
+      ref={root}
+      style={{ '--cx-chatroom-inspector-width': `${width}px` } as CSSProperties}
+      className="cx-chatroom-page"
+      onKeyDown={event => {
+        if (inspector !== undefined && event.key === 'Escape' && !event.defaultPrevented) {
+          event.preventDefault();
+          event.stopPropagation();
+          closeInspector();
+        }
+      }}
+      data-inspector-open={inspector !== undefined}
+      onFocusCapture={event => {
+        if (inspector === undefined) returnFocus.current = event.target;
+      }}
+    >
+      {narrow && inspector !== undefined && (
+        <button
+          type="button"
+          className="cx-chatroom-inspector__scrim"
+          tabIndex={-1}
+          aria-label={props.t('members.close')}
+          onClick={closeInspector}
         />
+      )}
+      <header className="cx-chatroom-header" inert={narrow && inspector !== undefined}>
+        <button
+          type="button"
+          className="cx-chatroom-header__avatar"
+          aria-label={props.t('members.title')}
+          onClick={openMembers}
+        >
+          <ChatroomCompositeAvatar
+            participants={participants}
+            size="header"
+            onSnapshot={capture === undefined ? undefined : publishSnapshot}
+          />
+        </button>
         <div className="cx-chatroom-header__copy">
           <h1>{roomTitle}</h1>
-          <p>{snapshot.room?.description ?? props.t('page.description')}</p>
+          {details !== undefined && snapshot.room !== undefined
+            ? (
+              <button
+                type="button"
+                className="cx-chatroom-header__description"
+                onClick={() => setInspector({ kind: 'settings' })}
+              >
+                {snapshot.room.description || props.t('room.description.add')}
+              </button>
+            )
+            : <p>{snapshot.room?.description ?? props.t('page.description')}</p>}
         </div>
-        <span className="cx-chatroom-header__count">{props.t('members.count', { count: participants.length })}</span>
+        <div className="cx-chatroom-header__actions">
+          {details !== undefined && (
+            <ChatroomNewTaskEntry
+              key={roomId ?? 'new'}
+              roomId={roomId}
+              details={details}
+              navigation={props.navigation}
+              t={props.t}
+            />
+          )}
+          <button
+            ref={membersTrigger}
+            type="button"
+            className="cx-chatroom-header__action"
+            aria-label={props.t('members.title')}
+            aria-expanded={inspector?.kind === 'members' || inspector?.kind === 'identity'}
+            aria-controls={inspector === undefined ? undefined : inspectorId}
+            onClick={openMembers}
+          >
+            {props.t('members.count', { count: members.length })}
+          </button>
+          {details !== undefined && snapshot.room !== undefined && (
+            <button
+              type="button"
+              className="cx-chatroom-header__action"
+              aria-expanded={inspector?.kind === 'settings'}
+              onClick={() => setInspector({ kind: 'settings' })}
+            >
+              {props.t('room.settings')}
+            </button>
+          )}
+          {snapshot.room !== undefined && details !== undefined && (
+            <ChatroomRoomActions
+              room={snapshot.room}
+              details={details}
+              t={props.t}
+              onDeleted={async () => {
+                await props.navigation.navigate({ id: 'new-room' });
+              }}
+            />
+          )}
+          {headerActions.map(action => (
+            <button
+              key={action.id}
+              type="button"
+              className="cx-chatroom-header__action"
+              disabled={action.disabled || busyAction !== undefined}
+              title={action.disabledReason}
+              aria-busy={busyAction === action.id}
+              onClick={() => void runHeaderAction(action)}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
       </header>
       <main className="cx-chatroom-main">
-        <div className="cx-chatroom-conversation">
-          <Timeline
+        <div className="cx-chatroom-conversation" inert={narrow && inspector !== undefined}>
+          {actionError && <div className="cx-chatroom-page__error" role="alert">{props.t('page.action.failed')}</div>}
+          <ChatroomTimeline
+            key={roomId ?? 'new'}
             items={snapshot.items}
+            activeRuns={snapshot.activeRuns}
             participants={participants}
             roomId={snapshot.room?.id}
             source={source}
             t={props.t}
+            onParticipantClick={openParticipant}
+            onMentionParticipant={participantId => {
+              if (!composerMembers.some(participant => participant.id === participantId)) return;
+              setMentionRequest({ participantId, sequence: ++mentionSequence.current });
+              setInspector(undefined);
+            }}
+            copyText={copyText}
           />
-          <Composer
-            source={source}
-            shortcutPolicy={snapshot.shortcutPolicy}
-            pageComposer={props.pageComposer}
-            signal={props.signal}
-            t={props.t}
-          />
+          <div className="cx-chatroom-composer-seat">
+            <ChatroomComposer
+              key={roomId ?? 'new'}
+              source={source}
+              shortcutPolicy={snapshot.shortcutPolicy}
+              pageComposer={props.pageComposer}
+              signal={props.signal}
+              t={props.t}
+              participants={composerMembers}
+              mentionRequest={mentionRequest}
+            />
+          </div>
         </div>
-        <aside className="cx-chatroom-members" aria-label={props.t('members.title')}>
-          <h2>{props.t('members.title')}</h2>
-          <ul>
-            {participants.map(participant => {
-              const active = snapshot.activeRuns.find(run => run.participantId === participant.id);
-              return (
-                <li key={participant.id}>
-                  <ChatroomAvatar participant={participant} />
-                  <span>
-                    <strong>{participant.name}</strong>
-                    <small>
-                      {active === undefined
-                        ? props.t('members.status.idle')
-                        : props.t(`members.status.${active.lifecycle.phase}`)}
-                    </small>
-                  </span>
-                  <i data-state={active?.lifecycle.phase ?? 'idle'} aria-hidden="true" />
-                </li>
-              );
-            })}
-          </ul>
-        </aside>
+        {inspector !== undefined && (
+          <aside
+            ref={panel}
+            id={inspectorId}
+            role="dialog"
+            aria-modal={narrow}
+            className="cx-chatroom-inspector"
+            aria-labelledby={`${inspectorId}-title`}
+            onKeyDown={event => {
+              if (!narrow || event.key !== 'Tab' || event.defaultPrevented) return;
+              const controls = Array.from(
+                panel.current?.querySelectorAll<HTMLElement>(
+                  'button:not(:disabled),input:not(:disabled),textarea:not(:disabled),a[href],[tabindex="0"]',
+                ) ?? [],
+              ).filter(element => element.getClientRects().length > 0);
+              const first = controls[0];
+              const last = controls.at(-1);
+              if (first === undefined || last === undefined) {
+                event.preventDefault();
+                inspectorHeading.current?.focus();
+                return;
+              }
+              if (event.shiftKey && (event.target === first || event.target === inspectorHeading.current)) {
+                event.preventDefault();
+                last.focus();
+              } else if (!event.shiftKey && (event.target === last || event.target === inspectorHeading.current)) {
+                event.preventDefault();
+                first.focus();
+              }
+            }}
+          >
+            <div
+              className="cx-chatroom-inspector__resizer"
+              aria-label={props.t('members.resize')}
+              {...separatorProps}
+            />
+            <header className="cx-chatroom-inspector__header">
+              {inspector.kind === 'identity' && (
+                <button
+                  type="button"
+                  className="cx-chatroom-header__action"
+                  aria-label={props.t('members.back')}
+                  onClick={() => setInspector({ kind: 'members' })}
+                >
+                  ← {props.t('members.title')}
+                </button>
+              )}
+              <h2 id={`${inspectorId}-title`} tabIndex={-1} ref={inspectorHeading}>{inspectorTitle}</h2>
+              <button
+                type="button"
+                className="cx-chatroom-header__action"
+                aria-label={props.t('members.close')}
+                onClick={closeInspector}
+              >
+                ×
+              </button>
+            </header>
+            <div className="cx-chatroom-inspector__body">
+              {inspector.kind === 'settings' && details !== undefined && snapshot.room !== undefined
+                ? (
+                  <ChatroomRoomSettings
+                    key={snapshot.room.id}
+                    roomId={snapshot.room.id}
+                    onSaved={() => setInspector(undefined)}
+                    details={details}
+                    t={props.t}
+                  />
+                )
+                : inspector.kind === 'identity' && details !== undefined
+                ? (
+                  <ChatroomMemberDetails
+                    key={inspector.participantId}
+                    snapshot={snapshot}
+                    participantId={inspector.participantId}
+                    details={details}
+                    t={props.t}
+                  />
+                )
+                : (
+                  <div className="cx-chatroom-members">
+                    <div className="cx-chatroom-members__search-row">
+                      <input
+                        ref={memberSearchInput}
+                        className="cx-chatroom-members__search"
+                        type="search"
+                        value={memberSearch}
+                        aria-label={props.t('members.search')}
+                        placeholder={props.t('members.search')}
+                        onChange={event => setMemberSearch(event.currentTarget.value)}
+                        onKeyDown={event => {
+                          if (event.key !== 'Escape' || memberSearch === '') return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setMemberSearch('');
+                          memberSearchInput.current?.focus();
+                        }}
+                      />
+                      {memberSearch !== '' && (
+                        <button
+                          type="button"
+                          className="cx-chatroom-header__action"
+                          aria-label={props.t('members.search.clear')}
+                          onClick={() => {
+                            setMemberSearch('');
+                            memberSearchInput.current?.focus();
+                          }}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                    {visibleMembers.length === 0
+                      ? <p role="status">{props.t(search === '' ? 'members.none' : 'members.empty')}</p>
+                      : (
+                        <ul>
+                          {visibleMembers.map(participant => {
+                            const active = snapshot.activeRuns.find(run => run.participantId === participant.id);
+                            return (
+                              <li key={participant.id}>
+                                <button
+                                  type="button"
+                                  className="cx-chatroom-members__member"
+                                  disabled={details === undefined}
+                                  onClick={() => openParticipant(participant.id)}
+                                >
+                                  <ChatroomAvatar participant={participant} />
+                                  <span>
+                                    <strong>{participant.name}</strong>
+                                    <small>
+                                      {active === undefined
+                                        ? props.t('members.status.unknown')
+                                        : props.t(`members.status.${active.lifecycle.phase}`)}
+                                    </small>
+                                  </span>
+                                  <i data-state={active?.lifecycle.phase ?? 'unknown'} aria-hidden="true" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="cx-chatroom-header__action"
+                                  aria-label={props.t('members.mention', { name: participant.name })}
+                                  disabled={participant.mentionAlias === undefined}
+                                  title={participant.mentionAlias === undefined
+                                    ? props.t('composer.mention-unavailable')
+                                    : undefined}
+                                  onClick={() => {
+                                    setMentionRequest({
+                                      participantId: participant.id,
+                                      sequence: ++mentionSequence.current,
+                                    });
+                                    setInspector(undefined);
+                                  }}
+                                >
+                                  @
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                  </div>
+                )}
+            </div>
+          </aside>
+        )}
       </main>
     </div>
   );

@@ -1,0 +1,154 @@
+import type { EntitySettingsNavigationService } from '@cordisx/protocol/entity-settings-navigation/v1';
+import type { ChatroomTaskDraftInput, ChatroomTaskDrafts } from './chatroom-task-draft.js';
+import type { CordisXCommands } from 'cordisx/contracts';
+import type { EntityRegistry } from '@cordisx/protocol/entities/v1';
+import type {
+  AgentDetailNavigationService,
+  AgentSessionDetailReferenceService,
+} from '@cordisx/protocol/agent-detail-navigation/v1';
+import type {
+  AgentDetailNavigationService as HistoricalNavigation,
+  AgentSessionDetailReferenceService as HistoricalReferences,
+} from '@cordisx/protocol/agent-detail-navigation/v2';
+import type { AgentConversationActiveRunDescriptor } from '@cordisx/protocol/agent-conversation-shell/v7';
+import type { SessionId } from '@cordisx/protocol/sessions/v1';
+
+import type { Room } from './room.js';
+import type { DurableChatroomRoomStore } from './room-store.js';
+import { roomActions } from './room-navigation.js';
+import { executeRoomProfileCommand } from './room-profile.js';
+
+export interface ChatroomPageDetailServices {
+  readonly entitySettings?: EntitySettingsNavigationService;
+  readonly entities: Pick<EntityRegistry, 'get'>;
+  readonly references: AgentSessionDetailReferenceService | HistoricalReferences;
+  readonly navigation: AgentDetailNavigationService | HistoricalNavigation;
+  readonly rooms: DurableChatroomRoomStore;
+  readonly commands?: Pick<CordisXCommands, 'execute'>;
+  readonly tasks?: ChatroomTaskDrafts;
+  readonly roomLink?: (roomId: string) => Promise<string | undefined>;
+}
+
+export interface ChatroomMemberSession {
+  /** Rendering key only. Never displayed as product copy. */
+  readonly sessionId: SessionId;
+  readonly title: string;
+  readonly phase?: AgentConversationActiveRunDescriptor['lifecycle']['phase'];
+}
+
+/** One list from the existing Room relationships, enriched only by matching live facts. */
+export function memberSessions(
+  room: Room,
+  participantId: string,
+  activeRuns: readonly AgentConversationActiveRunDescriptor[],
+): readonly ChatroomMemberSession[] {
+  const member = room.memberships.find(candidate => candidate.participantId === participantId);
+  if (member === undefined) return [];
+  const sessions = new Map<SessionId, ChatroomMemberSession>();
+  for (const run of room.runs) {
+    if (run.memberId !== member.memberId || run.sessionId === undefined) continue;
+    const active = activeRuns.find(candidate =>
+      candidate.sessionId === run.sessionId && candidate.runId === run.runId
+      && candidate.memberId === member.memberId && candidate.participantId === participantId
+    );
+    const previous = sessions.get(run.sessionId);
+    sessions.set(run.sessionId, {
+      sessionId: run.sessionId,
+      title: run.title,
+      ...(active === undefined
+        ? previous?.phase === undefined ? {} : { phase: previous.phase }
+        : { phase: active.lifecycle.phase }),
+    });
+  }
+  return [...sessions.values()];
+}
+
+/** Presentation actions use existing owner services; this class stores no Session facts. */
+export class ChatroomPageDetails {
+  constructor(private readonly services: ChatroomPageDetailServices) {}
+
+  async entity(room: Room, participantId: string) {
+    const member = room.memberships.find(candidate => candidate.participantId === participantId);
+    if (member === undefined) return undefined;
+    const result = await this.services.entities.get(member.definition);
+    if (result.status !== 'found') return undefined;
+    // Keep the exact frozen revision even if a provider violates its response contract.
+    if (
+      result.entity.identity.agentId !== member.definition.agentId
+      || result.entity.identity.revision !== member.definition.revision
+    ) return undefined;
+    return result.entity;
+  }
+
+  async openSession(room: Room, participantId: string, sessionId: SessionId): Promise<boolean> {
+    if (!memberSessions(room, participantId, []).some(session => session.sessionId === sessionId)) return false;
+    const { references, navigation } = this.services;
+    // Historical navigation never falls back to the frozen current-only v1 API.
+    if (!('getV2' in references) || !('openV2' in navigation)) return false;
+    const reference = await references.getV2({ sessionId });
+    if (reference.status !== 'accepted' || reference.sessionId !== sessionId) return false;
+    return (await navigation.openV2({ target: reference.target })).status === 'accepted';
+  }
+
+  async entitySettingsAvailable(room: Room, participantId: string): Promise<boolean> {
+    const member = room.memberships.find(candidate => candidate.participantId === participantId);
+    return member !== undefined && this.services.entitySettings !== undefined
+      && (await this.services.entitySettings.get({ identity: member.definition })).status === 'available';
+  }
+
+  async openEntitySettings(room: Room, participantId: string): Promise<boolean> {
+    const expected = room.memberships.find(candidate => candidate.participantId === participantId)?.definition;
+    const current = this.services.rooms.rooms.get(room.id);
+    const member = current?.memberships.find(candidate => candidate.participantId === participantId);
+    return member !== undefined && expected !== undefined
+      && member.definition.agentId === expected.agentId && member.definition.revision === expected.revision
+      && this.services.entitySettings !== undefined
+      && (await this.services.entitySettings.open({ identity: member.definition })).status === 'accepted';
+  }
+
+  taskLeaders(roomId?: string) {
+    return this.services.tasks?.leaders(roomId) ?? [];
+  }
+
+  async startTask(roomId: string | undefined, input: ChatroomTaskDraftInput) {
+    return this.services.tasks === undefined
+      ? { status: 'unavailable' as const, code: 'failed' as const }
+      : await this.services.tasks.start(roomId, input);
+  }
+
+  get canResolveRoomLink(): boolean {
+    return this.services.roomLink !== undefined;
+  }
+
+  async roomLink(roomId: string): Promise<string | undefined> {
+    if (this.services.rooms.rooms.get(roomId) === undefined) return undefined;
+    return await this.services.roomLink?.(roomId);
+  }
+
+  async executeRoomAction(roomId: string, actionId: string): Promise<void> {
+    const room = this.services.rooms.rooms.get(roomId);
+    const action = room === undefined ? undefined : roomActions(room, room.archived ? 'archived' : 'active')
+      .find(candidate => candidate.id === actionId);
+    if (action?.kind !== 'command' || action.disabled.value || this.services.commands === undefined) {
+      throw new Error('Room action is unavailable.');
+    }
+    const result = await this.services.commands.execute(action.command);
+    if (result === null || typeof result !== 'object' || !('status' in result) || result.status !== 'applied') {
+      throw new Error('Room action was not applied.');
+    }
+  }
+
+  profile(roomId: string) {
+    return this.services.rooms.document(roomId);
+  }
+
+  async saveProfile(roomId: string, expectedRevision: number, name: string, description: string): Promise<void> {
+    await executeRoomProfileCommand(this.services.rooms, {
+      type: 'replace-room-profile',
+      roomId,
+      expectedRevision,
+      name,
+      description,
+    });
+  }
+}

@@ -1,3 +1,5 @@
+import type { RoomTaskDelegation } from './room-task-model.js';
+import type { RoomCliMessage } from './room-cli-message-model.js';
 import { type AgentAvatarRef } from '@cordisx/protocol/agent-avatar/v1';
 import type { AgentConversationItem } from '@cordisx/protocol/agent-conversation-shell/v3';
 import type {
@@ -235,6 +237,9 @@ export interface RoomMembership {
 }
 
 export interface RoomRun {
+  readonly delegation?: RoomTaskDelegation;
+  /** Explicit Room reports use the authenticated CLI; assistant transcript stays private. */
+  readonly collaborationMode?: 'cli-pending' | 'cli';
   readonly runId: string;
   readonly memberId: string;
   readonly title: string;
@@ -542,6 +547,8 @@ export interface Room {
   readonly approvalDecisions: readonly RoomApprovalDecision[];
   /** Exact admitted SessionEvent-to-Room-item associations; no message copy. */
   readonly admissionMessageLinks?: readonly RoomAdmissionMessageLink[];
+  /** Explicit authenticated CLI messages; retained for durable sender-scoped replay. */
+  readonly cliMessages?: readonly RoomCliMessage[];
   /** Present only when the loopback Playground bridge projected Agent egress. */
   readonly playgroundAgentEgresses?: readonly RoomPlaygroundAgentEgress[];
   /** Present only when the loopback Playground bridge projected Agent approvals. */
@@ -575,6 +582,8 @@ export type CreateRoomInput = {
   readonly outbox?: readonly RoomOutboxDelivery[];
   readonly approvalDecisions?: readonly RoomApprovalDecision[];
   readonly admissionMessageLinks?: readonly RoomAdmissionMessageLink[];
+  /** Explicit authenticated CLI messages; retained for durable sender-scoped replay. */
+  readonly cliMessages?: readonly RoomCliMessage[];
   readonly playgroundAgentEgresses?: readonly RoomPlaygroundAgentEgress[];
   readonly playgroundAgentApprovals?: readonly RoomPlaygroundAgentApproval[];
   readonly timelineSequence?: number;

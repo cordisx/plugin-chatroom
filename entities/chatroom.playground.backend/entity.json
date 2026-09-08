@@ -8,7 +8,7 @@
   "extends": [
     {
       "agentId": "chatroom.integrator",
-      "revision": "sha256:cf89bc7dc1406f57369a29cfda1ad0bd826ea84f02b845a0660d36f7d269004b"
+      "revision": "sha256:fb79e675608826f5a024e49a2e7e3f86486f92208492d8740652a3deff81f079"
     }
   ],
   "inherit": {

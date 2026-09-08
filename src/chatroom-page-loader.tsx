@@ -2,6 +2,7 @@ import { type ComponentType, defineReactPage, lazy, Suspense } from 'cordisx/rea
 import type { CordisXReactPageProps } from 'cordisx/contracts';
 
 import type { ChatroomPageSource } from './chatroom-page-source.js';
+import type { ChatroomPageDetails } from './chatroom-page-details.js';
 import type { ChatroomSidebarImageCache } from './sidebar-image-cache.js';
 import { loadModuleOnce } from './lazy-module.js';
 
@@ -9,6 +10,7 @@ type ChatroomPageComponent = ComponentType<
   CordisXReactPageProps & {
     readonly source: ChatroomPageSource;
     readonly imageCache: ChatroomSidebarImageCache;
+    readonly details?: ChatroomPageDetails;
   }
 >;
 
@@ -24,6 +26,7 @@ export const createChatroomPageModuleLoader = (
 export function createLazyChatroomPage(
   source: ChatroomPageSource,
   imageCache: ChatroomSidebarImageCache,
+  details?: ChatroomPageDetails,
 ) {
   const loadChatroomPageModule = createChatroomPageModuleLoader(
     () => import('./chatroom-page.js'),
@@ -33,7 +36,7 @@ export function createLazyChatroomPage(
   }));
   return defineReactPage(props => (
     <Suspense fallback={null}>
-      <LazyChatroomPage {...props} source={source} imageCache={imageCache} />
+      <LazyChatroomPage {...props} source={source} imageCache={imageCache} details={details} />
     </Suspense>
   ));
 }

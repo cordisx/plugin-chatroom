@@ -446,8 +446,10 @@ export const CHATROOM_DEFAULT_AGENT = Object.freeze(
       }),
     ]),
     rules: Object.freeze(['chatroom.room-isolation', 'chatroom.no-fabricated-replies']),
-    skills: Object.freeze([]),
-    tools: Object.freeze({ include: Object.freeze(['read', 'search']), exclude: Object.freeze(['external-channel']) }),
+    skills: Object.freeze(['chatroom']),
+    tools: Object.freeze({
+      exclude: Object.freeze(['external-channel']),
+    }),
     mcpServers: Object.freeze({ exclude: Object.freeze(['external-channel']) }),
     runtimeDefaults: Object.freeze({ adapterId: 'codex', effort: 'medium' }),
   } as const satisfies AgentDefinition,

@@ -290,7 +290,7 @@ test('reuses one compact member card with full Host HoverCard details across bot
   const nodeSeatRule = css.match(/\.cx-team-architecture__node-seat \{([^}]*)\}/u)?.[1] ?? '';
   const toggleRule = css.match(/\.cx-team-architecture__tree-toggle \{([^}]*)\}/u)?.[1] ?? '';
   const connectorRule = css.match(
-    /\.cx-team-architecture__node-seat\[data-has-children='true'\]::after \{([^}]*)\}/u,
+    /\.cx-team-architecture__node-seat\[data-has-children=["']true["']\]::after \{([^}]*)\}/u,
   )?.[1] ?? '';
   assert.match(entityRule, /width: fit-content;/u);
   assert.match(entityRule, /max-width: 120px;/u);
@@ -396,8 +396,8 @@ test('renders a compact IDE prompt tree with guide lines and independent pane sc
     css,
     /\.cx-team-architecture__prompt-kind button \{[\s\S]*?min-height: 26px;[\s\S]*?padding: 2px 6px;/u,
   );
-  assert.match(css, /\.cx-team-architecture__prompt-kind > \[role='group'\]::before/u);
-  assert.match(css, /\.cx-team-architecture__prompt-kind > \[role='group'\] > button::before/u);
+  assert.match(css, /\.cx-team-architecture__prompt-kind > \[role=["']group["']\]::before/u);
+  assert.match(css, /\.cx-team-architecture__prompt-kind > \[role=["']group["']\] > button::before/u);
   const workspaceRule = css.match(/\.cx-team-architecture__prompt-workspace \{([^}]*)\}/u)?.[1] ?? '';
   assert.match(workspaceRule, /height: 100%;/u);
   assert.match(workspaceRule, /min-height: 0;/u);

@@ -141,8 +141,8 @@ export function createRoomConversationModel(
       // because Playground task registries are document-scoped. That local
       // observation is neither a Room join attempt nor durable run failure,
       // so it must not create a historical "failed to join" timeline item.
-      // The same local fence still removes the run from activeRuns below and
-      // explicit mutations plan a replacement run through the owner path.
+      // The same local fence removes the run from activeRuns below. Explicit
+      // CLI recovery may still target its original identity through the owner path.
       continue;
     } else if (run.presence.state === 'inviting' || run.presence.state === 'creating') {
       eligibleItems.push({ ...base, state: run.presence.state, retryable: false });
