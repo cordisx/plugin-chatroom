@@ -15,6 +15,7 @@ import {
 export type { PageParticipant } from './chatroom-timeline-entries.js';
 type MessageItem = Extract<ChatroomPageItem, { readonly kind: 'message'; }>;
 type TimelineActions = {
+  mode?: 'more';
   participant: PageParticipant;
   text?: string;
   item?: MessageItem;
@@ -24,13 +25,25 @@ type TimelineActions = {
 };
 
 export function ChatroomTimeline(
-  { items, participants, roomId, source, t, onParticipantClick, onMentionParticipant, copyText, activeRuns = [] }: {
+  {
+    items,
+    participants,
+    roomId,
+    source,
+    t,
+    locale,
+    onParticipantClick,
+    onMentionParticipant,
+    copyText,
+    activeRuns = [],
+  }: {
     readonly activeRuns?: import('./chatroom-page-source.js').ChatroomPageSnapshot['activeRuns'];
     readonly items: readonly ChatroomPageItem[];
     readonly participants: readonly PageParticipant[];
     readonly roomId?: string;
     readonly source: ChatroomPageSource;
     readonly t: Translate;
+    readonly locale?: string;
     readonly onParticipantClick?: (participantId: string) => void;
     readonly onMentionParticipant?: (participantId: string) => void;
     readonly copyText?: (text: string) => Promise<void>;
@@ -62,7 +75,13 @@ export function ChatroomTimeline(
     setActions(undefined);
     if (restore) actions?.trigger.focus({ preventScroll: true });
   };
-  const openActions = (participant: PageParticipant, event: ActionEvent, text?: string, item?: MessageItem) => {
+  const openActions = (
+    participant: PageParticipant,
+    event: ActionEvent,
+    text?: string,
+    item?: MessageItem,
+    mode?: 'more',
+  ) => {
     event.preventDefault();
     event.stopPropagation();
     const bounds = region.current?.getBoundingClientRect();
@@ -70,6 +89,7 @@ export function ChatroomTimeline(
     const x = 'clientX' in event && event.clientX > 0 ? event.clientX : triggerBounds.left;
     const y = 'clientY' in event && event.clientY > 0 ? event.clientY : triggerBounds.bottom;
     setActions({
+      ...(mode === undefined ? {} : { mode }),
       participant,
       text,
       ...(item === undefined ? {} : { item }),
@@ -210,7 +230,7 @@ export function ChatroomTimeline(
             }
           }}
         >
-          {actions.text !== undefined && (
+          {actions.mode !== 'more' && actions.text !== undefined && (
             <button
               type="button"
               role="menuitem"
@@ -221,7 +241,7 @@ export function ChatroomTimeline(
               {t('timeline.copy-message')}
             </button>
           )}
-          {(actions.item?.actions ?? []).slice(2).map(action => {
+          {(actions.mode === 'more' ? (actions.item?.actions ?? []).slice(2) : []).map(action => {
             const running = runningActions.has(actionKey(actions.item!.itemId, action.id));
             const reason = action.disabled.reason?.fallback;
             return (
@@ -242,7 +262,10 @@ export function ChatroomTimeline(
               </button>
             );
           })}
-          {actions.participant.role !== 'human' && onParticipantClick !== undefined && (
+          {actions.mode === 'more' && (actions.item?.actions?.length ?? 0) <= 2 && (
+            <span className="cx-chatroom-timeline__menu-empty">{t('timeline.no-more-actions')}</span>
+          )}
+          {actions.mode !== 'more' && actions.participant.role !== 'human' && onParticipantClick !== undefined && (
             <button
               type="button"
               role="menuitem"
@@ -254,7 +277,7 @@ export function ChatroomTimeline(
               {t('timeline.view-member')}
             </button>
           )}
-          {actions.participant.role === 'agent' && onMentionParticipant !== undefined && (
+          {actions.mode !== 'more' && actions.participant.role === 'agent' && onMentionParticipant !== undefined && (
             <button
               type="button"
               role="menuitem"
@@ -292,6 +315,8 @@ export function ChatroomTimeline(
               item.kind === 'message'
                 ? (
                   <MessageItem
+                    locale={locale}
+                    actionsOpen={actions?.mode === 'more' && actions.item?.itemId === item.itemId}
                     onCopy={(text, trigger) => void copy(text, trigger)}
                     copyAvailable={canCopy}
                     runtimeRunning={typeof item.source === 'object' && item.source.kind === 'session-event'

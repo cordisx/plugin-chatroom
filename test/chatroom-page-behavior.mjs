@@ -447,7 +447,7 @@ test('timeline menus offer detail/mention, keyboard dismissal and write-only cop
     return element.type(element.props);
   };
   const open = () => {
-    byClass(message(), 'cx-chatroom-message__actions').props.onClick({
+    message().props.onContextMenu({
       currentTarget: trigger,
       clientX: 490,
       clientY: 490,
@@ -485,6 +485,9 @@ test('timeline menus offer detail/mention, keyboard dismissal and write-only cop
   assert.equal(byClass(tree, 'cx-chatroom-timeline__feedback').props.children, 'timeline.copied');
   byClass(message(), 'cx-chatroom-message__time').props.onClick({ currentTarget: trigger });
   assert.deepEqual(copies.at(-1), item.timestamp);
+  await new Promise(resolve => setImmediate(resolve));
+  byClass(message(), 'cx-chatroom-message__copy').props.onClick({ currentTarget: trigger });
+  assert.deepEqual(copies.at(-1), '**exact text**');
 });
 
 test('timeline copying is honestly disabled when absent and reports browser permission rejection', async () => {
@@ -616,6 +619,8 @@ test('message actions preserve order, current execution, disabled reasons and du
   });
   tree = render();
   const menu = byClass(tree, 'cx-chatroom-timeline__menu');
+  assert.equal(all(menu, node => node.props?.children === 'timeline.copy-message').length, 0);
+  assert.equal(all(menu, node => node.props?.children === 'timeline.view-member').length, 0);
   const overflow = all(menu, node => node.props?.role === 'menuitem')
     .filter(button => ['Third', 'Disabled'].includes(button.props.children));
   assert.deepEqual(overflow.map(button => button.props.children), ['Third', 'Disabled']);

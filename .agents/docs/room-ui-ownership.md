@@ -54,6 +54,12 @@ old button to another definition. Room header actions reuse the sidebar's
 owner command definitions. Copy link uses the public Host route resolver;
 Chatroom does not manufacture a canonical URL. Deletion requires confirmation.
 
+The explicit new-task dialog is provisional implementation, not an accepted
+product workflow. The user rejected its Leader/text/manual-cwd form in the
+2026-09-09 review; changes to that creation flow are paused pending UX agreement.
+The single create-and-submit backend operation does not require such a dialog.
+The following describes implemented wiring only.
+
 The explicit new-task form calls the existing `room.prepare` and `task.start`
 commands. It requires a Room Leader, task text and an absolute working directory
 before preparing any Room. Form idempotency is ephemeral; durable task facts
@@ -77,7 +83,12 @@ avatars aligned with their bubbles, and a 360px resizable details pane. The
 compact composer keeps add/editor/send in one row; typing `@` opens member
 selection, and the expanded editor retains its explicit member control. The
 keyboard hint remains an accessible description without adding a permanent
-visual row. Message timestamps/actions appear on hover or keyboard focus.
+visual row. Agent timestamps share the author row; human timestamps sit above the bubble's
+trailing corner. Timestamps are hidden until hover/focus. Separate action
+bars sit beside the bubble (Agent trailing side, human leading side), align to
+its bottom edge and retain a pointer bridge across the 6px gap. Direct actions,
+copy and overflow stay separate from the right-click member/message menu; none
+adds a row to the bubble.
 Header, bubble and composer colors consume Host theme tokens. The generic
 body-only Host React seat owns zero outer padding; plugin CSS must not override
 that Host node to compensate for a mount defect.

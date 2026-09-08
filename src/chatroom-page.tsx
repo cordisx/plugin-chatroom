@@ -288,6 +288,7 @@ export function ChatroomPage(
           {actionError && <div className="cx-chatroom-page__error" role="alert">{props.t('page.action.failed')}</div>}
           <ChatroomTimeline
             key={roomId ?? 'new'}
+            locale={props.localization?.getSnapshot().locale}
             items={snapshot.items}
             activeRuns={snapshot.activeRuns}
             participants={participants}
