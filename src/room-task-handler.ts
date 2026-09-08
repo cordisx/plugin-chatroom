@@ -144,8 +144,10 @@ export class ChatroomTaskHandler {
                 availableTargets: document.room.memberships.filter(value => value.reportsToMemberId === member.memberId)
                   .map(value => ({ memberId: value.memberId, label: value.label })),
               }),
-              'Use the supplied Chatroom Skill and CLI to report acceptance, checkpoints, blockers and results.',
-              'Task:',
+              'kind' in scope
+                ? 'Reply naturally to the user through the supplied Chatroom Skill and CLI. Delegate only when the conversation calls for it.'
+                : 'Use the supplied Chatroom Skill and CLI to report acceptance, checkpoints, blockers and results.',
+              'kind' in scope ? 'User message:' : 'Task:',
               input.text,
             ].join('\n'),
             tool: {

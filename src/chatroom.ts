@@ -1,3 +1,4 @@
+import type { EntityExecutionContexts } from '@cordisx/protocol/entity-execution-context/v1';
 import { ChatroomNewRooms } from './chatroom-new-room-model.js';
 import type { AgentTaskApprovals, AgentTaskOwnership } from '@cordisx/protocol/agent-task-binding/v1';
 import { createRoomTaskBootstrap } from './room-task-bootstrap.js';
@@ -228,6 +229,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   );
   const agentTools: AgentTools | undefined = ctx.reflect.get('agentTools', false);
   const agentTasks: AgentTasks | undefined = ctx.reflect.get('agentTasks', false);
+  const entityContexts: EntityExecutionContexts | undefined = ctx.reflect.get('entityExecutionContexts', false);
   const taskApprovals: AgentTaskApprovals | undefined = ctx.reflect.get('agentTaskApprovals', false);
   const taskOwnership: AgentTaskOwnership | undefined = ctx.reflect.get('agentTaskOwnership', false);
   const taskProvider: AgentTasks | undefined =
@@ -487,7 +489,11 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
         return result?.status === 'accepted' ? result.url : undefined;
       },
       commands: ctx.commands,
-      newRooms: new ChatroomNewRooms(agent, ctx.entities, new ChatroomTaskDrafts(roomStore, agent, ctx.commands)),
+      newRooms: new ChatroomNewRooms(
+        agent,
+        ctx.entities,
+        new ChatroomTaskDrafts(roomStore, agent, ctx.commands, entityContexts),
+      ),
       entities: ctx.entities,
       references: ctx.agentSessionDetailReferences,
       navigation: ctx.agentDetailNavigation,
@@ -515,6 +521,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   }, product.activeRooms);
 
   const teamSource = createTeamArchitectureDataSource(agent, product.store.rooms, {
+    ...(entityContexts === undefined ? {} : { executionContexts: entityContexts }),
     references: ctx.agentSessionDetailReferences,
     navigation: ctx.agentDetailNavigation,
   });

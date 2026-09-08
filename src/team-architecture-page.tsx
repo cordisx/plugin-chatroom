@@ -1,3 +1,4 @@
+import { EntityProjectBinding } from './entity-project-binding.js';
 import {
   Fragment,
   type KeyboardEvent,
@@ -634,6 +635,7 @@ function EntityDetail({ entity, entities, tab, source, onSelect, t }: {
             <code>{entity.definitionIdentity.revision}</code>
           </Fact>
         </dl>
+        <EntityProjectBinding identity={entity.definitionIdentity} contexts={source.executionContexts} t={t} />
       </section>
     );
   } else if (tab === 'prompts') {

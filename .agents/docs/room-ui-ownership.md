@@ -67,14 +67,19 @@ Uncertain submissions retain their operation and payload. A navigation failure
 after accepted creation does not retry creation or preserve a misleading unsent
 draft; the sidebar remains the way to open the created Room.
 
-Current capability gap: `entities/v1` and `AgentRuntimeDefaults` expose no
-entity-to-project/cwd binding, and the installed native task resolver has no
-project authority connected. A new Room has no parent Session from which to
-inherit. Until a formal public binding and resolver exist, the first message
-resolves the actual Leader but returns `context-required` before creating a
-Room or Session. It retains the draft and does not infer the Host checkout or
-invent project cards. This is an incomplete execution integration, not accepted
-end-to-end functionality. See [#73](https://github.com/cordisx/plugin-chatroom/issues/73).
+The optional public `entityExecutionContexts` service supplies an explicit
+projectless workspace or the Entity's saved project selector. The task draft
+retains that resolution during an uncertain retry, then uses the existing
+`room.prepare`/`task.start` and Host create-and-submit chain. No manually entered
+directory or Host checkout fallback is part of the new-Room UX. The existing
+member overview can change a future task's default using real Host projects and
+a revision-checked Entity binding; no project or Session is created by that edit.
+
+The first human message is displayed from the exact accepted task's Session and
+first MessageId association. It shows the user's original text, not the private
+assignment wrapper. It remains a projection of real SessionEvents and cannot
+match a different message by text or infer another Session. Native acceptance
+and the optional service's Host availability remain separate gates.
 
 The composer uses the public controlled Markdown editor for text editing,
 syntax highlighting, selection, theme and six-line sizing. Chatroom owns its

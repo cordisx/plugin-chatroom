@@ -62,12 +62,17 @@ composer. Choose one or send without selecting to use the default global Leader.
 A first message should use the selected entity's bound project and a single
 Host create-and-submit operation; existing Room Sessions are not migrated.
 
-The current public Entity contract does not yet supply project/cwd bindings,
-and native project resolution is not connected. A first message therefore
-preserves its draft with an explicit missing-context message before creating
-any Room or Session. This capability gap is tracked in [#73](https://github.com/cordisx/plugin-chatroom/issues/73).
-There is no mandatory directory form or fallback to the Host launch directory.
-Native product acceptance remains separate from this UI implementation.
+The versioned Entity execution context service supplies explicit projectless
+workspaces or verifies the Entity's saved project binding. Configure a future
+Session's default project from the member's existing Team overview; only actual
+Host projects are offered. An unbound global Leader needs no project or manual
+directory. Existing Session associations remain unchanged. Older Hosts without
+the service leave the draft intact and report the missing capability.
+
+This candidate consumes the Host context implementation under review in
+[Host #387](https://github.com/cordisx/cordisx/pull/387), with formal
+[Protocol #133](https://github.com/cordisx/cordisx-protocol/pull/133).
+Native product acceptance remains separate from compilation and fixture checks.
 
 ## Agent configuration
 

@@ -1,4 +1,13 @@
 export type TeamArchitectureMessages = {
+  'detail.project': undefined;
+  'detail.projectless': undefined;
+  'detail.project-loading': undefined;
+  'detail.project-unavailable': undefined;
+  'detail.project-missing': undefined;
+  'detail.project-save': undefined;
+  'detail.project-saved': undefined;
+  'detail.project-conflict': undefined;
+  'detail.project-future-only': undefined;
   'body.introduction': undefined;
   'search.label': undefined;
   'search.placeholder': undefined;

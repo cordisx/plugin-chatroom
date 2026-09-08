@@ -54,9 +54,8 @@ export class ChatroomNewRooms {
     ) {
       return { status: 'unavailable', code: 'failed', reason: 'definition-unavailable' };
     }
-    // entities/v1 exposes no project/cwd binding. A new Room also has no parent
-    // Session to inherit. Keep the same task orchestrator's context-required
-    // preflight; never invent a directory or use the Host launch checkout.
+    // The owned Entity context service resolves its persistent project or the
+    // explicit Host-managed projectless default inside the retained operation.
     return await this.tasks.start(undefined, { text, to: leader.memberId });
   }
 }

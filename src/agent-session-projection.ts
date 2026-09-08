@@ -388,9 +388,15 @@ export class ChatroomAgentSessionProjector {
       ? correlation
       : undefined;
     const admissionLink = this.admissionMessageLinkFor(message);
+    const task = this.run.delegation;
+    const firstTaskMessage = message.source.kind === 'plugin' && message.source.pluginId === 'chatroom'
+      && task !== undefined && 'kind' in task.source && task.source.kind === 'room'
+      && task.result?.status === 'accepted' && task.result.task.sessionId === this.sessionId
+      && task.result.task.messageId === message.id;
+
     if (
       message.source.kind === 'plugin'
-      && roomMessageCorrelation === undefined && admissionLink === undefined
+      && roomMessageCorrelation === undefined && admissionLink === undefined && !firstTaskMessage
     ) return undefined;
     const durableDisplay = this.roomDisplayForMessage(message);
     if (admissionLink !== undefined && durableDisplay?.kind !== 'message') return undefined;
@@ -398,7 +404,9 @@ export class ChatroomAgentSessionProjector {
     // Room message owns only its display association. In the admitted identity
     // path, text remains authoritative SessionEvent content; the Room link
     // never permits a content-only or current-Agent inference.
-    const body = admissionLink === undefined && durableDisplay?.kind === 'message'
+    const body = firstTaskMessage
+      ? bodyFor([{ type: 'text', text: task!.text }])
+      : admissionLink === undefined && durableDisplay?.kind === 'message'
       ? durableDisplay.body
       : bodyFor(message.content);
     const author = this.humanParticipant();

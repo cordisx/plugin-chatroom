@@ -1,3 +1,4 @@
+import type { EntityExecutionContexts } from '@cordisx/protocol/entity-execution-context/v1';
 import type { AgentTaskFailureCode } from '@cordisx/protocol/agent-task/v1';
 import { taskFailureCode } from './chatroom-task-failures.js';
 import type { CordisXCommands } from 'cordisx/contracts';
@@ -27,6 +28,7 @@ interface TaskDraft {
   readonly title: string;
   prepared: boolean;
   editable: boolean;
+  context?: { readonly cwd?: string; readonly projectId?: string; };
 }
 
 /** Ephemeral first-message idempotency only. All task facts remain in the existing Room document. */
@@ -37,6 +39,7 @@ export class ChatroomTaskDrafts {
     private readonly rooms: DurableChatroomRoomStore,
     private readonly configuration: ChatroomAgentConfiguration,
     private readonly commands: Pick<CordisXCommands, 'execute'>,
+    private readonly contexts?: Pick<EntityExecutionContexts, 'resolve'>,
   ) {}
 
   leaders(roomId?: string): readonly { memberId: string; label: string; }[] {
@@ -62,7 +65,7 @@ export class ChatroomTaskDrafts {
     if (!this.leaders(roomId).some(member => member.memberId === input.to)) {
       return { status: 'unavailable', code: 'leader-unavailable' };
     }
-    if (cwd === undefined && projectId === undefined) {
+    if (cwd === undefined && projectId === undefined && this.contexts === undefined) {
       return { status: 'unavailable', code: 'failed', reason: 'context-required' };
     }
     const key = roomId ?? '';
@@ -105,6 +108,37 @@ export class ChatroomTaskDrafts {
     input: ChatroomTaskDraftInput,
   ): Promise<ChatroomTaskDraftResult> {
     try {
+      if (input.cwd === undefined && input.projectId === undefined) {
+        if (draft.context === undefined) {
+          const member = this.configuration.members.find(value => value.memberId === input.to);
+          const resolved = member === undefined ? undefined : await this.contexts?.resolve({
+            identity: member.definition,
+            operationId: draft.operationId,
+          });
+          if (resolved?.status !== 'resolved') {
+            draft.editable = true;
+            return {
+              status: 'unavailable',
+              code: 'failed',
+              reason: resolved?.code === 'entity-unavailable'
+                ? 'definition-unavailable'
+                : taskFailureCode(resolved?.code) ?? 'host-unavailable',
+            };
+          }
+          if (resolved.context.kind === 'directory' && resolved.binding.kind === 'projectless') {
+            draft.context = { cwd: resolved.context.cwd };
+          } else if (
+            resolved.context.kind === 'project' && resolved.binding.kind === 'project'
+            && resolved.context.projectId === resolved.binding.projectId
+          ) {
+            draft.context = {
+              projectId: resolved.context.projectId,
+              ...(resolved.context.cwd === undefined ? {} : { cwd: resolved.context.cwd }),
+            };
+          } else return { status: 'unavailable', code: 'failed', reason: 'host-unavailable' };
+        }
+        input = { ...input, ...draft.context };
+      }
       if (originalRoomId === undefined && !draft.prepared) {
         const prepared = await this.commands.execute({
           id: 'room.prepare',
