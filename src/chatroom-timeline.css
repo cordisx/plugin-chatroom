@@ -78,6 +78,7 @@
   padding-inline: 2px;
   color: var(--cx-chatroom-muted);
   font-size: 10px;
+  line-height: 14px;
 }
 .cx-chatroom-message__bubble {
   width: fit-content;
