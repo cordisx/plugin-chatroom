@@ -1,4 +1,4 @@
-import { chatroomNewTaskEn, chatroomNewTaskZhCN } from './chatroom-new-task-locales.js';
+import { ChatroomNewRooms } from './chatroom-new-room-model.js';
 import type { AgentTaskApprovals, AgentTaskOwnership } from '@cordisx/protocol/agent-task-binding/v1';
 import { createRoomTaskBootstrap } from './room-task-bootstrap.js';
 import type { AgentTasks } from '@cordisx/protocol/agent-task/v1';
@@ -48,13 +48,14 @@ import {
 
 export type ChatroomMessages =
   & Record<
-    | keyof typeof chatroomNewTaskEn
     | keyof typeof chatroomDetailsEnglish
     | keyof typeof chatroomComposerEn
-    | Exclude<keyof typeof chatroomPageEnglish, 'members.mention'>,
+    | Exclude<keyof typeof chatroomPageEnglish, 'members.mention' | 'new-room.default-hint' | 'new-room.selected-hint'>,
     undefined
   >
   & {
+    'new-room.default-hint': { readonly name: string; };
+    'new-room.selected-hint': { readonly name: string; };
     'task.start': undefined;
     'task.recover': undefined;
     'room.prepare': undefined;
@@ -285,7 +286,6 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       'task.recover': 'Retry task setup',
       'room.prepare': 'Prepare Room',
       ...chatroomDetailsEnglish,
-      ...chatroomNewTaskEn,
       ...chatroomPageEnglish,
       ...chatroomComposerEn,
       'navigation.title': 'New room',
@@ -365,7 +365,6 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
       'task.recover': '重试任务准备',
       'room.prepare': '准备房间',
       ...chatroomDetailsChinese,
-      ...chatroomNewTaskZhCN,
       ...chatroomPageChinese,
       ...chatroomComposerZhCN,
       'navigation.title': '新建房间',
@@ -488,7 +487,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
         return result?.status === 'accepted' ? result.url : undefined;
       },
       commands: ctx.commands,
-      tasks: new ChatroomTaskDrafts(roomStore, agent, ctx.commands),
+      newRooms: new ChatroomNewRooms(agent, ctx.entities, new ChatroomTaskDrafts(roomStore, agent, ctx.commands)),
       entities: ctx.entities,
       references: ctx.agentSessionDetailReferences,
       navigation: ctx.agentDetailNavigation,

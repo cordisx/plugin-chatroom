@@ -453,3 +453,24 @@ test('a public selection event filters mentions at the caret without reading Hos
   assert.deepEqual(ui.resident.selection, [7, 7]);
   assert.equal(ui.calls.length, 0);
 });
+
+test('first message remains sendable without a chosen Leader or a page-composer fallback', async () => {
+  const submitted = [];
+  const ui = mount({
+    pageComposer: undefined,
+    participants: [],
+    firstMessage: async text => {
+      submitted.push(text);
+      return { status: 'unavailable', message: 'Default Leader has no project context.' };
+    },
+  });
+  ui.change('hello');
+  assert.equal(ui.find(node => node.props?.type === 'submit').props.disabled, false);
+  ui.submit();
+  await settle(ui);
+  assert.deepEqual(submitted, ['hello']);
+  assert.deepEqual(ui.calls, []);
+  assert.equal(ui.input().props.value, 'hello');
+  assert.equal(ui.find(node => node.props?.role === 'alert').props.children, 'Default Leader has no project context.');
+  module.hooks.cleanup();
+});

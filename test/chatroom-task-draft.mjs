@@ -389,3 +389,14 @@ test('a definite permission denial remains visible without changing the retained
   });
   assert.equal(h.calls.length, 2);
 });
+
+test('missing bound project context fails before creating a Room or task and never invents a cwd', async () => {
+  const h = harness();
+  assert.deepEqual(await h.drafts.start(undefined, { text: 'hello', to: 'lead-a' }), {
+    status: 'unavailable',
+    code: 'failed',
+    reason: 'context-required',
+  });
+  assert.deepEqual(h.calls, []);
+  assert.equal(h.rooms.size, 0);
+});

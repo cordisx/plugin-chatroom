@@ -7,7 +7,8 @@ import type { DurableChatroomRoomStore } from './room-store.js';
 export interface ChatroomTaskDraftInput {
   readonly text: string;
   readonly to: string;
-  readonly cwd: string;
+  readonly cwd?: string;
+  readonly projectId?: string;
 }
 export type ChatroomTaskDraftResult =
   | { readonly status: 'accepted'; readonly roomId: string; }
@@ -28,7 +29,7 @@ interface TaskDraft {
   editable: boolean;
 }
 
-/** Ephemeral form idempotency only. All task facts remain in the existing Room document. */
+/** Ephemeral first-message idempotency only. All task facts remain in the existing Room document. */
 export class ChatroomTaskDrafts {
   private readonly drafts = new Map<string, TaskDraft>();
   private readonly pending = new Map<string, Promise<ChatroomTaskDraftResult>>();
@@ -49,15 +50,23 @@ export class ChatroomTaskDrafts {
 
   async start(roomId: string | undefined, input: ChatroomTaskDraftInput): Promise<ChatroomTaskDraftResult> {
     const text = input.text.trim();
-    const cwd = input.cwd.trim();
-    if (!text || text.length > 16_000 || !cwd.startsWith('/') || cwd.includes('\0')) {
+    const cwd = input.cwd?.trim();
+    const projectId = input.projectId?.trim();
+    if (
+      !text || text.length > 16_000
+      || cwd !== undefined && (!cwd.startsWith('/') || cwd.includes('\0'))
+      || projectId !== undefined && projectId === ''
+    ) {
       return { status: 'unavailable', code: 'invalid-input' };
     }
     if (!this.leaders(roomId).some(member => member.memberId === input.to)) {
       return { status: 'unavailable', code: 'leader-unavailable' };
     }
+    if (cwd === undefined && projectId === undefined) {
+      return { status: 'unavailable', code: 'failed', reason: 'context-required' };
+    }
     const key = roomId ?? '';
-    const fingerprint = JSON.stringify([text, input.to, cwd]);
+    const fingerprint = JSON.stringify([text, input.to, cwd, projectId]);
     const retained = this.drafts.get(key);
     if (retained !== undefined && retained.fingerprint !== fingerprint && !retained.editable) {
       return { status: 'unavailable', code: 'pending' };
@@ -74,7 +83,12 @@ export class ChatroomTaskDrafts {
     };
     draft.editable = false;
     this.drafts.set(key, draft);
-    const operation = this.submit(roomId, draft, { ...input, text, cwd });
+    const operation = this.submit(roomId, draft, {
+      text,
+      to: input.to,
+      ...(cwd === undefined ? {} : { cwd }),
+      ...(projectId === undefined ? {} : { projectId }),
+    });
     this.pending.set(key, operation);
     try {
       const result = await operation;

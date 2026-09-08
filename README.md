@@ -55,19 +55,19 @@ Out of scope: host adapters, credentials, external channels, automation,
 application chrome, arbitrary Host DOM access, rich-media messages, and Agent
 execution.
 
-## Start a task
+## Start a chatroom
 
-Use **New task** in the Room header to select a Leader, describe the task, and
-enter an absolute working directory (for example `/Users/me/project`). From a
-new Room page, this prepares a Room before starting the task. In an existing
-Room, existing conversations keep their Session and workspace associations.
-Ordinary messages continue through the composer.
+The new Room page presents its configured Leader avatars above the normal chat
+composer. Choose one or send without selecting to use the default global Leader.
+A first message should use the selected entity's bound project and a single
+Host create-and-submit operation; existing Room Sessions are not migrated.
 
-A task whose creation result is uncertain retains its input for a retry using
-the same operation. Check the Room task details before changing the request.
-This entry does not select a default directory, change an existing Session's
-workspace, or automatically create a worktree. Native acceptance of the new
-page remains part of the [migration gates](.agents/docs/room-ui-ownership.md).
+The current public Entity contract does not yet supply project/cwd bindings,
+and native project resolution is not connected. A first message therefore
+preserves its draft with an explicit missing-context message before creating
+any Room or Session. This capability gap is tracked in [#73](https://github.com/cordisx/plugin-chatroom/issues/73).
+There is no mandatory directory form or fallback to the Host launch directory.
+Native product acceptance remains separate from this UI implementation.
 
 ## Agent configuration
 

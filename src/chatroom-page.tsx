@@ -1,4 +1,4 @@
-import { ChatroomNewTaskEntry } from './chatroom-new-task-entry.js';
+import { ChatroomLeaderPicker } from './chatroom-new-room.js';
 import {
   type CSSProperties,
   useCallback,
@@ -59,6 +59,8 @@ export function ChatroomPage(
   },
 ) {
   const [inspector, setInspector] = useState<Inspector>();
+  const [selectedLeader, setSelectedLeader] = useState<string>();
+  const [roomOpenFailed, setRoomOpenFailed] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLElement>(null);
   const { width, narrow, separatorProps } = useChatroomInspector(root, inspector !== undefined, props.signal);
@@ -204,6 +206,7 @@ export function ChatroomPage(
           className="cx-chatroom-header__avatar"
           aria-label={props.t('members.title')}
           onClick={openMembers}
+          disabled={snapshot.room === undefined}
         >
           <ChatroomCompositeAvatar
             participants={participants}
@@ -226,17 +229,9 @@ export function ChatroomPage(
             : <p>{snapshot.room?.description ?? props.t('page.description')}</p>}
         </div>
         <div className="cx-chatroom-header__actions">
-          {details !== undefined && (
-            <ChatroomNewTaskEntry
-              key={roomId ?? 'new'}
-              roomId={roomId}
-              details={details}
-              navigation={props.navigation}
-              t={props.t}
-            />
-          )}
           <button
             ref={membersTrigger}
+            disabled={snapshot.room === undefined}
             type="button"
             className="cx-chatroom-header__action"
             aria-label={props.t('members.title')}
@@ -286,27 +281,66 @@ export function ChatroomPage(
       <main className="cx-chatroom-main">
         <div className="cx-chatroom-conversation" inert={narrow && inspector !== undefined}>
           {actionError && <div className="cx-chatroom-page__error" role="alert">{props.t('page.action.failed')}</div>}
-          <ChatroomTimeline
-            key={roomId ?? 'new'}
-            locale={props.localization?.getSnapshot().locale}
-            items={snapshot.items}
-            activeRuns={snapshot.activeRuns}
-            participants={participants}
-            roomId={snapshot.room?.id}
-            source={source}
-            t={props.t}
-            onParticipantClick={openParticipant}
-            onMentionParticipant={participantId => {
-              if (!composerMembers.some(participant => participant.id === participantId)) return;
-              setMentionRequest({ participantId, sequence: ++mentionSequence.current });
-              setInspector(undefined);
-            }}
-            copyText={copyText}
-          />
+          {roomId === undefined && details !== undefined
+            ? (
+              <ChatroomLeaderPicker
+                leaders={details.newRoomLeaders()}
+                selected={selectedLeader}
+                onSelect={setSelectedLeader}
+                t={props.t}
+              />
+            )
+            : (
+              <ChatroomTimeline
+                key={roomId ?? 'new'}
+                locale={props.localization?.getSnapshot().locale}
+                items={snapshot.items}
+                activeRuns={snapshot.activeRuns}
+                participants={participants}
+                roomId={snapshot.room?.id}
+                source={source}
+                t={props.t}
+                onParticipantClick={openParticipant}
+                onMentionParticipant={participantId => {
+                  if (!composerMembers.some(participant => participant.id === participantId)) return;
+                  setMentionRequest({ participantId, sequence: ++mentionSequence.current });
+                  setInspector(undefined);
+                }}
+                copyText={copyText}
+              />
+            )}
           <div className="cx-chatroom-composer-seat">
+            {roomOpenFailed && <p role="status">{props.t('task.start.open-failed')}</p>}
             <ChatroomComposer
               key={roomId ?? 'new'}
               source={source}
+              firstMessage={roomId === undefined && details !== undefined
+                ? async text => {
+                  setRoomOpenFailed(false);
+                  const result = await details.startRoom(text, selectedLeader, props.signal);
+                  if (props.signal.aborted) return { status: 'unavailable', message: props.t('composer.unavailable') };
+                  if (result.status !== 'accepted') {
+                    return {
+                      status: 'unavailable',
+                      message: props.t(
+                        result.reason === 'context-required'
+                          ? 'new-room.context-required'
+                          : result.code === 'leader-unavailable'
+                          ? 'new-room.default-unavailable'
+                          : result.reason === undefined
+                          ? `task.start.${result.code}`
+                          : `task.failure.${result.reason}`,
+                      ),
+                    };
+                  }
+                  try {
+                    await props.navigation.navigate({ id: 'room', params: { roomId: result.roomId } });
+                  } catch {
+                    if (!props.signal.aborted) setRoomOpenFailed(true);
+                  }
+                  return { status: 'accepted' };
+                }
+                : undefined}
               shortcutPolicy={snapshot.shortcutPolicy}
               pageComposer={props.pageComposer}
               signal={props.signal}

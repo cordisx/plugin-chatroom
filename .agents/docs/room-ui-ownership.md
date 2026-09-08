@@ -54,21 +54,27 @@ old button to another definition. Room header actions reuse the sidebar's
 owner command definitions. Copy link uses the public Host route resolver;
 Chatroom does not manufacture a canonical URL. Deletion requires confirmation.
 
-The explicit new-task dialog is provisional implementation, not an accepted
-product workflow. The user rejected its Leader/text/manual-cwd form in the
-2026-09-09 review; changes to that creation flow are paused pending UX agreement.
-The single create-and-submit backend operation does not require such a dialog.
-The following describes implemented wiring only.
+The new Room page shows the actual configured Leader avatars above the normal
+composer. Selection is optional: no selected avatar means the configured
+default global Leader (`chatroom.generalist`). Selecting an avatar targets that
+exact configured identity; selecting it again returns to the default state.
+There is no joining wizard, separate task dialog or mandatory directory field.
+Existing Rooms keep their normal composer and their original Session bindings.
 
-The explicit new-task form calls the existing `room.prepare` and `task.start`
-commands. It requires a Room Leader, task text and an absolute working directory
-before preparing any Room. Form idempotency is ephemeral; durable task facts
-stay in the Room document. An unknown result retains the operation and payload.
-Disabled CLI collaboration is rejected before task creation and leaves the form
-editable; it must not be presented as an uncertain submitted task.
-Only a rejection known to precede task creation permits an edited request, and
-an already prepared Room is reused. This does not mutate existing Sessions or
-infer their workspace. Ordinary sending still uses page composer admission.
+First messages enter the existing Room preparation/task-start orchestrator,
+which may call one Host create-and-submit after valid context is available.
+Uncertain submissions retain their operation and payload. A navigation failure
+after accepted creation does not retry creation or preserve a misleading unsent
+draft; the sidebar remains the way to open the created Room.
+
+Current capability gap: `entities/v1` and `AgentRuntimeDefaults` expose no
+entity-to-project/cwd binding, and the installed native task resolver has no
+project authority connected. A new Room has no parent Session from which to
+inherit. Until a formal public binding and resolver exist, the first message
+resolves the actual Leader but returns `context-required` before creating a
+Room or Session. It retains the draft and does not infer the Host checkout or
+invent project cards. This is an incomplete execution integration, not accepted
+end-to-end functionality. See [#73](https://github.com/cordisx/plugin-chatroom/issues/73).
 
 The composer uses the public controlled Markdown editor for text editing,
 syntax highlighting, selection, theme and six-line sizing. Chatroom owns its

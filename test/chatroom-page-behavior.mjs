@@ -192,7 +192,7 @@ test('page opens details without active runs, filters members, returns and sends
     navigation: { navigate: async target => navigations.push(target) },
     params: { roomId: 'room' },
     t,
-    details: {},
+    details: { newRoomLeaders: () => [] },
     signal: new AbortController().signal,
     imageCache: { begin: () => undefined },
     source: { subscribe: () => () => {}, getSnapshot: () => snapshot, hydrate: async () => {} },
@@ -639,14 +639,19 @@ test('narrow inspector contains keyboard focus, makes the header inert and respe
     './chatroom-inspector.js': { useChatroomInspector: () => ({ width: 360, narrow: true, separatorProps: {} }) },
   });
   const props = {
-    params: {},
+    params: { roomId: 'existing-room' },
     t,
     signal: new AbortController().signal,
-    imageCache: {},
-    details: {},
+    imageCache: { begin: () => undefined },
+    details: { newRoomLeaders: () => [] },
     source: {
       subscribe: () => () => {},
-      getSnapshot: () => ({ participants: [], items: [], activeRuns: [] }),
+      getSnapshot: () => ({
+        room: { id: 'existing-room', title: 'Existing', memberships: [] },
+        participants: [],
+        items: [],
+        activeRuns: [],
+      }),
       hydrate: async () => {},
     },
   };
@@ -806,32 +811,64 @@ test('approval body copy, diagnostics, mention, individual decision availability
   harness.unmount();
 });
 
-test('new task entry distinguishes accepted creation from navigation failure', async () => {
-  const harness = await componentHarness('chatroom-new-task-entry.tsx', {
-    './chatroom-new-task.js': { ChatroomNewTask: 'NewTask' },
+test('new Room uses the normal composer with an optional Leader selection, never a task form', async () => {
+  const harness = await componentHarness('chatroom-page.tsx', {
+    './avatar-fingerprint.js': { roomAvatarFingerprint: () => '' },
+    './chatroom-timeline.js': { ChatroomTimeline: 'Timeline' },
+    './chatroom-composer.js': { ChatroomComposer: 'Composer' },
+    './chatroom-new-room.js': { ChatroomLeaderPicker: 'LeaderPicker' },
   });
   const calls = [];
   const props = {
+    params: {},
     t,
-    details: {
-      taskLeaders: () => [{ memberId: 'lead', label: 'Leader' }],
-      startTask: async (roomId, input) => {
-        calls.push([roomId, input]);
-        return { status: 'accepted', roomId: 'created-room' };
-      },
+    signal: new AbortController().signal,
+    imageCache: {},
+    navigation: { navigate: async value => calls.push(['navigate', value]) },
+    source: {
+      subscribe: () => () => {},
+      hydrate: async () => {},
+      getSnapshot: () => ({ participants: [], items: [], activeRuns: [] }),
     },
-    navigation: {
-      navigate: async () => {
-        throw new Error('route unavailable');
+    details: {
+      newRoomLeaders: () => [{ memberId: 'configured-leader', name: 'Leader' }],
+      startRoom: async (text, selected) => {
+        calls.push([text, selected]);
+        return { status: 'unavailable', code: 'failed', reason: 'context-required' };
       },
     },
   };
-  const input = { text: 'Task', to: 'lead', cwd: '/project' };
-  let tree = harness.render(harness.exports.ChatroomNewTaskEntry, props);
-  assert.deepEqual(await all(tree, node => node.type === 'NewTask')[0].props.onStart(input), { status: 'accepted' });
-  tree = harness.render(harness.exports.ChatroomNewTaskEntry, props);
-  assert.deepEqual(calls, [[undefined, input]]);
-  assert.equal(all(tree, node => node.props.role === 'status')[0].props.children, 'task.start.open-failed');
+  const render = () => {
+    const tree = harness.render(harness.exports.ChatroomPage, props);
+    harness.flush();
+    return tree;
+  };
+  let tree = render();
+  assert.equal(all(tree, node => node.type === 'dialog').length, 0);
+  assert.equal(all(tree, node => node.type === 'LeaderPicker')[0].props.selected, undefined);
+  let composer = all(tree, node => node.type === 'Composer')[0];
+  assert.deepEqual(await composer.props.firstMessage('hello'), {
+    status: 'unavailable',
+    message: 'new-room.context-required',
+  });
+  assert.deepEqual(calls, [['hello', undefined]]);
+  all(tree, node => node.type === 'LeaderPicker')[0].props.onSelect('configured-leader');
+  tree = render();
+  composer = all(tree, node => node.type === 'Composer')[0];
+  await composer.props.firstMessage('selected');
+  assert.deepEqual(calls.at(-1), ['selected', 'configured-leader']);
+  all(tree, node => node.type === 'LeaderPicker')[0].props.onSelect(undefined);
+  tree = render();
+  assert.equal(all(tree, node => node.type === 'LeaderPicker')[0].props.selected, undefined);
+  props.details.startRoom = async () => ({ status: 'accepted', roomId: 'created' });
+  props.navigation.navigate = async () => {
+    throw new Error('navigation failed after task acceptance');
+  };
+  tree = render();
+  assert.deepEqual(await all(tree, node => node.type === 'Composer')[0].props.firstMessage('accepted'), {
+    status: 'accepted',
+  });
+  assert.equal(all(render(), node => node.props?.role === 'status')[0].props.children, 'task.start.open-failed');
 });
 
 test('Room settings rejects backend-invalid names, prevents duplicate save and closes only on success', async () => {
