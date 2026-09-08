@@ -205,7 +205,7 @@ test('page opens details without active runs, filters members, returns and sends
   let tree = render();
   await all(tree, node => node.type === 'RoomActions')[0].props.onDeleted();
   assert.deepEqual(navigations, [{ id: 'new-room' }]);
-  all(tree, node => node.props?.children === 'room.settings')[0].props.onClick();
+  all(tree, node => node.props?.['aria-label'] === 'room.settings')[0].props.onClick();
   tree = render();
   all(tree, node => node.type === 'RoomSettings')[0].props.onSaved();
   tree = render();

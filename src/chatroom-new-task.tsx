@@ -85,6 +85,9 @@ export function ChatroomNewTask({ leaders, onStart, t, onClose }: ChatroomNewTas
   return (
     <>
       <Button
+        className="cx-chatroom-new-task-trigger"
+        aria-label={t(leaders.length === 0 ? 'new-task.open-unavailable' : 'new-task.open')}
+        title={t(leaders.length === 0 ? 'new-task.open-unavailable' : 'new-task.open')}
         type="button"
         variant="secondary"
         disabled={leaders.length === 0}
@@ -100,7 +103,6 @@ export function ChatroomNewTask({ leaders, onStart, t, onClose }: ChatroomNewTas
         }}
       >
         <Icon name="create" aria-hidden="true" />
-        {t(leaders.length === 0 ? 'new-task.open-unavailable' : 'new-task.open')}
       </Button>
       <dialog
         ref={dialog}

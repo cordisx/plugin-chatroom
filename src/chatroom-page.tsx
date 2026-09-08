@@ -10,7 +10,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'cordisx/react';
-import { EmptyState } from 'cordisx/ui';
+import { EmptyState, Icon } from 'cordisx/ui';
 import type { CordisXReactPageProps } from 'cordisx/contracts';
 
 import { ChatroomAvatar } from './avatar.js';
@@ -244,16 +244,18 @@ export function ChatroomPage(
             aria-controls={inspector === undefined ? undefined : inspectorId}
             onClick={openMembers}
           >
-            {props.t('members.count', { count: members.length })}
+            <Icon name="role" aria-hidden="true" />
           </button>
           {details !== undefined && snapshot.room !== undefined && (
             <button
               type="button"
               className="cx-chatroom-header__action"
+              aria-label={props.t('room.settings')}
+              title={props.t('room.settings')}
               aria-expanded={inspector?.kind === 'settings'}
               onClick={() => setInspector({ kind: 'settings' })}
             >
-              {props.t('room.settings')}
+              <Icon name="host:settings" aria-hidden="true" />
             </button>
           )}
           {snapshot.room !== undefined && details !== undefined && (
@@ -357,10 +359,13 @@ export function ChatroomPage(
                   aria-label={props.t('members.back')}
                   onClick={() => setInspector({ kind: 'members' })}
                 >
-                  ← {props.t('members.title')}
+                  ←
                 </button>
               )}
-              <h2 id={`${inspectorId}-title`} tabIndex={-1} ref={inspectorHeading}>{inspectorTitle}</h2>
+              <div className="cx-chatroom-inspector__breadcrumb">
+                {inspector.kind === 'identity' && <span>{props.t('members.title')} /</span>}
+                <h2 id={`${inspectorId}-title`} tabIndex={-1} ref={inspectorHeading}>{inspectorTitle}</h2>
+              </div>
               <button
                 type="button"
                 className="cx-chatroom-header__action"

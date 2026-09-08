@@ -58,6 +58,8 @@ The explicit new-task form calls the existing `room.prepare` and `task.start`
 commands. It requires a Room Leader, task text and an absolute working directory
 before preparing any Room. Form idempotency is ephemeral; durable task facts
 stay in the Room document. An unknown result retains the operation and payload.
+Disabled CLI collaboration is rejected before task creation and leaves the form
+editable; it must not be presented as an uncertain submitted task.
 Only a rejection known to precede task creation permits an edited request, and
 an already prepared Room is reused. This does not mutate existing Sessions or
 infer their workspace. Ordinary sending still uses page composer admission.
@@ -68,6 +70,17 @@ compact/expanded form and action layout, mentions and send semantics. It does
 not query or style the editor's private descendants.
 
 ## Styles and delivery
+
+The migration preserves the established compact Room shape: a single 68px
+header with icon actions, a centered 780px message/composer column, 40px message
+avatars aligned with their bubbles, and a 360px resizable details pane. The
+compact composer keeps add/editor/send in one row; typing `@` opens member
+selection, and the expanded editor retains its explicit member control. The
+keyboard hint remains an accessible description without adding a permanent
+visual row. Message timestamps/actions appear on hover or keyboard focus.
+Header, bubble and composer colors consume Host theme tokens. The generic
+body-only Host React seat owns zero outer padding; plugin CSS must not override
+that Host node to compensate for a mount defect.
 
 Room components load ordinary CSS alongside their lazy page graph. Their
 styles use the `cx-chatroom-` namespace and Host semantic tokens. Native Vite

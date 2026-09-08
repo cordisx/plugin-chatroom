@@ -90,3 +90,13 @@
     padding: 16px;
   }
 }
+
+.cx-chatroom-header .cx-chatroom-new-task-trigger {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}

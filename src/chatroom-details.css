@@ -5,7 +5,9 @@
 }
 .cx-chatroom-identity__hero {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--cx-chatroom-border);
   align-items: center;
   gap: 12px;
 }
@@ -15,7 +17,9 @@
 }
 .cx-chatroom-identity h3 {
   margin: 0 0 8px;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--cx-chatroom-muted);
 }
 .cx-chatroom-identity p {
   color: var(--cx-chatroom-muted);
@@ -101,4 +105,12 @@
 .cx-chatroom-task h4 {
   margin: 0 0 8px;
   font-size: 12px;
+}
+
+.cx-chatroom-identity__hero h3 {
+  margin: 0 0 2px;
+  color: var(--cx-text, CanvasText);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 22px;
 }

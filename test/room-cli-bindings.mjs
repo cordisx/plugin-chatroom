@@ -111,3 +111,35 @@ test('adapter revokes on Room archive and rejects a late handler even before rev
   await bindings.dispose();
   store.dispose();
 });
+
+test('disabled CLI collaboration rejects task startup before any task fact or Host call', async () => {
+  const { room, store } = setup();
+  let hostCalls = 0;
+  const bindings = new ChatroomCliBindings(
+    undefined,
+    store,
+    { get: () => ({ cliReporting: false }), watch: () => () => {} },
+    {
+      createAndSubmit: async () => {
+        hostCalls += 1;
+        throw new Error('must not execute');
+      },
+    },
+  );
+  const before = JSON.stringify(store.rooms.get(room.id));
+  assert.deepEqual(
+    await bindings.startTask({
+      action: 'start',
+      roomId: room.id,
+      to: 'leader',
+      operationId: 'disabled-start',
+      text: 'New task',
+      cwd: '/workspace/project',
+    }),
+    { status: 'rejected', code: 'unsupported' },
+  );
+  assert.equal(hostCalls, 0);
+  assert.equal(JSON.stringify(store.rooms.get(room.id)), before);
+  await bindings.dispose();
+  store.dispose();
+});

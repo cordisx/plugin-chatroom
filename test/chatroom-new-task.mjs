@@ -183,7 +183,7 @@ test('requires an existing Leader, task text and explicit working directory befo
   h.submit();
   assert.deepEqual(h.calls, []);
   assert.equal(h.trigger().props.disabled, true);
-  assert.ok(h.trigger().props.children.includes('new-task.open-unavailable'));
+  assert.equal(h.trigger().props['aria-label'], 'new-task.open-unavailable');
   assert.equal(h.find(node => node.type === 'select').props.value, '');
   h.unmount();
 });

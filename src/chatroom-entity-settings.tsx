@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'cordisx/react';
-import { Button } from 'cordisx/ui';
+import { Button, Icon } from 'cordisx/ui';
 import type { CordisXReactPageProps } from 'cordisx/contracts';
 import type { ChatroomPageDetails } from './chatroom-page-details.js';
 import type { Room } from './room.js';
@@ -29,6 +29,8 @@ export function ChatroomEntitySettings({ room, participantId, details, t }: {
   return (
     <div>
       <Button
+        aria-label={t('identity.settings')}
+        className="cx-chatroom-header__action"
         disabled={!available || busy}
         title={available ? undefined : t('identity.settings.unavailable')}
         onClick={async () => {
@@ -46,7 +48,7 @@ export function ChatroomEntitySettings({ room, participantId, details, t }: {
           }
         }}
       >
-        {t('identity.settings')}
+        <Icon name="host:settings" aria-hidden="true" />
       </Button>
       {failed && <p role="alert">{t('identity.settings.failed')}</p>}
     </div>
