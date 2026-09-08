@@ -8,7 +8,7 @@ test('Chatroom mounts its page while retaining Host page composer admission', as
     readFile(new URL('../src/chatroom-page-source.ts', import.meta.url), 'utf8'),
   ]);
 
-  assert.match(pluginSource, /new ChatroomPageSource\(controller, agentSession, composerSettings\)/);
+  assert.match(pluginSource, /new ChatroomPageSource\(controller, agentSession, composerSettings, ctx\.commands\)/);
   assert.match(
     pluginSource,
     /ctx\.pages\.register\(page, pageMount\)/,
@@ -28,5 +28,6 @@ test('Chatroom mounts its page while retaining Host page composer admission', as
   assert.doesNotMatch(pageSource, /this\.sessions\.sendToRoom\(/);
   assert.match(pageSource, /assertChatroomAdmissionDeliveriesAccepted\(outcomes\)/);
   assert.match(pageSource, /pageComposerCompletion/);
+  assert.match(pageSource, /this\.commands\.execute\([\s\S]*action\.command/);
   assert.match(pageSource, /this\.sessions\.answerApprovalItem\(roomId, itemId, outcome\)/);
 });

@@ -13,7 +13,15 @@ import {
   StatusItem,
 } from './chatroom-timeline-entries.js';
 export type { PageParticipant } from './chatroom-timeline-entries.js';
-type TimelineActions = { participant: PageParticipant; text?: string; trigger: HTMLElement; x: number; y: number; };
+type MessageItem = Extract<ChatroomPageItem, { readonly kind: 'message'; }>;
+type TimelineActions = {
+  participant: PageParticipant;
+  text?: string;
+  item?: MessageItem;
+  trigger: HTMLElement;
+  x: number;
+  y: number;
+};
 
 export function ChatroomTimeline(
   { items, participants, roomId, source, t, onParticipantClick, onMentionParticipant, copyText, activeRuns = [] }: {
@@ -32,6 +40,9 @@ export function ChatroomTimeline(
   const menuElement = useRef<HTMLDivElement>(null);
   const [actions, setActions] = useState<TimelineActions>();
   const [copyStatus, setCopyStatus] = useState<'copied' | 'copy-failed'>();
+  const [actionFailed, setActionFailed] = useState(false);
+  const [runningActions, setRunningActions] = useState<ReadonlySet<string>>(() => new Set());
+  const actionPending = useRef(new Set<string>());
   const copying = useRef(false);
   const [clipboardAvailable, setClipboardAvailable] = useState(false);
   useLayoutEffect(() => {
@@ -51,7 +62,7 @@ export function ChatroomTimeline(
     setActions(undefined);
     if (restore) actions?.trigger.focus({ preventScroll: true });
   };
-  const openActions = (participant: PageParticipant, event: ActionEvent, text?: string) => {
+  const openActions = (participant: PageParticipant, event: ActionEvent, text?: string, item?: MessageItem) => {
     event.preventDefault();
     event.stopPropagation();
     const bounds = region.current?.getBoundingClientRect();
@@ -61,10 +72,29 @@ export function ChatroomTimeline(
     setActions({
       participant,
       text,
+      ...(item === undefined ? {} : { item }),
       trigger: event.currentTarget,
       x: x - (bounds?.left ?? 0),
       y: y - (bounds?.top ?? 0),
     });
+  };
+  const actionKey = (itemId: string, actionId: string) => JSON.stringify([itemId, actionId]);
+  const runAction = async (itemId: string, actionId: string) => {
+    if (roomId === undefined) return;
+    const key = actionKey(itemId, actionId);
+    if (actionPending.current.has(key)) return;
+    actionPending.current.add(key);
+    setRunningActions(new Set(actionPending.current));
+    setActionFailed(false);
+    setActions(undefined);
+    try {
+      await source.executeMessageAction(roomId, itemId, actionId);
+    } catch {
+      if (mounted.current) setActionFailed(true);
+    } finally {
+      actionPending.current.delete(key);
+      if (mounted.current) setRunningActions(new Set(actionPending.current));
+    }
   };
   useLayoutEffect(() => {
     const menu = menuElement.current;
@@ -191,6 +221,27 @@ export function ChatroomTimeline(
               {t('timeline.copy-message')}
             </button>
           )}
+          {(actions.item?.actions ?? []).slice(2).map(action => {
+            const running = runningActions.has(actionKey(actions.item!.itemId, action.id));
+            const reason = action.disabled.reason?.fallback;
+            return (
+              <button
+                key={action.id}
+                type="button"
+                role="menuitem"
+                disabled={action.disabled.value || running}
+                aria-busy={running}
+                aria-label={reason === undefined ? action.label.fallback : `${action.label.fallback}: ${reason}`}
+                title={reason}
+                onClick={event => {
+                  event.stopPropagation();
+                  void runAction(actions.item!.itemId, action.id);
+                }}
+              >
+                {action.label.fallback}
+              </button>
+            );
+          })}
           {actions.participant.role !== 'human' && onParticipantClick !== undefined && (
             <button
               type="button"
@@ -220,6 +271,7 @@ export function ChatroomTimeline(
       {copyStatus !== undefined && (
         <div className="cx-chatroom-timeline__feedback" role="status">{t(`timeline.${copyStatus}`)}</div>
       )}
+      {actionFailed && <div className="cx-chatroom-timeline__feedback" role="alert">{t('timeline.action-failed')}</div>}
       <section
         ref={viewport}
         className="cx-chatroom-timeline"
@@ -256,6 +308,8 @@ export function ChatroomTimeline(
                     onParticipantClick={onParticipantClick}
                     onOpenActions={openActions}
                     onMentionParticipant={onMentionParticipant}
+                    onRunAction={(itemId, actionId) => void runAction(itemId, actionId)}
+                    isActionRunning={(itemId, actionId) => runningActions.has(actionKey(itemId, actionId))}
                   />
                 )
                 : item.kind === 'approval' && roomId !== undefined

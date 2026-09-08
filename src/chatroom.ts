@@ -449,7 +449,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   );
   const composerSettings = new ChatroomComposerSettings(ctx.settings);
   const product = ChatroomProductBase.attach(roomStore);
-  const pageSource = new ChatroomPageSource(controller, agentSession, composerSettings);
+  const pageSource = new ChatroomPageSource(controller, agentSession, composerSettings, ctx.commands);
   ctx.commands.register(
     { id: CHATROOM_COMMAND_SUBMIT, title: message('composer.placeholder', 'Write a message') },
     async command => {

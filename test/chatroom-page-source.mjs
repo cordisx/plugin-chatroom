@@ -4,7 +4,7 @@ import test from 'node:test';
 import { ChatroomPageSource } from '../dist/chatroom-page-source.js';
 import { addRoomRun, bindRoomRunSession, ChatroomRoomRegistry, createRoom } from '../dist/room.js';
 
-function harness({ rooms = [], projection = { activeRuns: [], items: [] }, intent } = {}) {
+function harness({ rooms = [], projection = { activeRuns: [], items: [] }, intent, commands } = {}) {
   const registry = new ChatroomRoomRegistry(rooms);
   const projectionListeners = new Set();
   const settingsListeners = new Set();
@@ -58,7 +58,7 @@ function harness({ rooms = [], projection = { activeRuns: [], items: [] }, inten
       return () => settingsListeners.delete(listener);
     },
   };
-  const source = new ChatroomPageSource(conversation, sessions, settings);
+  const source = new ChatroomPageSource(conversation, sessions, settings, commands);
   return { calls, conversation, projectionListeners, registry, sessions, settingsListeners, source };
 }
 
@@ -99,6 +99,49 @@ test('merges replayed Session items, exposes participants, hydrates and invalida
   run.projectionListeners.forEach(listener => listener('room-a'));
   assert.ok(run.source.getSnapshot('room-a').revision > second.revision);
   run.source.dispose();
+});
+
+test('message actions execute only from the current Room projection through owner commands', async () => {
+  const calls = [];
+  const action = {
+    id: 'inspect:message',
+    label: { key: 'inspect', fallback: 'Inspect' },
+    command: { id: 'inspect-message', arguments: { itemId: projectedMessage.itemId } },
+    disabled: { value: false },
+  };
+  const message = { ...projectedMessage, itemId: 'projected:item', actions: [action] };
+  const run = harness({
+    rooms: [createRoom({ id: 'room-a', title: 'Room A' })],
+    projection: { activeRuns: [], items: [message] },
+    commands: {
+      async execute(...args) {
+        calls.push(args);
+      },
+    },
+  });
+  await run.source.executeMessageAction('room-a', message.itemId, action.id);
+  assert.deepEqual(calls, [[
+    action.command,
+    JSON.stringify(['room-message-action', 'room-a', message.itemId, action.id]),
+  ]]);
+  await assert.rejects(run.source.executeMessageAction('room-a', message.itemId, 'missing'));
+  run.projectionListeners.forEach(listener => listener('room-a'));
+  const currentCommand = { id: 'inspect-current', arguments: { revision: 2 } };
+  run.sessions.projectionForRoom = () => ({
+    activeRuns: [],
+    items: [{ ...message, actions: [{ ...action, command: currentCommand }] }],
+  });
+  await run.source.executeMessageAction('room-a', message.itemId, action.id);
+  assert.equal(calls[1][0], currentCommand, 'execution re-resolves the action from the current projection');
+  run.projectionListeners.forEach(listener => listener('room-a'));
+  run.sessions.projectionForRoom = () => ({
+    activeRuns: [],
+    items: [{ ...message, actions: [{ ...action, disabled: { value: true, reason: { fallback: 'Denied' } } }] }],
+  });
+  await assert.rejects(run.source.executeMessageAction('room-a', message.itemId, action.id), /Denied/);
+  assert.equal(calls.length, 2);
+  run.source.dispose();
+  await assert.rejects(run.source.executeMessageAction('room-a', message.itemId, action.id), /disposed/);
 });
 
 test('routes current and legacy approval decisions to exact Session or playground owners', async () => {

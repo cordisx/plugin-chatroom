@@ -1,4 +1,5 @@
 import type { AgentStatus } from '@cordisx/protocol/agents/v1';
+import type { CordisXCommands } from 'cordisx/contracts';
 import { type ChatroomCliPageMessage, roomCliPageMessages } from './room-cli-message-page.js';
 import type {
   AgentConversationActiveRunDescriptor,
@@ -115,10 +116,32 @@ export class ChatroomPageSource {
     private readonly conversation: ChatroomConversationController,
     private readonly sessions: ChatroomAgentSessionController,
     private readonly settings: ChatroomComposerSettings,
+    private readonly commands?: Pick<CordisXCommands, 'execute'>,
   ) {
     this.unsubscribeRooms = conversation.rooms.subscribe(roomId => this.refreshRoom(roomId));
     this.unsubscribeProjection = sessions.subscribeProjection(roomId => this.refreshRoom(roomId));
     this.unsubscribeSettings = settings.subscribe(() => this.refresh());
+  }
+
+  /** Executes only an action still present on the current Room projection. */
+  async executeMessageAction(roomId: string, itemId: string, actionId: string): Promise<void> {
+    if (this.disposed) throw new Error('Chatroom page source is disposed.');
+    const item = this.getSnapshot(roomId).items.find(candidate =>
+      candidate.kind === 'message' && candidate.itemId === itemId
+    );
+    const action = item?.kind === 'message'
+      ? item.actions.find(candidate => candidate.id === actionId)
+      : undefined;
+    if (action === undefined || this.commands === undefined) {
+      throw new Error('Message action is unavailable.');
+    }
+    if (action.disabled.value) {
+      throw new Error(action.disabled.reason?.fallback ?? 'Message action is disabled.');
+    }
+    await this.commands.execute(
+      action.command,
+      JSON.stringify(['room-message-action', roomId, itemId, action.id]),
+    );
   }
 
   getSnapshot(roomId: string | undefined): ChatroomPageSnapshot {

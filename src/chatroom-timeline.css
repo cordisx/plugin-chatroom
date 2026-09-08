@@ -228,6 +228,7 @@
 }
 
 .cx-chatroom-message__time,
+.cx-chatroom-message__command,
 .cx-chatroom-message__actions {
   padding: 0 2px;
   border: 0;
@@ -237,14 +238,22 @@
   font: inherit;
   cursor: pointer;
 }
-.cx-chatroom-message__time:disabled {
+.cx-chatroom-message__time:disabled,
+.cx-chatroom-message__command:disabled {
   cursor: default;
 }
 .cx-chatroom-message__actions {
   min-width: 22px;
   font-size: 14px;
 }
+.cx-chatroom-message__command {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .cx-chatroom-message__time:focus-visible,
+.cx-chatroom-message__command:focus-visible,
 .cx-chatroom-message__actions:focus-visible {
   outline: 2px solid var(--cx-primary, currentColor);
 }

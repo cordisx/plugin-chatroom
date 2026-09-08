@@ -523,6 +523,110 @@ test('timeline copying is honestly disabled when absent and reports browser perm
   assert.equal(byClass(render(), 'cx-chatroom-timeline__feedback').props.children, 'timeline.copy-failed');
 });
 
+test('message actions preserve order, current execution, disabled reasons and duplicate-click fencing', async () => {
+  const harness = await componentHarness('chatroom-timeline.tsx');
+  const calls = [];
+  let rejectFirst;
+  const actions = [
+    { id: 'first', label: { fallback: 'First' }, command: { id: 'first' }, disabled: { value: false } },
+    { id: 'second', label: { fallback: 'Second' }, command: { id: 'second' }, disabled: { value: false } },
+    { id: 'third', label: { fallback: 'Third' }, command: { id: 'third' }, disabled: { value: false } },
+    {
+      id: 'disabled',
+      label: { fallback: 'Disabled' },
+      command: { id: 'disabled' },
+      disabled: { value: true, reason: { fallback: 'Unavailable now' } },
+    },
+  ];
+  const item = {
+    kind: 'message',
+    itemId: 'message-actions',
+    author: { participantId: 'agent', role: 'agent', displayName: { fallback: 'Agent' } },
+    body: [{ text: { fallback: 'Body' } }],
+    timestamp: '2026-09-08T00:00:00Z',
+    reactions: [],
+    actions,
+  };
+  const source = {
+    executeMessageAction: async (_roomId, itemId, actionId) => {
+      calls.push([itemId, actionId]);
+      if (actionId === 'first' && calls.filter(([, id]) => id === 'first').length === 1) {
+        return await new Promise((_, reject) => {
+          rejectFirst = reject;
+        });
+      }
+    },
+  };
+  const trigger = {
+    ownerDocument: { defaultView: { navigator: {} } },
+    getBoundingClientRect: () => ({ left: 5, bottom: 20 }),
+    focus() {},
+  };
+  const props = { items: [item], participants: [], source, t, roomId: 'room' };
+  const render = () => {
+    const tree = harness.render(harness.exports.ChatroomTimeline, props);
+    tree.props.ref.current = {
+      ownerDocument: trigger.ownerDocument,
+      clientWidth: 500,
+      clientHeight: 500,
+      getBoundingClientRect: () => ({ left: 0, top: 0 }),
+    };
+    const menu = byClass(tree, 'cx-chatroom-timeline__menu');
+    if (menu) menu.props.ref.current = { style: {}, offsetWidth: 200, offsetHeight: 180, querySelector: () => trigger };
+    harness.flush();
+    return tree;
+  };
+  const message = tree => {
+    const element = all(tree, node => node.props?.item === item)[0];
+    return element.type(element.props);
+  };
+  render();
+  let tree = render();
+  let stopped = 0;
+  let direct = all(message(tree), node => node.props?.className === 'cx-chatroom-message__command');
+  assert.deepEqual(direct.map(button => button.props.children), ['First', 'Second']);
+  direct[0].props.onClick({ stopPropagation: () => stopped++ });
+  direct[0].props.onClick({ stopPropagation: () => stopped++ });
+  assert.deepEqual(calls, [['message-actions', 'first']]);
+  assert.equal(stopped, 2);
+  tree = render();
+  direct = all(message(tree), node => node.props?.className === 'cx-chatroom-message__command');
+  assert.equal(direct[0].props.disabled, true);
+  assert.equal(direct[0].props['aria-busy'], true);
+  rejectFirst(new Error('command failed'));
+  await new Promise(resolve => setImmediate(resolve));
+  tree = render();
+  assert.equal(all(tree, node => node.props?.role === 'alert')[0].props.children, 'timeline.action-failed');
+  direct = all(message(tree), node => node.props?.className === 'cx-chatroom-message__command');
+  direct[0].props.onClick({ stopPropagation() {} });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(calls.slice(0, 2), [
+    ['message-actions', 'first'],
+    ['message-actions', 'first'],
+  ], 'the same action can retry after its failed attempt settles');
+  tree = render();
+  assert.equal(all(tree, node => node.props?.role === 'alert').length, 0);
+
+  byClass(message(tree), 'cx-chatroom-message__actions').props.onClick({
+    currentTarget: trigger,
+    clientX: 20,
+    clientY: 30,
+    preventDefault() {},
+    stopPropagation() {},
+  });
+  tree = render();
+  const menu = byClass(tree, 'cx-chatroom-timeline__menu');
+  const overflow = all(menu, node => node.props?.role === 'menuitem')
+    .filter(button => ['Third', 'Disabled'].includes(button.props.children));
+  assert.deepEqual(overflow.map(button => button.props.children), ['Third', 'Disabled']);
+  overflow[0].props.onClick({ stopPropagation() {} });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(calls.at(-1), ['message-actions', 'third']);
+  assert.equal(overflow[1].props.disabled, true);
+  assert.equal(overflow[1].props.title, 'Unavailable now');
+  assert.equal(overflow[1].props['aria-label'], 'Disabled: Unavailable now');
+});
+
 test('narrow inspector contains keyboard focus, makes the header inert and respects nested Escape handling', async () => {
   const harness = await componentHarness('chatroom-page.tsx', {
     './avatar-fingerprint.js': { roomAvatarFingerprint: () => '' },

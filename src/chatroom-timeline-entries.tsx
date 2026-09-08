@@ -54,24 +54,34 @@ export function MessageItem(
     previous,
     next,
     onMentionParticipant,
+    onRunAction = () => undefined,
+    isActionRunning = () => false,
   }: {
     readonly item: Extract<ChatroomPageItem, { readonly kind: 'message'; }>;
     readonly participants: readonly PageParticipant[];
     readonly t: Translate;
     readonly onParticipantClick?: (participantId: string) => void;
-    readonly onOpenActions: (participant: PageParticipant, event: ActionEvent, text?: string) => void;
+    readonly onOpenActions: (
+      participant: PageParticipant,
+      event: ActionEvent,
+      text?: string,
+      item?: Extract<ChatroomPageItem, { readonly kind: 'message'; }>,
+    ) => void;
     readonly onCopy: (text: string, trigger: HTMLElement) => void;
     readonly copyAvailable: boolean;
     readonly runtimeRunning?: boolean;
     readonly previous?: ChatroomPageItem;
     readonly next?: ChatroomPageItem;
     readonly onMentionParticipant?: (participantId: string) => void;
+    readonly onRunAction?: (itemId: string, actionId: string) => void;
+    readonly isActionRunning?: (itemId: string, actionId: string) => boolean;
   },
 ) {
   const author = display(item.author.displayName, t);
   const body = item.body.map(block => display(block.text, t)).join('\n\n');
   const human = item.author.role === 'human';
   const participant = { id: item.author.participantId, name: author, role: item.author.role };
+  const messageActions = item.actions ?? [];
   const sameAgent = (other: ChatroomPageItem | undefined) => {
     if (item.author.role !== 'agent' || other?.kind !== 'message' || other.author.role !== 'agent') return false;
     return item.author.participantId === other.author.participantId
@@ -98,13 +108,14 @@ export function MessageItem(
       aria-label={`${author}, ${fullTime}`}
       data-role={item.author.role}
       aria-live={item.ariaLive}
-      onContextMenu={event => onOpenActions(participant, event, body)}
+      onContextMenu={event => onOpenActions(participant, event, body, item)}
       onKeyDown={event => {
         if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
           onOpenActions(
             participant,
             event,
             body,
+            item,
           );
         }
       }}
@@ -157,12 +168,34 @@ export function MessageItem(
               {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </time>
           </button>
+          {messageActions.slice(0, 2).map(action => {
+            const running = isActionRunning(item.itemId, action.id);
+            const label = display(action.label, t);
+            const reason = action.disabled.reason === undefined ? undefined : display(action.disabled.reason, t);
+            return (
+              <button
+                key={action.id}
+                type="button"
+                className="cx-chatroom-message__command"
+                disabled={action.disabled.value || running}
+                aria-busy={running}
+                aria-label={reason === undefined ? label : `${label}: ${reason}`}
+                title={reason}
+                onClick={event => {
+                  event.stopPropagation();
+                  onRunAction(item.itemId, action.id);
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
           <button
             type="button"
             className="cx-chatroom-message__actions"
             aria-label={t('timeline.actions')}
             aria-haspopup="menu"
-            onClick={event => onOpenActions(participant, event, body)}
+            onClick={event => onOpenActions(participant, event, body, item)}
           >
             ⋯
           </button>
