@@ -54,9 +54,13 @@ test('real CLI process commits one authenticated Room report through Host docume
     void operation.then(
       value =>
         globalThis.__cordisxOwnerDocumentReceiveV1?.(JSON.stringify({ requestId: request.requestId, ok: true, value })),
-      () =>
+      error =>
         globalThis.__cordisxOwnerDocumentReceiveV1?.(
-          JSON.stringify({ requestId: request.requestId, ok: false, error: 'Host rejected request' }),
+          JSON.stringify({
+            requestId: request.requestId,
+            ok: false,
+            error: `${request.operation}: ${error instanceof Error ? error.message : 'Host rejected request'}`,
+          }),
         ),
     );
   };
@@ -182,7 +186,9 @@ test('real CLI process commits one authenticated Room report through Host docume
     const visible = pageSnapshot.items.filter(item => item.kind === 'message' && item.messageId === first.messageId);
     assert.equal(visible.length, 1);
     assert.equal(visible[0].source, 'chatroom-cli');
-    assert.equal(visible[0].sequence, reports[0].sequence);
+    // Page sequence is presentation order after merging independently sequenced sources.
+    assert.equal(visible[0].timestamp, reports[0].timestamp);
+    assert.equal(store.rooms.get(room.id).cliMessages[0].sequence, reports[0].sequence);
     assert.equal(visible[0].author.participantId, member.participantId);
     assert.equal(visible[0].body[0].text.fallback, 'Accepted the assigned work.');
     assert.equal(visible[0].author.role, 'agent');
@@ -246,10 +252,11 @@ test('real CLI process commits one authenticated Room report through Host docume
     sessionController = undefined;
     domain.dispose();
     domain = undefined;
-    await bindings.dispose();
-    bindings = undefined;
+    // Revoke the child handle while its command registration still exists.
     await childToolBinding.revoke();
     childToolBinding = undefined;
+    await bindings.dispose();
+    bindings = undefined;
     store.dispose();
     store = undefined;
     await assertColdPageReports(documents, room.id, first.messageId, queried.reports[0].messageId);
@@ -293,15 +300,25 @@ async function assertColdPageReports(documents, roomId, parentMessageId, childMe
       item.kind === 'message' && item.source === 'chatroom-cli'
     );
     assert.equal(visible.length, 2);
+    assert.deepEqual(
+      visible.map(item => item.messageId),
+      [...expected]
+        .sort((left, right) =>
+          Date.parse(left.timestamp) - Date.parse(right.timestamp) || left.sequence - right.sequence
+        )
+        .map(message => message.messageId),
+    );
+    assert.ok(visible[0].sequence < visible[1].sequence);
     for (const message of expected) {
       const matches = visible.filter(item => item.messageId === message.messageId);
       assert.equal(matches.length, 1);
       assert.equal(matches[0].author.participantId, message.participantId);
       assert.equal(matches[0].body[0].text.fallback, message.text);
-      assert.equal(matches[0].sequence, message.sequence);
+      assert.equal(matches[0].timestamp, message.timestamp);
       assert.equal(matches[0].semantic.causation.operationId, message.operationId);
     }
-    assert.deepEqual(coldStore.rooms.get(roomId).runs, persistedRoom.runs);
+    // Owner documents are JSON; optional in-memory undefined fields are not persisted facts.
+    assert.deepEqual(JSON.parse(JSON.stringify(coldStore.rooms.get(roomId).runs)), persistedRoom.runs);
     assert.equal(runtime.creates.length, 0);
     assert.equal(runtime.resumes.length, 0);
     assert.equal(coldController.ownerHandleCount, 0);

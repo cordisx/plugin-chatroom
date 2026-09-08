@@ -37,7 +37,9 @@ test('mounts the plugin-owned Room page through one lazy public page path', asyn
   assert.match(page, /ChatroomCompositeAvatar/u);
   assert.match(page, /import '\.\/chatroom-page\.css'/u);
   assert.doesNotMatch(page, /data-chatroom-page-styles|CHATROOM_AVATAR_VENDOR_STYLES/u);
-  assert.match(css, /@container chatroom-page \(max-width: 760px\)/u);
+  assert.match(css, /@container chatroom-page \(width < 900px\)/u);
+  assert.match(css, /@container chatroom-page \(min-width: 900px\)/u);
+  assert.match(page, /inert=\{narrow && inspector !== undefined\}/u);
   assert.doesNotMatch(
     `${entry}\n${page}\n${pageSource}`,
     /ctx\.visuals|AgentConversationRenderer|renderer\/host-ui|data-cordisx-app-theme/u,
