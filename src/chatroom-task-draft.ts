@@ -1,4 +1,4 @@
-import type { EntityExecutionContexts } from '@cordisx/protocol/entity-execution-context/v1';
+import type { EntityExecutionContexts } from '@cordisx/protocol/entity-execution-context/v2';
 import type { AgentTaskFailureCode } from '@cordisx/protocol/agent-task/v1';
 import { taskFailureCode } from './chatroom-task-failures.js';
 import type { CordisXCommands } from 'cordisx/contracts';
@@ -10,6 +10,7 @@ export interface ChatroomTaskDraftInput {
   readonly to: string;
   readonly cwd?: string;
   readonly projectId?: string;
+  readonly projectless?: boolean;
 }
 export type ChatroomTaskDraftResult =
   | { readonly status: 'accepted'; readonly roomId: string; }
@@ -39,7 +40,9 @@ export class ChatroomTaskDrafts {
     private readonly rooms: DurableChatroomRoomStore,
     private readonly configuration: ChatroomAgentConfiguration,
     private readonly commands: Pick<CordisXCommands, 'execute'>,
-    private readonly contexts?: Pick<EntityExecutionContexts, 'resolve'>,
+    private readonly contexts?:
+      & Pick<EntityExecutionContexts, 'resolve'>
+      & Partial<Pick<EntityExecutionContexts, 'projectless'>>,
   ) {}
 
   leaders(roomId?: string): readonly { memberId: string; label: string; }[] {
@@ -59,6 +62,7 @@ export class ChatroomTaskDrafts {
       !text || text.length > 16_000
       || cwd !== undefined && (!cwd.startsWith('/') || cwd.includes('\0'))
       || projectId !== undefined && projectId === ''
+      || input.projectless === true && (cwd !== undefined || projectId !== undefined)
     ) {
       return { status: 'unavailable', code: 'invalid-input' };
     }
@@ -69,7 +73,7 @@ export class ChatroomTaskDrafts {
       return { status: 'unavailable', code: 'failed', reason: 'context-required' };
     }
     const key = roomId ?? '';
-    const fingerprint = JSON.stringify([text, input.to, cwd, projectId]);
+    const fingerprint = JSON.stringify([text, input.to, cwd, projectId, input.projectless === true]);
     const retained = this.drafts.get(key);
     if (retained !== undefined && retained.fingerprint !== fingerprint && !retained.editable) {
       return { status: 'unavailable', code: 'pending' };
@@ -89,6 +93,7 @@ export class ChatroomTaskDrafts {
     const operation = this.submit(roomId, draft, {
       text,
       to: input.to,
+      ...(input.projectless === true ? { projectless: true } : {}),
       ...(cwd === undefined ? {} : { cwd }),
       ...(projectId === undefined ? {} : { projectId }),
     });
@@ -111,7 +116,8 @@ export class ChatroomTaskDrafts {
       if (input.cwd === undefined && input.projectId === undefined) {
         if (draft.context === undefined) {
           const member = this.configuration.members.find(value => value.memberId === input.to);
-          const resolved = member === undefined ? undefined : await this.contexts?.resolve({
+          const resolver = input.projectless === true ? this.contexts?.projectless : this.contexts?.resolve;
+          const resolved = member === undefined ? undefined : await resolver?.call(this.contexts, {
             identity: member.definition,
             operationId: draft.operationId,
           });
@@ -124,6 +130,9 @@ export class ChatroomTaskDrafts {
                 ? 'definition-unavailable'
                 : taskFailureCode(resolved?.code) ?? 'host-unavailable',
             };
+          }
+          if (input.projectless === true && resolved.binding.kind !== 'projectless') {
+            return { status: 'unavailable', code: 'failed', reason: 'host-unavailable' };
           }
           if (resolved.context.kind === 'directory' && resolved.binding.kind === 'projectless') {
             draft.context = { cwd: resolved.context.cwd };
@@ -167,7 +176,10 @@ export class ChatroomTaskDrafts {
           action: 'start',
           roomId: draft.roomId,
           operationId: draft.operationId,
-          ...input,
+          text: input.text,
+          to: input.to,
+          ...(input.cwd === undefined ? {} : { cwd: input.cwd }),
+          ...(input.projectId === undefined ? {} : { projectId: input.projectId }),
         },
       });
       if (

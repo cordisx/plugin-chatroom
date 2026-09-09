@@ -39,6 +39,7 @@ import {
 } from './team-entity-view-model.js';
 import type { TeamArchitectureMessages } from './team-architecture-messages.js';
 import teamArchitectureCss from './team-architecture-page.css?inline';
+import entityProjectCss from './entity-project-binding.css?inline';
 
 export type { TeamArchitectureMessages } from './team-architecture-messages.js';
 
@@ -896,6 +897,7 @@ function TeamArchitecturePage({ source, detailRouteIds, routeId, params, navigat
   return (
     <Fragment>
       <style data-chatroom-team-architecture-styles="v1">{teamArchitectureCss}</style>
+      <style data-chatroom-entity-project-styles="v1">{entityProjectCss}</style>
       {content}
     </Fragment>
   );

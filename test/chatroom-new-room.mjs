@@ -15,7 +15,7 @@ test('unselected first message targets the real configured default global Leader
   assert.equal(flow.leaders.length, 1);
   assert.equal(flow.leaders[0].defaultGlobal, true);
   assert.deepEqual(await flow.start('hello'), { status: 'unavailable', code: 'failed', reason: 'context-required' });
-  assert.deepEqual(requests, [[undefined, { text: 'hello', to: 'leader' }]]);
+  assert.deepEqual(requests, [[undefined, { text: 'hello', to: 'leader', projectless: true }]]);
   assert.equal((await flow.start('hello', 'unknown')).code, 'leader-unavailable');
   assert.equal(requests.length, 1);
 });

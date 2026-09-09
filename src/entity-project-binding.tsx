@@ -6,7 +6,6 @@ import type {
   EntityExecutionContexts,
   HostExecutionProject,
 } from '@cordisx/protocol/entity-execution-context/v1';
-import './entity-project-binding.css';
 
 type ProjectMessage =
   | 'detail.project'

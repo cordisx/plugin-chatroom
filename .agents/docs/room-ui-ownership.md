@@ -68,7 +68,11 @@ after accepted creation does not retry creation or preserve a misleading unsent
 draft; the sidebar remains the way to open the created Room.
 
 The optional public `entityExecutionContexts` service supplies an explicit
-projectless workspace or the Entity's saved project selector. The task draft
+projectless workspace or the Entity's saved project selector. No selection uses
+the v2 `projectless` operation even if the default Leader has a saved project.
+Explicit selection uses the saved binding through `resolve`; choosing the same
+default Leader therefore remains different from leaving selection empty.
+A missing v2 method stays unavailable and never rewrites the saved binding. The task draft
 retains that resolution during an uncertain retry, then uses the existing
 `room.prepare`/`task.start` and Host create-and-submit chain. No manually entered
 directory or Host checkout fallback is part of the new-Room UX. The existing
@@ -108,7 +112,9 @@ Room components load ordinary CSS alongside their lazy page graph. Their
 styles use the `cx-chatroom-` namespace and Host semantic tokens. Native Vite
 style lifetime and installed generation retirement are different paths; see
 [the dated CSS/build audit](css-and-build-audit.md). The Team page's existing
-inline CSS decision remains a separate surface decision.
+inline CSS decision remains a separate surface decision. The Entity project
+binding styles follow that same Team page lifetime, after its existing page
+stylesheet; importing the editor must not add CSS to plugin activation.
 
 Malva formats maintained CSS through dprint; `npm run lint:css` checks syntax,
 selector complexity and the 1000-line stylesheet limit with Stylelint. Source

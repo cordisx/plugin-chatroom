@@ -463,3 +463,49 @@ test('a bound project reaches task.start as a real project selector and never fa
   assert.deepEqual(unavailable.calls, []);
   assert.equal(unavailable.rooms.size, 0);
 });
+
+test('explicit global intent bypasses a saved project without leaking private mode to task.start', async () => {
+  const configuration = members.map(member => ({
+    ...member,
+    definition: { agentId: member.memberId, revision: 'exact' },
+  }));
+  const calls = [];
+  const contexts = {
+    resolve: async () => {
+      calls.push('resolve');
+      return {
+        status: 'resolved',
+        binding: { kind: 'project', projectId: 'bound' },
+        context: { kind: 'project', projectId: 'bound', cwd: '/project' },
+      };
+    },
+    projectless: async () => {
+      calls.push('projectless');
+      return {
+        status: 'resolved',
+        binding: { kind: 'projectless' },
+        context: { kind: 'directory', cwd: '/private/global' },
+      };
+    },
+  };
+  const global = harness({ configuration, contexts });
+  assert.equal(
+    (await global.drafts.start(undefined, { text: 'hi', to: 'lead-a', projectless: true })).status,
+    'accepted',
+  );
+  const args = global.calls.find(call => call.id === 'task.start').arguments;
+  assert.equal(args.cwd, '/private/global');
+  assert.equal('projectId' in args, false);
+  assert.equal('projectless' in args, false);
+  const selected = harness({ configuration, contexts });
+  assert.equal((await selected.drafts.start(undefined, { text: 'hi', to: 'lead-a' })).status, 'accepted');
+  assert.equal(selected.calls.find(call => call.id === 'task.start').arguments.projectId, 'bound');
+  assert.deepEqual(calls, ['projectless', 'resolve']);
+  const oldHost = harness({ configuration, contexts: { resolve: contexts.resolve } });
+  assert.equal(
+    (await oldHost.drafts.start(undefined, { text: 'hi', to: 'lead-a', projectless: true })).status,
+    'unavailable',
+  );
+  assert.deepEqual(oldHost.calls, []);
+  assert.deepEqual(calls, ['projectless', 'resolve']);
+});
