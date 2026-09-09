@@ -5,8 +5,11 @@ import { build } from 'esbuild';
 // Exercise the production component's handlers and effect cleanup with a bounded
 // hook host. This is component behavior evidence, not native renderer acceptance.
 const hooks = `
+export const notifications = [];
+export function createContext(value) { return {value}; }
+export function useContext() { return { show: options => { notifications.push(options); return { dismiss() {} }; } }; }
 let slots = [], cursor = 0, pending = [];
-export function reset() { slots = []; }
+export function reset() { slots = []; notifications.length = 0; }
 export function begin() { cursor = 0; pending = []; }
 export function finish() { for (const effect of pending) effect(); }
 export function cleanup() { for (const slot of slots) slot?.cleanup?.(); }
@@ -239,7 +242,7 @@ test('only one public command executes while busy; accepted completion clears th
   await settle(ui);
   assert.equal(ui.input().props.value, '');
   assert.equal(ui.input().props.disabled, false);
-  assert.equal(ui.find(node => node.props?.role === 'status').props.children, 'composer.sent');
+  assert.equal(module.hooks.notifications.at(-1).message, 'composer.sent');
 });
 
 test('failed completion retains the draft and retry uses the same public seam', async () => {
@@ -248,7 +251,7 @@ test('failed completion retains the draft and retry uses the same public seam', 
   ui.submit();
   await settle(ui);
   assert.equal(ui.input().props.value, 'retain this');
-  assert.equal(ui.find(node => node.props?.role === 'alert').props.children, 'composer.send-failed');
+  assert.equal(module.hooks.notifications.at(-1).message, 'composer.send-failed');
   ui.props.pageComposer = { execute: async () => ({ status: 'accepted' }) };
   ui.render();
   ui.submit();
@@ -401,7 +404,7 @@ test('a Host UTF16 admission rejection keeps the complete supplementary-characte
   ui.submit();
   await settle(ui);
   assert.equal(ui.input().props.value, draft);
-  assert.equal(ui.find(node => node.props?.role === 'alert').props.children, 'composer.send-failed');
+  assert.equal(module.hooks.notifications.at(-1).message, 'composer.send-failed');
 });
 
 test('uses the public controlled MarkdownEditor and imperative selection contract', () => {

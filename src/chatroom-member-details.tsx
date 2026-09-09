@@ -1,3 +1,4 @@
+import { useNotifications } from './notifications.js';
 import { ChatroomEntitySettings } from './chatroom-entity-settings.js';
 import { useEffect, useState } from 'cordisx/react';
 import { Button, MarkdownViewer } from 'cordisx/ui';
@@ -20,7 +21,7 @@ export function ChatroomMemberDetails({ snapshot, participantId, details, t }: {
   const [entity, setEntity] = useState<EntityRecord>();
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState<string>();
-  const [error, setError] = useState(false);
+  const notifications = useNotifications();
   const room = snapshot.room;
   const member = room?.memberships.find(candidate => candidate.participantId === participantId);
   useEffect(() => {
@@ -54,11 +55,12 @@ export function ChatroomMemberDetails({ snapshot, participantId, details, t }: {
   const open = async (sessionId: typeof sessions[number]['sessionId']) => {
     if (opening !== undefined) return;
     setOpening(sessionId);
-    setError(false);
     try {
-      if (!await details.openSession(room, participantId, sessionId)) setError(true);
+      if (!await details.openSession(room, participantId, sessionId)) {
+        notifications.show({ kind: 'session.open-failed', type: 'error', message: t('identity.session.open-failed') });
+      }
     } catch {
-      setError(true);
+      notifications.show({ kind: 'session.open-failed', type: 'error', message: t('identity.session.open-failed') });
     } finally {
       setOpening(undefined);
     }
@@ -102,7 +104,6 @@ export function ChatroomMemberDetails({ snapshot, participantId, details, t }: {
             ))}
           </ul>
         )}
-        {error && <p role="alert">{t('identity.session.open-failed')}</p>}
       </section>
       {unassignedTasks.length > 0 && (
         <section>

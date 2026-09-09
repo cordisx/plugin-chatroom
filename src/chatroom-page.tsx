@@ -1,3 +1,4 @@
+import { useNotifications } from './notifications.js';
 import { ChatroomLeaderPicker } from './chatroom-new-room.js';
 import {
   type CSSProperties,
@@ -60,13 +61,13 @@ export function ChatroomPage(
 ) {
   const [inspector, setInspector] = useState<Inspector>();
   const [selectedLeader, setSelectedLeader] = useState<string>();
-  const [roomOpenFailed, setRoomOpenFailed] = useState(false);
+
   const root = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLElement>(null);
   const { width, narrow, separatorProps } = useChatroomInspector(root, inspector !== undefined, props.signal);
   const [memberSearch, setMemberSearch] = useState('');
   const [mentionRequest, setMentionRequest] = useState<{ participantId: string; sequence: number; }>();
-  const [actionError, setActionError] = useState(false);
+  const notifications = useNotifications();
   const [busyAction, setBusyAction] = useState<string>();
   const actionPending = useRef(false);
   const actionGeneration = useRef(0);
@@ -95,12 +96,13 @@ export function ChatroomPage(
     if (action.disabled || actionPending.current || props.signal.aborted) return;
     actionPending.current = true;
     setBusyAction(action.id);
-    setActionError(false);
     const generation = actionGeneration.current;
     try {
       await action.run();
     } catch {
-      if (generation === actionGeneration.current && !props.signal.aborted) setActionError(true);
+      if (generation === actionGeneration.current && !props.signal.aborted) {
+        notifications.show({ kind: 'room.action-failed', type: 'error', message: props.t('page.action.failed') });
+      }
     } finally {
       if (generation === actionGeneration.current && !props.signal.aborted) {
         actionPending.current = false;
@@ -113,7 +115,6 @@ export function ChatroomPage(
     setInspector(undefined);
     setMemberSearch('');
     setMentionRequest(undefined);
-    setActionError(false);
     setBusyAction(undefined);
     actionPending.current = false;
     actionGeneration.current += 1;
@@ -280,7 +281,6 @@ export function ChatroomPage(
       </header>
       <main className="cx-chatroom-main">
         <div className="cx-chatroom-conversation" inert={narrow && inspector !== undefined}>
-          {actionError && <div className="cx-chatroom-page__error" role="alert">{props.t('page.action.failed')}</div>}
           {roomId === undefined && details !== undefined
             ? (
               <ChatroomLeaderPicker
@@ -310,13 +310,11 @@ export function ChatroomPage(
               />
             )}
           <div className="cx-chatroom-composer-seat">
-            {roomOpenFailed && <p role="status">{props.t('task.start.open-failed')}</p>}
             <ChatroomComposer
               key={roomId ?? 'new'}
               source={source}
               firstMessage={roomId === undefined && details !== undefined
                 ? async text => {
-                  setRoomOpenFailed(false);
                   const result = await details.startRoom(text, selectedLeader, props.signal);
                   if (props.signal.aborted) return { status: 'unavailable', message: props.t('composer.unavailable') };
                   if (result.status !== 'accepted') {
@@ -336,7 +334,13 @@ export function ChatroomPage(
                   try {
                     await props.navigation.navigate({ id: 'room', params: { roomId: result.roomId } });
                   } catch {
-                    if (!props.signal.aborted) setRoomOpenFailed(true);
+                    if (!props.signal.aborted) {
+                      notifications.show({
+                        kind: 'room.open-failed',
+                        type: 'error',
+                        message: props.t('task.start.open-failed'),
+                      });
+                    }
                   }
                   return { status: 'accepted' };
                 }

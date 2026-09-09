@@ -218,3 +218,7 @@ validation; that does not make them a merged or released dependency.
 ## License
 
 [MIT](LICENSE)
+
+## Notification feedback
+
+See [operation notifications and candidate SDK setup](./.agents/docs/notifications.md).

@@ -199,11 +199,11 @@ test('package pins the exact Protocol and Host revisions with exact manifest byt
   const packageJson = JSON.parse(readFileSync(path.join(repositoryRoot, 'package.json'), 'utf8'));
   assert.equal(
     packageJson.devDependencies['@cordisx/protocol'],
-    'github:cordisx/cordisx-protocol#a39c5d1f61999a69043180d6b7e7bbbee3072c09',
+    'github:cordisx/cordisx-protocol#f3e18c925c34d90fdf203c158811cef10f7ebf57',
   );
   assert.equal(
     packageJson.devDependencies.cordisx,
-    'github:cordisx/cordisx#e0a7d7b6fbd653dcf55b4105d3d193e49443826f',
+    'file:.cache/sdk/cordisx-efbff656d84b.tgz',
   );
   assert.equal(packageJson.main, packageManifest.entry);
   assert.equal(packageManifest.entry, './dist/runtime/chatroom.js');

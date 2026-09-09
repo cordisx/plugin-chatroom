@@ -1,3 +1,4 @@
+import { useNotifications } from './notifications.js';
 import { type KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'cordisx/react';
 import type { CordisXReactPageProps } from 'cordisx/contracts';
 import {
@@ -117,7 +118,7 @@ export function ChatroomComposer(
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [aborted, setAborted] = useState(signal.aborted);
-  const [notice, setNotice] = useState<string>();
+  const notifications = useNotifications();
   const [error, setError] = useState<string>();
   const [query, setQuery] = useState<string>();
   const [activeIndex, setActiveIndex] = useState(0);
@@ -231,7 +232,6 @@ export function ChatroomComposer(
     setSending(true);
     setQuery(undefined);
     setError(undefined);
-    setNotice(undefined);
     try {
       if (firstMessage !== undefined) {
         const result = await firstMessage(submittedDraft);
@@ -252,14 +252,16 @@ export function ChatroomComposer(
         if (!mounted.current || signal.aborted) return;
         const result = source.pageComposerCompletion(completion);
         if (result.status !== 'accepted') {
-          setError(t('composer.send-failed'));
+          notifications.show({ kind: 'message.send-failed', type: 'error', message: t('composer.send-failed') });
           return;
         }
       }
       setDraft(current => current === submittedDraft ? '' : current);
-      setNotice(t('composer.sent'));
+      notifications.show({ kind: 'message.sent', type: 'success', message: t('composer.sent') });
     } catch {
-      if (mounted.current && !signal.aborted) setError(t('composer.send-failed'));
+      if (mounted.current && !signal.aborted) {
+        notifications.show({ kind: 'message.send-failed', type: 'error', message: t('composer.send-failed') });
+      }
     } finally {
       busy.current = false;
       if (mounted.current && !signal.aborted) setSending(false);
@@ -355,7 +357,6 @@ export function ChatroomComposer(
           onValueChange={value => {
             draftRef.current = value;
             setDraft(value);
-            setNotice(undefined);
             setError(undefined);
             updateQuery(value, input.current?.getSelection());
           }}
@@ -414,7 +415,7 @@ export function ChatroomComposer(
         {t(shortcutPolicy === 'enter' ? 'composer.shortcut.enter' : 'composer.shortcut.mod-enter')}
       </p>
       <div id={`${id}-status`} role="status" className="cx-chatroom-input__status">
-        {unavailable ? t('composer.unavailable') : sending ? t('composer.sending') : notice}
+        {unavailable ? t('composer.unavailable') : sending ? t('composer.sending') : undefined}
       </div>
       {error !== undefined && <p role="alert" className="cx-chatroom-input__error">{error}</p>}
     </form>

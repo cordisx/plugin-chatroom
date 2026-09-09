@@ -1,0 +1,50 @@
+{
+  "hostCommit": "efbff656d84b482d51598bc5ba303d24134e0c62",
+  "node": "v24.14.1",
+  "npm": "11.11.0",
+  "sources": [
+    {
+      "location": "node_modules/@cordisx/channel",
+      "spec": "git+ssh://git@github.com/cordisx/plugin-channel.git#4cee12e3a92eeed557bc9de8cc4792710918327a"
+    },
+    {
+      "location": "node_modules/@cordisx/eslint-config",
+      "spec": "git+ssh://git@github.com/cordisx/cordisxmono.git#c63c2e8c2ba7e11502934a52ad2ce3734e804cdc"
+    },
+    {
+      "location": "node_modules/@cordisx/plugin-cli-proxy-api",
+      "spec": "git+ssh://git@github.com/cordisx/plugin-cli-proxy-api.git#1428ee205aab31df2779398cc8491879b303d1d0"
+    },
+    {
+      "location": "node_modules/@cordisx/protocol",
+      "spec": "git+ssh://git@github.com/cordisx/cordisx-protocol.git#f3e18c925c34d90fdf203c158811cef10f7ebf57"
+    }
+  ],
+  "packages": [
+    {
+      "filename": "cordisx-0.1.0-beta.2.tgz",
+      "sha256": "c3ea96b691a8e2e6b52ced3cf1a54fa29830e8b29538112312e036e5d3b5b42a",
+      "integrity": "sha512-f6wHDDz/2+71POc5WEaoiN7xsbHZJMpHob0pxnlH8YCpPAvU2uC8elNHOg7iasuwgry9QrAL5+hEOMRKc0nAgQ=="
+    },
+    {
+      "filename": "cordisx-channel-0.1.0.tgz",
+      "sha256": "ca3fa6283bd5a6af41faf60d936373412246beba047dd652924f5b92060f09e5",
+      "integrity": "sha512-WqKvGxy72WwAUdwoLIHTBCG5/MAwVLKh2VmGK3tdSB+EMSUmuR+lAhxfdt9dYQRQL1Mh3t/w8SdYqps4mO0FkQ=="
+    },
+    {
+      "filename": "cordisx-plugin-cli-proxy-api-0.1.0.tgz",
+      "sha256": "31d23ed0aa49372f2a8b77fcf74e8e80ba0cc8abf19aed8dc06305246f9d7830",
+      "integrity": "sha512-Otc61B3LTLweo0strMzH3XQH5I/P+HXAuFEFN+ynnnfvwscMj5BHovqAz2YS+JvPO79p+3WuCBTnEKh8DN/rkw=="
+    },
+    {
+      "filename": "cordisx-protocol-0.1.0-alpha.0.tgz",
+      "sha256": "04e72b3c58ccb6722a6c56459da1e70c11d0162760eda29bb4846233ea8bb8fe",
+      "integrity": "sha512-o/YzvFs5gkrYsK0vijubLN/go2/oL04sixPz/Ks7N0eMLEHUL7qxD56Yf1ltW5dN9qfBIpgkHuiXgkSgOjj1bw=="
+    },
+    {
+      "filename": "create-cordisx-plugin-0.1.0-beta.2.tgz",
+      "sha256": "3e4d16e315d4a911aabeff3cf6e3b21d64d3d4be7d9b9b07de610443027a5d30",
+      "integrity": "sha512-mdchmWwhZj/C938TpkiaNFjMhTFGzdYeG0bSk5AEhe+NdaoRmP3g0eUhu3DAfsvNNilp+vBbDmT4kWwcH9LwDg=="
+    }
+  ]
+}

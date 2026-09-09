@@ -140,6 +140,7 @@ const message = (key: keyof ChatroomMessages, fallback: string) => ({
 } as const);
 
 export const inject = [
+  'notifications',
   'i18n',
   'commands',
   'pages',
@@ -481,6 +482,7 @@ export async function apply(ctx: Context, config: unknown = {}): Promise<void> {
   const { createLazyChatroomPage } = await import('./chatroom-page-loader.js');
   const pageMount = createLazyChatroomPage(
     pageSource,
+    ctx.notifications,
     product.sidebarImages,
     new ChatroomPageDetails({
       entitySettings: ctx.entitySettingsNavigation,

@@ -1,3 +1,4 @@
+import { useNotifications } from './notifications.js';
 import { useEffect, useRef, useState } from 'cordisx/react';
 import { Button, Icon } from 'cordisx/ui';
 import type { CordisXReactPageProps } from 'cordisx/contracts';
@@ -12,13 +13,12 @@ export function ChatroomEntitySettings({ room, participantId, details, t }: {
 }) {
   const [available, setAvailable] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const notifications = useNotifications();
   const pending = useRef(false);
   const member = room.memberships.find(candidate => candidate.participantId === participantId);
   useEffect(() => {
     let cancelled = false;
     setAvailable(false);
-    setFailed(false);
     void details.entitySettingsAvailable(room, participantId).then(value => {
       if (!cancelled) setAvailable(value);
     }).catch(() => {});
@@ -37,11 +37,16 @@ export function ChatroomEntitySettings({ room, participantId, details, t }: {
           if (pending.current) return;
           pending.current = true;
           setBusy(true);
-          setFailed(false);
           try {
-            if (!await details.openEntitySettings(room, participantId)) setFailed(true);
+            if (!await details.openEntitySettings(room, participantId)) {
+              notifications.show({
+                kind: 'settings.open-failed',
+                type: 'error',
+                message: t('identity.settings.failed'),
+              });
+            }
           } catch {
-            setFailed(true);
+            notifications.show({ kind: 'settings.open-failed', type: 'error', message: t('identity.settings.failed') });
           } finally {
             pending.current = false;
             setBusy(false);
@@ -50,7 +55,6 @@ export function ChatroomEntitySettings({ room, participantId, details, t }: {
       >
         <Icon name="host:settings" aria-hidden="true" />
       </Button>
-      {failed && <p role="alert">{t('identity.settings.failed')}</p>}
     </div>
   );
 }

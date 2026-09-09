@@ -1,3 +1,4 @@
+import { useNotifications } from './notifications.js';
 import { useEffect, useRef, useState } from 'cordisx/react';
 import { Button } from 'cordisx/ui';
 import type { AgentDefinitionIdentity } from '@cordisx/protocol/agents/v1';
@@ -25,6 +26,7 @@ export function EntityProjectBinding({ identity, contexts, t }: {
   readonly contexts?: EntityExecutionContexts;
   readonly t: Translate;
 }) {
+  const notifications = useNotifications();
   const [snapshot, setSnapshot] = useState<EntityExecutionBindingSnapshot>();
   const [projects, setProjects] = useState<readonly HostExecutionProject[]>();
   const [selected, setSelected] = useState('');
@@ -92,7 +94,7 @@ export function EntityProjectBinding({ identity, contexts, t }: {
           const currentEpoch = epoch.current;
           const key = JSON.stringify([identity, snapshot.revision, selected]);
           if (mutation.current !== undefined && mutation.current.key !== key) {
-            setFeedback(t('detail.project-conflict'));
+            notifications.show({ kind: 'project.save', type: 'error', message: t('detail.project-conflict') });
             return;
           }
           mutation.current ??= { key, id: `entity-project.${crypto.randomUUID()}` };
@@ -110,12 +112,20 @@ export function EntityProjectBinding({ identity, contexts, t }: {
             if (result.status === 'applied') {
               mutation.current = undefined;
               setSnapshot(result);
-              setFeedback(t('detail.project-saved'));
-            } else {setFeedback(
-                t(result.status === 'conflict' ? 'detail.project-conflict' : 'detail.project-unavailable'),
-              );}
+              notifications.show({ kind: 'project.save', type: 'success', message: t('detail.project-saved') });
+            } else {notifications.show({
+                kind: 'project.save',
+                type: 'error',
+                message: t(result.status === 'conflict' ? 'detail.project-conflict' : 'detail.project-unavailable'),
+              });}
           } catch {
-            if (mounted.current && epoch.current === currentEpoch) setFeedback(t('detail.project-unavailable'));
+            if (mounted.current && epoch.current === currentEpoch) {
+              notifications.show({
+                kind: 'project.save',
+                type: 'error',
+                message: t('detail.project-unavailable'),
+              });
+            }
           } finally {
             if (epoch.current === currentEpoch) {
               pending.current = false;
@@ -127,7 +137,6 @@ export function EntityProjectBinding({ identity, contexts, t }: {
         {t('detail.project-save')}
       </Button>
       <p className="cx-chatroom-entity-project__note">{t('detail.project-future-only')}</p>
-      {feedback && <p role="status">{feedback}</p>}
     </div>
   );
 }

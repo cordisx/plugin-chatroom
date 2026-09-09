@@ -1,3 +1,4 @@
+import { useNotifications } from './notifications.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'cordisx/react';
 import { EmptyState } from 'cordisx/ui';
 import type { CordisXReactPageProps } from 'cordisx/contracts';
@@ -52,8 +53,7 @@ export function ChatroomTimeline(
   const region = useRef<HTMLDivElement>(null);
   const menuElement = useRef<HTMLDivElement>(null);
   const [actions, setActions] = useState<TimelineActions>();
-  const [copyStatus, setCopyStatus] = useState<'copied' | 'copy-failed'>();
-  const [actionFailed, setActionFailed] = useState(false);
+  const notifications = useNotifications();
   const [runningActions, setRunningActions] = useState<ReadonlySet<string>>(() => new Set());
   const actionPending = useRef(new Set<string>());
   const copying = useRef(false);
@@ -105,12 +105,13 @@ export function ChatroomTimeline(
     if (actionPending.current.has(key)) return;
     actionPending.current.add(key);
     setRunningActions(new Set(actionPending.current));
-    setActionFailed(false);
     setActions(undefined);
     try {
       await source.executeMessageAction(roomId, itemId, actionId);
     } catch {
-      if (mounted.current) setActionFailed(true);
+      if (mounted.current) {
+        notifications.show({ kind: 'timeline.action-failed', type: 'error', message: t('timeline.action-failed') });
+      }
     } finally {
       actionPending.current.delete(key);
       if (mounted.current) setRunningActions(new Set(actionPending.current));
@@ -138,17 +139,20 @@ export function ChatroomTimeline(
     const write = copyText
       ?? (typeof clipboard?.writeText === 'function' ? (value: string) => clipboard.writeText(value) : undefined);
     if (write === undefined) {
-      setCopyStatus('copy-failed');
+      notifications.show({ kind: 'timeline.copy', type: 'error', message: t('timeline.copy-failed') });
       return;
     }
     copying.current = true;
-    setCopyStatus(undefined);
     closeActions(true);
     try {
       await write(text);
-      if (mounted.current) setCopyStatus('copied');
+      if (mounted.current) {
+        notifications.show({ kind: 'timeline.copy', type: 'success', message: t('timeline.copied') });
+      }
     } catch {
-      if (mounted.current) setCopyStatus('copy-failed');
+      if (mounted.current) {
+        notifications.show({ kind: 'timeline.copy', type: 'error', message: t('timeline.copy-failed') });
+      }
     } finally {
       copying.current = false;
     }
@@ -291,10 +295,6 @@ export function ChatroomTimeline(
           )}
         </div>
       )}
-      {copyStatus !== undefined && (
-        <div className="cx-chatroom-timeline__feedback" role="status">{t(`timeline.${copyStatus}`)}</div>
-      )}
-      {actionFailed && <div className="cx-chatroom-timeline__feedback" role="alert">{t('timeline.action-failed')}</div>}
       <section
         ref={viewport}
         className="cx-chatroom-timeline"

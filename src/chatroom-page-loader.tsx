@@ -1,5 +1,6 @@
 import { type ComponentType, defineReactPage, lazy, Suspense } from 'cordisx/react';
-import type { CordisXReactPageProps } from 'cordisx/contracts';
+import { NotificationsContext } from './notifications.js';
+import type { CordisXReactPageProps, NotificationsV1 } from 'cordisx/contracts';
 
 import type { ChatroomPageSource } from './chatroom-page-source.js';
 import type { ChatroomPageDetails } from './chatroom-page-details.js';
@@ -25,6 +26,7 @@ export const createChatroomPageModuleLoader = (
 /** Registration stays light; the page graph starts loading only on an actual mount. */
 export function createLazyChatroomPage(
   source: ChatroomPageSource,
+  notifications: NotificationsV1,
   imageCache: ChatroomSidebarImageCache,
   details?: ChatroomPageDetails,
 ) {
@@ -35,8 +37,10 @@ export function createLazyChatroomPage(
     default: (await loadChatroomPageModule()).ChatroomPage,
   }));
   return defineReactPage(props => (
-    <Suspense fallback={null}>
-      <LazyChatroomPage {...props} source={source} imageCache={imageCache} details={details} />
-    </Suspense>
+    <NotificationsContext.Provider value={notifications}>
+      <Suspense fallback={null}>
+        <LazyChatroomPage {...props} source={source} imageCache={imageCache} details={details} />
+      </Suspense>
+    </NotificationsContext.Provider>
   ));
 }

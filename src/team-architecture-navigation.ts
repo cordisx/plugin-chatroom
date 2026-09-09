@@ -1,3 +1,4 @@
+import type { NotificationsV1 } from 'cordisx/contracts';
 import {
   CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V1,
   CORDISX_MANAGER_CONTENT_NAVIGATION_SCHEMA_V2,
@@ -590,6 +591,7 @@ export const TEAM_ARCHITECTURE_LOCALES: readonly CordisXLocaleCatalog<TeamArchit
 ]);
 
 export interface TeamArchitectureRegistrationContext {
+  readonly notifications: NotificationsV1;
   readonly i18n: CordisXI18n;
   readonly pages: CordisXPages;
   readonly routes: CordisXRoutes;
@@ -612,6 +614,7 @@ export function registerTeamArchitectureManagerContributions(
     disposers.push(...TEAM_ARCHITECTURE_LOCALES.map(catalog => context.i18n.define(catalog)));
     const pageMount = createTeamArchitecturePage(
       source,
+      context.notifications,
       TEAM_ARCHITECTURE_DETAIL_ROUTE_IDS,
       context.i18n.seat<TeamArchitectureMessages>(TEAM_ARCHITECTURE_LOCALE_NAMESPACE),
     );
