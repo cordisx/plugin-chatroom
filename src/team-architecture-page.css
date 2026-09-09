@@ -169,6 +169,7 @@
 }
 
 .cx-team-architecture__node-seat[data-has-children="true"]::after {
+  pointer-events: none;
   position: absolute;
   top: 36px;
   left: 50%;
