@@ -54,13 +54,36 @@ old button to another definition. Room header actions reuse the sidebar's
 owner command definitions. Copy link uses the public Host route resolver;
 Chatroom does not manufacture a canonical URL. Deletion requires confirmation.
 
-The explicit new-task form calls the existing `room.prepare` and `task.start`
-commands. It requires a Room Leader, task text and an absolute working directory
-before preparing any Room. Form idempotency is ephemeral; durable task facts
-stay in the Room document. An unknown result retains the operation and payload.
-Only a rejection known to precede task creation permits an edited request, and
-an already prepared Room is reused. This does not mutate existing Sessions or
-infer their workspace. Ordinary sending still uses page composer admission.
+The new Room page shows the actual configured Leader avatars above the normal
+composer. Selection is optional: no selected avatar means the configured
+default global Leader (`chatroom.generalist`). Selecting an avatar targets that
+exact configured identity; selecting it again returns to the default state.
+There is no joining wizard, separate task dialog or mandatory directory field.
+Existing Rooms keep their normal composer and their original Session bindings.
+
+First messages enter the existing Room preparation/task-start orchestrator,
+which may call one Host create-and-submit after valid context is available.
+Uncertain submissions retain their operation and payload. A navigation failure
+after accepted creation does not retry creation or preserve a misleading unsent
+draft; the sidebar remains the way to open the created Room.
+
+The optional public `entityExecutionContexts` service supplies an explicit
+projectless workspace or the Entity's saved project selector. No selection uses
+the v2 `projectless` operation even if the default Leader has a saved project.
+Explicit selection uses the saved binding through `resolve`; choosing the same
+default Leader therefore remains different from leaving selection empty.
+A missing v2 method stays unavailable and never rewrites the saved binding. The task draft
+retains that resolution during an uncertain retry, then uses the existing
+`room.prepare`/`task.start` and Host create-and-submit chain. No manually entered
+directory or Host checkout fallback is part of the new-Room UX. The existing
+member overview can change a future task's default using real Host projects and
+a revision-checked Entity binding; no project or Session is created by that edit.
+
+The first human message is displayed from the exact accepted task's Session and
+first MessageId association. It shows the user's original text, not the private
+assignment wrapper. It remains a projection of real SessionEvents and cannot
+match a different message by text or infer another Session. Native acceptance
+and the optional service's Host availability remain separate gates.
 
 The composer uses the public controlled Markdown editor for text editing,
 syntax highlighting, selection, theme and six-line sizing. Chatroom owns its
@@ -69,11 +92,29 @@ not query or style the editor's private descendants.
 
 ## Styles and delivery
 
+The migration preserves the established compact Room shape: a single 68px
+header with icon actions, a centered 780px message/composer column, 40px message
+avatars aligned with their bubbles, and a 360px resizable details pane. The
+compact composer keeps add/editor/send in one row; typing `@` opens member
+selection, and the expanded editor retains its explicit member control. The
+keyboard hint remains an accessible description without adding a permanent
+visual row. Agent timestamps share the author row; human timestamps sit above the bubble's
+trailing corner. Timestamps are hidden until hover/focus. Separate action
+bars sit beside the bubble (Agent trailing side, human leading side), align to
+its bottom edge and retain a pointer bridge across the 6px gap. Direct actions,
+copy and overflow stay separate from the right-click member/message menu; none
+adds a row to the bubble.
+Header, bubble and composer colors consume Host theme tokens. The generic
+body-only Host React seat owns zero outer padding; plugin CSS must not override
+that Host node to compensate for a mount defect.
+
 Room components load ordinary CSS alongside their lazy page graph. Their
 styles use the `cx-chatroom-` namespace and Host semantic tokens. Native Vite
 style lifetime and installed generation retirement are different paths; see
 [the dated CSS/build audit](css-and-build-audit.md). The Team page's existing
-inline CSS decision remains a separate surface decision.
+inline CSS decision remains a separate surface decision. The Entity project
+binding styles follow that same Team page lifetime, after its existing page
+stylesheet; importing the editor must not add CSS to plugin activation.
 
 Malva formats maintained CSS through dprint; `npm run lint:css` checks syntax,
 selector complexity and the 1000-line stylesheet limit with Stylelint. Source

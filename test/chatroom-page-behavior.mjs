@@ -1,84 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import ts from 'typescript';
+import { all, byClass, componentHarness } from './helpers/component-hook-harness.mjs';
 
-// Deterministic hook/element harness: executes the production handlers and
-// lifecycle effects without claiming browser layout or native acceptance.
-async function componentHarness(file, dependencies = {}) {
-  if (file === 'chatroom-timeline.tsx' && dependencies['./chatroom-timeline-entries.js'] === undefined) {
-    dependencies['./chatroom-timeline-entries.js'] = (await componentHarness('chatroom-timeline-entries.tsx')).exports;
-  }
-  const state = [];
-  const effects = [];
-  let index = 0;
-  const hook = initial => {
-    const key = index++;
-    if (!(key in state)) state[key] = typeof initial === 'function' ? initial() : initial;
-    return [state[key], value => {
-      state[key] = typeof value === 'function' ? value(state[key]) : value;
-    }];
-  };
-  const effect = (run, deps) => {
-    const key = index++;
-    const previous = state[key];
-    if (previous === undefined || deps.some((value, i) => !Object.is(value, previous.deps[i]))) {
-      effects.push(() => {
-        previous?.cleanup?.();
-        state[key] = { deps, cleanup: run() };
-      });
-    }
-  };
-  const react = {
-    useState: hook,
-    useRef: value => hook({ current: value })[0],
-    useEffect: effect,
-    useLayoutEffect: effect,
-    useCallback: fn => fn,
-    useMemo: fn => fn(),
-    useId: () => 'inspector',
-    useSyncExternalStore: (_subscribe, snapshot) => snapshot(),
-  };
-  const jsx = (type, props, key) => ({ type, props: props ?? {}, key });
-  const exports = {};
-  const source = await readFile(new URL(`../src/${file}`, import.meta.url), 'utf8');
-  const output = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, jsxImportSource: 'cordisx/react' },
-    fileName: file,
-  }).outputText;
-  const require = name => {
-    if (name === './chatroom-room-actions.js') return { ChatroomRoomActions: 'RoomActions' };
-    if (name === './chatroom-message-body.js') return { ChatroomMessageBody: 'MessageBody' };
-    if (name === 'cordisx/react') return react;
-    if (name === './chatroom-inspector.js') {
-      return dependencies[name] ?? { useChatroomInspector: () => ({ width: 360, narrow: false, separatorProps: {} }) };
-    }
-    if (name === 'cordisx/react/jsx-runtime') return { jsx, jsxs: jsx };
-    if (name === 'cordisx/ui') return { Button: 'Button', EmptyState: 'EmptyState', MarkdownViewer: 'MarkdownViewer' };
-    return dependencies[name] ?? {};
-  };
-  new Function('require', 'exports', output)(require, exports);
-  return {
-    exports,
-    render: (Component, props) => {
-      index = 0;
-      return Component(props);
-    },
-    flush: () => {
-      for (const run of effects.splice(0)) run();
-    },
-    unmount: () => {
-      for (const value of state) value?.cleanup?.();
-    },
-  };
-}
-
-function all(tree, predicate) {
-  if (!tree || typeof tree !== 'object') return [];
-  if (Array.isArray(tree)) return tree.flatMap(child => all(child, predicate));
-  return [...(predicate(tree) ? [tree] : []), ...all(tree.props?.children, predicate)];
-}
-const byClass = (tree, name) => all(tree, node => node.props?.className === name)[0];
 const t = key => key;
 
 test('timeline preserves history reading, resumes at the end, follows delayed layout and resets for a new room', async () => {
@@ -192,7 +115,7 @@ test('page opens details without active runs, filters members, returns and sends
     navigation: { navigate: async target => navigations.push(target) },
     params: { roomId: 'room' },
     t,
-    details: {},
+    details: { newRoomLeaders: () => [] },
     signal: new AbortController().signal,
     imageCache: { begin: () => undefined },
     source: { subscribe: () => () => {}, getSnapshot: () => snapshot, hydrate: async () => {} },
@@ -205,7 +128,7 @@ test('page opens details without active runs, filters members, returns and sends
   let tree = render();
   await all(tree, node => node.type === 'RoomActions')[0].props.onDeleted();
   assert.deepEqual(navigations, [{ id: 'new-room' }]);
-  all(tree, node => node.props?.children === 'room.settings')[0].props.onClick();
+  all(tree, node => node.props?.['aria-label'] === 'room.settings')[0].props.onClick();
   tree = render();
   all(tree, node => node.type === 'RoomSettings')[0].props.onSaved();
   tree = render();
@@ -447,7 +370,7 @@ test('timeline menus offer detail/mention, keyboard dismissal and write-only cop
     return element.type(element.props);
   };
   const open = () => {
-    byClass(message(), 'cx-chatroom-message__actions').props.onClick({
+    message().props.onContextMenu({
       currentTarget: trigger,
       clientX: 490,
       clientY: 490,
@@ -485,6 +408,9 @@ test('timeline menus offer detail/mention, keyboard dismissal and write-only cop
   assert.equal(byClass(tree, 'cx-chatroom-timeline__feedback').props.children, 'timeline.copied');
   byClass(message(), 'cx-chatroom-message__time').props.onClick({ currentTarget: trigger });
   assert.deepEqual(copies.at(-1), item.timestamp);
+  await new Promise(resolve => setImmediate(resolve));
+  byClass(message(), 'cx-chatroom-message__copy').props.onClick({ currentTarget: trigger });
+  assert.deepEqual(copies.at(-1), '**exact text**');
 });
 
 test('timeline copying is honestly disabled when absent and reports browser permission rejection', async () => {
@@ -616,6 +542,8 @@ test('message actions preserve order, current execution, disabled reasons and du
   });
   tree = render();
   const menu = byClass(tree, 'cx-chatroom-timeline__menu');
+  assert.equal(all(menu, node => node.props?.children === 'timeline.copy-message').length, 0);
+  assert.equal(all(menu, node => node.props?.children === 'timeline.view-member').length, 0);
   const overflow = all(menu, node => node.props?.role === 'menuitem')
     .filter(button => ['Third', 'Disabled'].includes(button.props.children));
   assert.deepEqual(overflow.map(button => button.props.children), ['Third', 'Disabled']);
@@ -634,14 +562,19 @@ test('narrow inspector contains keyboard focus, makes the header inert and respe
     './chatroom-inspector.js': { useChatroomInspector: () => ({ width: 360, narrow: true, separatorProps: {} }) },
   });
   const props = {
-    params: {},
+    params: { roomId: 'existing-room' },
     t,
     signal: new AbortController().signal,
-    imageCache: {},
-    details: {},
+    imageCache: { begin: () => undefined },
+    details: { newRoomLeaders: () => [] },
     source: {
       subscribe: () => () => {},
-      getSnapshot: () => ({ participants: [], items: [], activeRuns: [] }),
+      getSnapshot: () => ({
+        room: { id: 'existing-room', title: 'Existing', memberships: [] },
+        participants: [],
+        items: [],
+        activeRuns: [],
+      }),
       hydrate: async () => {},
     },
   };
@@ -801,32 +734,64 @@ test('approval body copy, diagnostics, mention, individual decision availability
   harness.unmount();
 });
 
-test('new task entry distinguishes accepted creation from navigation failure', async () => {
-  const harness = await componentHarness('chatroom-new-task-entry.tsx', {
-    './chatroom-new-task.js': { ChatroomNewTask: 'NewTask' },
+test('new Room uses the normal composer with an optional Leader selection, never a task form', async () => {
+  const harness = await componentHarness('chatroom-page.tsx', {
+    './avatar-fingerprint.js': { roomAvatarFingerprint: () => '' },
+    './chatroom-timeline.js': { ChatroomTimeline: 'Timeline' },
+    './chatroom-composer.js': { ChatroomComposer: 'Composer' },
+    './chatroom-new-room.js': { ChatroomLeaderPicker: 'LeaderPicker' },
   });
   const calls = [];
   const props = {
+    params: {},
     t,
-    details: {
-      taskLeaders: () => [{ memberId: 'lead', label: 'Leader' }],
-      startTask: async (roomId, input) => {
-        calls.push([roomId, input]);
-        return { status: 'accepted', roomId: 'created-room' };
-      },
+    signal: new AbortController().signal,
+    imageCache: {},
+    navigation: { navigate: async value => calls.push(['navigate', value]) },
+    source: {
+      subscribe: () => () => {},
+      hydrate: async () => {},
+      getSnapshot: () => ({ participants: [], items: [], activeRuns: [] }),
     },
-    navigation: {
-      navigate: async () => {
-        throw new Error('route unavailable');
+    details: {
+      newRoomLeaders: () => [{ memberId: 'configured-leader', name: 'Leader' }],
+      startRoom: async (text, selected) => {
+        calls.push([text, selected]);
+        return { status: 'unavailable', code: 'failed', reason: 'context-required' };
       },
     },
   };
-  const input = { text: 'Task', to: 'lead', cwd: '/project' };
-  let tree = harness.render(harness.exports.ChatroomNewTaskEntry, props);
-  assert.deepEqual(await all(tree, node => node.type === 'NewTask')[0].props.onStart(input), { status: 'accepted' });
-  tree = harness.render(harness.exports.ChatroomNewTaskEntry, props);
-  assert.deepEqual(calls, [[undefined, input]]);
-  assert.equal(all(tree, node => node.props.role === 'status')[0].props.children, 'task.start.open-failed');
+  const render = () => {
+    const tree = harness.render(harness.exports.ChatroomPage, props);
+    harness.flush();
+    return tree;
+  };
+  let tree = render();
+  assert.equal(all(tree, node => node.type === 'dialog').length, 0);
+  assert.equal(all(tree, node => node.type === 'LeaderPicker')[0].props.selected, undefined);
+  let composer = all(tree, node => node.type === 'Composer')[0];
+  assert.deepEqual(await composer.props.firstMessage('hello'), {
+    status: 'unavailable',
+    message: 'new-room.context-required',
+  });
+  assert.deepEqual(calls, [['hello', undefined]]);
+  all(tree, node => node.type === 'LeaderPicker')[0].props.onSelect('configured-leader');
+  tree = render();
+  composer = all(tree, node => node.type === 'Composer')[0];
+  await composer.props.firstMessage('selected');
+  assert.deepEqual(calls.at(-1), ['selected', 'configured-leader']);
+  all(tree, node => node.type === 'LeaderPicker')[0].props.onSelect(undefined);
+  tree = render();
+  assert.equal(all(tree, node => node.type === 'LeaderPicker')[0].props.selected, undefined);
+  props.details.startRoom = async () => ({ status: 'accepted', roomId: 'created' });
+  props.navigation.navigate = async () => {
+    throw new Error('navigation failed after task acceptance');
+  };
+  tree = render();
+  assert.deepEqual(await all(tree, node => node.type === 'Composer')[0].props.firstMessage('accepted'), {
+    status: 'accepted',
+  });
+  assert.equal(all(render(), node => node.props?.role === 'status')[0].props.children, 'task.start.open-failed');
 });
 
 test('Room settings rejects backend-invalid names, prevents duplicate save and closes only on success', async () => {

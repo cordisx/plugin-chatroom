@@ -1,3 +1,4 @@
+import { EntityProjectBinding } from './entity-project-binding.js';
 import {
   Fragment,
   type KeyboardEvent,
@@ -38,6 +39,7 @@ import {
 } from './team-entity-view-model.js';
 import type { TeamArchitectureMessages } from './team-architecture-messages.js';
 import teamArchitectureCss from './team-architecture-page.css?inline';
+import entityProjectCss from './entity-project-binding.css?inline';
 
 export type { TeamArchitectureMessages } from './team-architecture-messages.js';
 
@@ -634,6 +636,7 @@ function EntityDetail({ entity, entities, tab, source, onSelect, t }: {
             <code>{entity.definitionIdentity.revision}</code>
           </Fact>
         </dl>
+        <EntityProjectBinding identity={entity.definitionIdentity} contexts={source.executionContexts} t={t} />
       </section>
     );
   } else if (tab === 'prompts') {
@@ -894,6 +897,7 @@ function TeamArchitecturePage({ source, detailRouteIds, routeId, params, navigat
   return (
     <Fragment>
       <style data-chatroom-team-architecture-styles="v1">{teamArchitectureCss}</style>
+      <style data-chatroom-entity-project-styles="v1">{entityProjectCss}</style>
       {content}
     </Fragment>
   );

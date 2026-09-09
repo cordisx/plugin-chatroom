@@ -6,12 +6,12 @@
   min-width: 0;
   gap: 6px;
   margin: 0;
-  padding: 8px;
+  padding: 6px 8px;
   color: var(--cx-text, CanvasText);
-  background: var(--cx-surface, Canvas);
+  background: var(--cx-surface-raised, Canvas);
   border: 1px solid
     var(--cx-border, color-mix(in srgb, currentcolor 15%, transparent));
-  border-radius: 16px;
+  border-radius: 18px;
   line-height: 1.5;
 }
 .cx-chatroom-input__editor {
@@ -172,4 +172,22 @@
   .cx-chatroom-input__hint {
     font-size: 11px;
   }
+}
+
+.cx-chatroom-input__hint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.cx-chatroom-input__submit {
+  border-radius: 50%;
+}
+
+/* The compact bar keeps the accepted add/editor/send shape. Typing @ still
+   opens mentions; the expanded editor also retains its explicit member button. */
+.cx-chatroom-input[data-layout="compact"] .cx-chatroom-input__mention {
+  display: none;
 }

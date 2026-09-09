@@ -1,5 +1,5 @@
 import type { EntitySettingsNavigationService } from '@cordisx/protocol/entity-settings-navigation/v1';
-import type { ChatroomTaskDraftInput, ChatroomTaskDrafts } from './chatroom-task-draft.js';
+import type { ChatroomNewRooms } from './chatroom-new-room-model.js';
 import type { CordisXCommands } from 'cordisx/contracts';
 import type { EntityRegistry } from '@cordisx/protocol/entities/v1';
 import type {
@@ -25,7 +25,7 @@ export interface ChatroomPageDetailServices {
   readonly navigation: AgentDetailNavigationService | HistoricalNavigation;
   readonly rooms: DurableChatroomRoomStore;
   readonly commands?: Pick<CordisXCommands, 'execute'>;
-  readonly tasks?: ChatroomTaskDrafts;
+  readonly newRooms?: ChatroomNewRooms;
   readonly roomLink?: (roomId: string) => Promise<string | undefined>;
 }
 
@@ -106,14 +106,14 @@ export class ChatroomPageDetails {
       && (await this.services.entitySettings.open({ identity: member.definition })).status === 'accepted';
   }
 
-  taskLeaders(roomId?: string) {
-    return this.services.tasks?.leaders(roomId) ?? [];
+  newRoomLeaders() {
+    return this.services.newRooms?.leaders ?? [];
   }
 
-  async startTask(roomId: string | undefined, input: ChatroomTaskDraftInput) {
-    return this.services.tasks === undefined
-      ? { status: 'unavailable' as const, code: 'failed' as const }
-      : await this.services.tasks.start(roomId, input);
+  async startRoom(text: string, selectedMemberId?: string, signal?: AbortSignal) {
+    return this.services.newRooms === undefined
+      ? { status: 'unavailable' as const, code: 'leader-unavailable' as const }
+      : await this.services.newRooms.start(text, selectedMemberId, signal);
   }
 
   get canResolveRoomLink(): boolean {

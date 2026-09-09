@@ -1,5 +1,5 @@
 import { type KeyboardEvent, type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from 'cordisx/react';
-import { Button } from 'cordisx/ui';
+import { Button, Icon } from 'cordisx/ui';
 import type { CordisXReactPageProps } from 'cordisx/contracts';
 import { ChatroomAvatar } from './avatar.js';
 import { ChatroomMessageBody } from './chatroom-message-body.js';
@@ -51,6 +51,8 @@ export function MessageItem(
     onCopy,
     copyAvailable,
     runtimeRunning = false,
+    actionsOpen = false,
+    locale,
     previous,
     next,
     onMentionParticipant,
@@ -66,10 +68,13 @@ export function MessageItem(
       event: ActionEvent,
       text?: string,
       item?: Extract<ChatroomPageItem, { readonly kind: 'message'; }>,
+      mode?: 'more',
     ) => void;
     readonly onCopy: (text: string, trigger: HTMLElement) => void;
     readonly copyAvailable: boolean;
     readonly runtimeRunning?: boolean;
+    readonly actionsOpen?: boolean;
+    readonly locale?: string;
     readonly previous?: ChatroomPageItem;
     readonly next?: ChatroomPageItem;
     readonly onMentionParticipant?: (participantId: string) => void;
@@ -90,7 +95,7 @@ export function MessageItem(
   };
   const groupStart = !sameAgent(previous);
   const groupEnd = !sameAgent(next);
-  const fullTime = new Date(item.timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'long' });
+  const fullTime = new Date(item.timestamp).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'long' });
   const messageState = runtimeRunning ? t('timeline.run.running') : item.runState === 'stopped'
     ? t('timeline.run.stopped')
     : item.runState === 'failed'
@@ -99,10 +104,25 @@ export function MessageItem(
     ? t('timeline.delivery.pending')
     : undefined;
 
+  const timestamp = (
+    <button
+      type="button"
+      className="cx-chatroom-message__time"
+      disabled={!copyAvailable}
+      aria-label={`${t('timeline.copy-time')}: ${fullTime}`}
+      title={copyAvailable ? fullTime : t('timeline.copy-unavailable')}
+      onClick={event => onCopy(item.timestamp, event.currentTarget)}
+    >
+      <time dateTime={item.timestamp}>
+        {new Date(item.timestamp).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+      </time>
+    </button>
+  );
   return (
     <article
       className="cx-chatroom-message"
       tabIndex={0}
+      data-actions-open={actionsOpen}
       data-group-start={groupStart}
       data-group-end={groupEnd}
       aria-label={`${author}, ${fullTime}`}
@@ -135,72 +155,79 @@ export function MessageItem(
         )
         : <span className="cx-chatroom-message__avatar-placeholder" aria-hidden="true" />)}
       <div className="cx-chatroom-message__content">
-        {!human && groupStart && (item.author.role === 'agent' && onMentionParticipant !== undefined
-          ? (
+        {!human && (
+          <div className="cx-chatroom-message__meta">
+            {groupStart && (item.author.role === 'agent' && onMentionParticipant !== undefined
+              ? (
+                <button
+                  type="button"
+                  className="cx-chatroom-message__author"
+                  aria-label={t('members.mention', { name: author })}
+                  onClick={() => onMentionParticipant(item.author.participantId)}
+                >
+                  {author}
+                </button>
+              )
+              : <div className="cx-chatroom-message__author">{author}</div>)}
+            {timestamp}
+          </div>
+        )}
+        <div className="cx-chatroom-message__anchor">
+          {human && timestamp}
+          <div className="cx-chatroom-message__bubble">
+            <ChatroomMessageBody
+              source={body}
+              label={author}
+              participants={participants}
+              onParticipantClick={onParticipantClick}
+            />
+            {item.deliveryState === 'failed' && <span role="status">{t('timeline.delivery.failed')}</span>}
+            {messageState !== undefined && <span role="status">{messageState}</span>}
+          </div>
+          <div className="cx-chatroom-message__toolbar" role="toolbar" aria-label={t('timeline.actions')}>
+            {messageActions.slice(0, 2).map(action => {
+              const running = isActionRunning(item.itemId, action.id);
+              const label = display(action.label, t);
+              const reason = action.disabled.reason === undefined ? undefined : display(action.disabled.reason, t);
+              return (
+                <button
+                  key={action.id}
+                  type="button"
+                  className="cx-chatroom-message__command"
+                  disabled={action.disabled.value || running}
+                  aria-busy={running}
+                  aria-label={reason === undefined ? label : `${label}: ${reason}`}
+                  title={reason}
+                  onClick={event => {
+                    event.stopPropagation();
+                    onRunAction(item.itemId, action.id);
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
             <button
               type="button"
-              className="cx-chatroom-message__author"
-              aria-label={t('members.mention', { name: author })}
-              onClick={() => onMentionParticipant(item.author.participantId)}
+              className="cx-chatroom-message__copy"
+              aria-label={t('timeline.copy-message')}
+              title={t('timeline.copy-message')}
+              disabled={!copyAvailable}
+              onClick={event => onCopy(body, event.currentTarget)}
             >
-              {author}
+              <Icon name="host:files" aria-hidden="true" />
             </button>
-          )
-          : <div className="cx-chatroom-message__author">{author}</div>)}
-        <div className="cx-chatroom-message__bubble">
-          <ChatroomMessageBody
-            source={body}
-            label={author}
-            participants={participants}
-            onParticipantClick={onParticipantClick}
-          />
-        </div>
-        <div className="cx-chatroom-message__meta">
-          <button
-            type="button"
-            className="cx-chatroom-message__time"
-            disabled={!copyAvailable}
-            aria-label={`${t('timeline.copy-time')}: ${fullTime}`}
-            title={copyAvailable ? fullTime : t('timeline.copy-unavailable')}
-            onClick={event => onCopy(item.timestamp, event.currentTarget)}
-          >
-            <time dateTime={item.timestamp}>
-              {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </time>
-          </button>
-          {messageActions.slice(0, 2).map(action => {
-            const running = isActionRunning(item.itemId, action.id);
-            const label = display(action.label, t);
-            const reason = action.disabled.reason === undefined ? undefined : display(action.disabled.reason, t);
-            return (
-              <button
-                key={action.id}
-                type="button"
-                className="cx-chatroom-message__command"
-                disabled={action.disabled.value || running}
-                aria-busy={running}
-                aria-label={reason === undefined ? label : `${label}: ${reason}`}
-                title={reason}
-                onClick={event => {
-                  event.stopPropagation();
-                  onRunAction(item.itemId, action.id);
-                }}
-              >
-                {label}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            className="cx-chatroom-message__actions"
-            aria-label={t('timeline.actions')}
-            aria-haspopup="menu"
-            onClick={event => onOpenActions(participant, event, body, item)}
-          >
-            ⋯
-          </button>
-          {item.deliveryState === 'failed' && <span>{t('timeline.delivery.failed')}</span>}
-          {messageState !== undefined && <span role="status">{messageState}</span>}
+            <button
+              type="button"
+              className="cx-chatroom-message__actions"
+              aria-label={t('timeline.more-actions')}
+              aria-haspopup="menu"
+              aria-expanded={actionsOpen}
+              onClick={event => onOpenActions(participant, event, body, item, 'more')}
+            >
+              ⋯
+            </button>
+          </div>
         </div>
         {item.reactions.length === 0
           ? null

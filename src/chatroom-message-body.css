@@ -1,7 +1,8 @@
 .cx-chatroom-markdown {
   min-width: 0;
   overflow-wrap: anywhere;
-  line-height: 1.55;
+  font-size: 14px;
+  line-height: 18px;
 }
 .cx-chatroom-markdown > :first-child {
   margin-top: 0;

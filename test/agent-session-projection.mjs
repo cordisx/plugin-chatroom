@@ -1,3 +1,5 @@
+import { DurableChatroomRoomStore } from '../dist/room-store.js';
+import { ChatroomTaskHandler } from '../dist/room-task-handler.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -713,4 +715,57 @@ test('CLI collaboration run keeps ordinary assistant transcript out of the Room 
     },
   })]));
   assert.equal(projected.items.length, 0);
+});
+
+test('a first chat message projects the exact accepted task message once without exposing the assignment wrapper', async () => {
+  const room = createRoom({
+    id: 'new-chat',
+    title: 'hello',
+    participants: [{ id: 'user', name: 'You', kind: 'human' }],
+  });
+  const store = DurableChatroomRoomStore.memory([room]);
+  let taskRequest;
+  const handler = new ChatroomTaskHandler(store, {
+    createAndSubmit: async request => {
+      taskRequest = request;
+      return {
+        status: 'accepted',
+        disposition: 'created',
+        operationId: request.operationId,
+        task: {
+          sessionId,
+          messageId: 'first-user-input',
+          context: { cwd: '/managed/no-project' },
+          detail: { kind: 'host', ref: 'opaque' },
+        },
+      };
+    },
+  });
+  await handler.start({
+    action: 'start',
+    operationId: 'first-chat',
+    roomId: room.id,
+    to: 'leader',
+    text: 'hello',
+    cwd: '/managed/no-project',
+  });
+  const saved = store.rooms.get(room.id);
+  const run = saved.runs.find(run => run.delegation);
+  let sequence = 0;
+  const projector = new ChatroomAgentSessionProjector(saved, run, sessionId, () => ++sequence);
+  const message = event(1, 'user/message', {
+    id: 'first-user-input',
+    role: 'user',
+    content: [{ type: 'text', text: taskRequest.text }],
+    source: { kind: 'plugin', pluginId: 'chatroom', generation: 1 },
+  });
+  projector.project(page('replay', [message]));
+  projector.project(page('replay', [message]));
+  const messages = projector.snapshotItems().filter(item => item.kind === 'message');
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].messageId, 'first-user-input');
+  assert.equal(messages[0].body[0].text.fallback, 'hello');
+  projector.project(page('live', [event(2, 'user/message', { ...message.data, id: 'unassociated' })]));
+  assert.equal(projector.snapshotItems().filter(item => item.kind === 'message').length, 1);
+  store.dispose();
 });

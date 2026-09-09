@@ -6,12 +6,12 @@
 .cx-chatroom-timeline__items {
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: 8px;
 }
 .cx-chatroom-timeline__avatar {
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -51,9 +51,9 @@
 .cx-chatroom-message {
   display: grid;
   width: 100%;
-  grid-template-columns: 36px minmax(0, 1fr);
+  grid-template-columns: 40px minmax(0, 1fr);
   align-items: end;
-  gap: 9px;
+  gap: 10px;
 }
 
 .cx-chatroom-message[data-role="human"] {
@@ -61,10 +61,11 @@
   justify-items: end;
 }
 .cx-chatroom-message > .cx-chatroom-avatar {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
 }
 .cx-chatroom-message__content {
+  position: relative;
   display: grid;
   min-width: 0;
   max-width: 88%;
@@ -74,42 +75,39 @@
   justify-items: end;
 }
 .cx-chatroom-message__author {
-  padding-inline: 2px;
+  padding: 0 2px;
   color: var(--cx-chatroom-muted);
   font-size: 10px;
+  line-height: 14px;
 }
 .cx-chatroom-message__bubble {
   width: fit-content;
   max-width: 100%;
-  min-height: 36px;
-  padding: 9px 12px;
+  min-height: 40px;
+  padding: 10px 12px;
   border: 1px solid var(--cx-chatroom-border);
   border-radius: 14px 14px 14px 4px;
-  background: color-mix(in srgb, currentColor 3%, transparent);
+  background: var(--cx-surface-raised, Canvas);
   overflow-wrap: anywhere;
 }
 .cx-chatroom-message[data-role="human"] .cx-chatroom-message__bubble {
-  border-color: color-mix(
-    in srgb,
-    var(--cx-primary, currentColor) 32%,
-    var(--cx-chatroom-border)
-  );
+  border-color: var(--cx-border);
   border-radius: 14px 14px 4px 14px;
-  background: color-mix(
-    in srgb,
-    var(--cx-primary, currentColor) 12%,
-    transparent
-  );
+  background: var(--cx-hover, Canvas);
 }
 .cx-chatroom-message__bubble > * {
   margin: 0;
 }
 .cx-chatroom-message__meta {
   display: flex;
+  min-width: 0;
+  min-height: 14px;
+  align-items: center;
   gap: 6px;
   padding-inline: 2px;
   color: var(--cx-chatroom-muted);
-  font-size: 9px;
+  font-size: 10px;
+  line-height: 14px;
 }
 .cx-chatroom-message__reactions {
   display: flex;
@@ -320,8 +318,8 @@ button.cx-chatroom-message__author:focus-visible {
   outline: 2px solid var(--cx-primary, currentColor);
 }
 .cx-chatroom-message__avatar-placeholder {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
 }
 .cx-chatroom-message__reaction-actor {
   max-width: 150px;
@@ -346,4 +344,139 @@ button.cx-chatroom-message__author:focus-visible {
 }
 .cx-chatroom-approval:focus-visible, .cx-chatroom-approval__copy:focus-visible {
   outline: 2px solid var(--cx-primary, currentColor);
+}
+
+.cx-chatroom-message__content {
+  width: fit-content;
+}
+.cx-chatroom-message__anchor {
+  position: relative;
+  display: grid;
+  width: fit-content;
+  min-width: 0;
+  max-width: 100%;
+}
+.cx-chatroom-message__anchor:has(> .cx-chatroom-message__toolbar:hover),
+.cx-chatroom-message__anchor:hover,
+.cx-chatroom-message__anchor:focus-within,
+.cx-chatroom-message[data-actions-open="true"] .cx-chatroom-message__anchor {
+  z-index: 3;
+}
+.cx-chatroom-message__time {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  opacity: 0;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 14px;
+  transition: opacity 120ms ease;
+}
+.cx-chatroom-message__content:has(> .cx-chatroom-message__anchor:hover)
+  > .cx-chatroom-message__meta
+  > .cx-chatroom-message__time,
+.cx-chatroom-message__meta:hover > .cx-chatroom-message__time,
+.cx-chatroom-message__content:focus-within .cx-chatroom-message__time,
+.cx-chatroom-message__time:hover,
+.cx-chatroom-message__time:focus-visible {
+  opacity: 1;
+}
+.cx-chatroom-message[data-role="human"]
+  .cx-chatroom-message__anchor
+  > .cx-chatroom-message__time {
+  position: absolute;
+  inset-block-end: calc(100% + 3px);
+  inset-inline-end: 0;
+}
+.cx-chatroom-message[data-role="human"]
+  .cx-chatroom-message__anchor:hover
+  > .cx-chatroom-message__time {
+  opacity: 1;
+}
+.cx-chatroom-message__toolbar {
+  position: absolute;
+  z-index: 4;
+  inset-block-end: 0;
+  inset-inline-start: calc(100% + 6px);
+  display: flex;
+  min-width: max-content;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--cx-border);
+  border-radius: 9px;
+  background: var(--cx-surface-raised, Canvas);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--cx-shadow) 24%, transparent);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: nowrap;
+  transform: translateX(2px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease,
+    visibility 0s linear 120ms;
+}
+.cx-chatroom-message[data-role="human"] .cx-chatroom-message__toolbar {
+  inset-inline: auto calc(100% + 6px);
+  transform: translateX(-2px);
+}
+.cx-chatroom-message__anchor:hover > .cx-chatroom-message__toolbar,
+.cx-chatroom-message__anchor:focus-within > .cx-chatroom-message__toolbar,
+.cx-chatroom-message:focus-visible .cx-chatroom-message__toolbar,
+.cx-chatroom-message[data-actions-open="true"] .cx-chatroom-message__toolbar {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(0);
+  transition-delay: 0s;
+}
+/* The original 6px bridge keeps the toolbar reachable as the pointer crosses
+   from its bubble. It does not add a layout box or shift a neighboring message. */
+.cx-chatroom-message__anchor::after {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 100%;
+  width: 6px;
+  content: "";
+}
+.cx-chatroom-message[data-role="human"] .cx-chatroom-message__anchor::after {
+  inset-inline: auto 100%;
+}
+.cx-chatroom-message__toolbar .cx-chatroom-message__copy,
+.cx-chatroom-message__toolbar .cx-chatroom-message__actions {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--cx-chatroom-muted);
+  cursor: pointer;
+}
+.cx-chatroom-message__toolbar button:hover:not(:disabled),
+.cx-chatroom-message__toolbar button:focus-visible {
+  background: var(--cx-hover);
+  color: var(--cx-text);
+}
+.cx-chatroom-message__toolbar button:focus-visible {
+  outline: 2px solid var(--cx-focus);
+  outline-offset: -2px;
+}
+.cx-chatroom-message__copy:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.cx-chatroom-message__toolbar .cx-chatroom-message__command {
+  min-height: 26px;
+  padding: 3px 7px;
+  font-size: 11px;
+}
+.cx-chatroom-timeline__menu-empty {
+  padding: 8px 10px;
+  color: var(--cx-chatroom-muted);
+  font-size: 12px;
 }

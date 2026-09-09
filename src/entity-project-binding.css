@@ -1,0 +1,31 @@
+.cx-chatroom-entity-project {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  padding-top: 20px;
+}
+.cx-chatroom-entity-project label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+.cx-chatroom-entity-project select {
+  width: min(100%, 360px);
+  padding: 8px 10px;
+  border: 1px solid var(--cx-border);
+  border-radius: 8px;
+  background: var(--cx-surface);
+  color: var(--cx-text);
+  font: inherit;
+}
+.cx-chatroom-entity-project select:focus-visible {
+  outline: 2px solid var(--cx-focus);
+  outline-offset: 2px;
+}
+.cx-chatroom-entity-project > button {
+  justify-self: start;
+}
+.cx-chatroom-entity-project__note {
+  color: var(--cx-muted);
+  font-size: 12px;
+}

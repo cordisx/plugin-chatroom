@@ -1,3 +1,4 @@
+import type { EntityExecutionContexts } from '@cordisx/protocol/entity-execution-context/v2';
 import type { AgentTaskFailureCode } from '@cordisx/protocol/agent-task/v1';
 import { taskFailureCode } from './chatroom-task-failures.js';
 import type { CordisXCommands } from 'cordisx/contracts';
@@ -7,7 +8,9 @@ import type { DurableChatroomRoomStore } from './room-store.js';
 export interface ChatroomTaskDraftInput {
   readonly text: string;
   readonly to: string;
-  readonly cwd: string;
+  readonly cwd?: string;
+  readonly projectId?: string;
+  readonly projectless?: boolean;
 }
 export type ChatroomTaskDraftResult =
   | { readonly status: 'accepted'; readonly roomId: string; }
@@ -26,9 +29,10 @@ interface TaskDraft {
   readonly title: string;
   prepared: boolean;
   editable: boolean;
+  context?: { readonly cwd?: string; readonly projectId?: string; };
 }
 
-/** Ephemeral form idempotency only. All task facts remain in the existing Room document. */
+/** Ephemeral first-message idempotency only. All task facts remain in the existing Room document. */
 export class ChatroomTaskDrafts {
   private readonly drafts = new Map<string, TaskDraft>();
   private readonly pending = new Map<string, Promise<ChatroomTaskDraftResult>>();
@@ -36,6 +40,9 @@ export class ChatroomTaskDrafts {
     private readonly rooms: DurableChatroomRoomStore,
     private readonly configuration: ChatroomAgentConfiguration,
     private readonly commands: Pick<CordisXCommands, 'execute'>,
+    private readonly contexts?:
+      & Pick<EntityExecutionContexts, 'resolve'>
+      & Partial<Pick<EntityExecutionContexts, 'projectless'>>,
   ) {}
 
   leaders(roomId?: string): readonly { memberId: string; label: string; }[] {
@@ -49,15 +56,24 @@ export class ChatroomTaskDrafts {
 
   async start(roomId: string | undefined, input: ChatroomTaskDraftInput): Promise<ChatroomTaskDraftResult> {
     const text = input.text.trim();
-    const cwd = input.cwd.trim();
-    if (!text || text.length > 16_000 || !cwd.startsWith('/') || cwd.includes('\0')) {
+    const cwd = input.cwd?.trim();
+    const projectId = input.projectId?.trim();
+    if (
+      !text || text.length > 16_000
+      || cwd !== undefined && (!cwd.startsWith('/') || cwd.includes('\0'))
+      || projectId !== undefined && projectId === ''
+      || input.projectless === true && (cwd !== undefined || projectId !== undefined)
+    ) {
       return { status: 'unavailable', code: 'invalid-input' };
     }
     if (!this.leaders(roomId).some(member => member.memberId === input.to)) {
       return { status: 'unavailable', code: 'leader-unavailable' };
     }
+    if (cwd === undefined && projectId === undefined && this.contexts === undefined) {
+      return { status: 'unavailable', code: 'failed', reason: 'context-required' };
+    }
     const key = roomId ?? '';
-    const fingerprint = JSON.stringify([text, input.to, cwd]);
+    const fingerprint = JSON.stringify([text, input.to, cwd, projectId, input.projectless === true]);
     const retained = this.drafts.get(key);
     if (retained !== undefined && retained.fingerprint !== fingerprint && !retained.editable) {
       return { status: 'unavailable', code: 'pending' };
@@ -74,7 +90,13 @@ export class ChatroomTaskDrafts {
     };
     draft.editable = false;
     this.drafts.set(key, draft);
-    const operation = this.submit(roomId, draft, { ...input, text, cwd });
+    const operation = this.submit(roomId, draft, {
+      text,
+      to: input.to,
+      ...(input.projectless === true ? { projectless: true } : {}),
+      ...(cwd === undefined ? {} : { cwd }),
+      ...(projectId === undefined ? {} : { projectId }),
+    });
     this.pending.set(key, operation);
     try {
       const result = await operation;
@@ -91,6 +113,41 @@ export class ChatroomTaskDrafts {
     input: ChatroomTaskDraftInput,
   ): Promise<ChatroomTaskDraftResult> {
     try {
+      if (input.cwd === undefined && input.projectId === undefined) {
+        if (draft.context === undefined) {
+          const member = this.configuration.members.find(value => value.memberId === input.to);
+          const resolver = input.projectless === true ? this.contexts?.projectless : this.contexts?.resolve;
+          const resolved = member === undefined ? undefined : await resolver?.call(this.contexts, {
+            identity: member.definition,
+            operationId: draft.operationId,
+          });
+          if (resolved?.status !== 'resolved') {
+            draft.editable = true;
+            return {
+              status: 'unavailable',
+              code: 'failed',
+              reason: resolved?.code === 'entity-unavailable'
+                ? 'definition-unavailable'
+                : taskFailureCode(resolved?.code) ?? 'host-unavailable',
+            };
+          }
+          if (input.projectless === true && resolved.binding.kind !== 'projectless') {
+            return { status: 'unavailable', code: 'failed', reason: 'host-unavailable' };
+          }
+          if (resolved.context.kind === 'directory' && resolved.binding.kind === 'projectless') {
+            draft.context = { cwd: resolved.context.cwd };
+          } else if (
+            resolved.context.kind === 'project' && resolved.binding.kind === 'project'
+            && resolved.context.projectId === resolved.binding.projectId
+          ) {
+            draft.context = {
+              projectId: resolved.context.projectId,
+              ...(resolved.context.cwd === undefined ? {} : { cwd: resolved.context.cwd }),
+            };
+          } else return { status: 'unavailable', code: 'failed', reason: 'host-unavailable' };
+        }
+        input = { ...input, ...draft.context };
+      }
       if (originalRoomId === undefined && !draft.prepared) {
         const prepared = await this.commands.execute({
           id: 'room.prepare',
@@ -119,7 +176,10 @@ export class ChatroomTaskDrafts {
           action: 'start',
           roomId: draft.roomId,
           operationId: draft.operationId,
-          ...input,
+          text: input.text,
+          to: input.to,
+          ...(input.cwd === undefined ? {} : { cwd: input.cwd }),
+          ...(input.projectId === undefined ? {} : { projectId: input.projectId }),
         },
       });
       if (

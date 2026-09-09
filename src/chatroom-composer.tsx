@@ -23,6 +23,9 @@ export interface ChatroomComposerProps {
   readonly signal: AbortSignal;
   readonly t: (key: string) => string;
   readonly participants: readonly ChatroomComposerParticipant[];
+  readonly firstMessage?: (text: string) => Promise<
+    { readonly status: 'accepted'; } | { readonly status: 'unavailable'; readonly message: string; }
+  >;
   readonly mentionRequest?: { readonly participantId: string; readonly sequence: number; };
 }
 
@@ -108,7 +111,8 @@ function useComposerLayout(draft: string) {
 }
 
 export function ChatroomComposer(
-  { source, shortcutPolicy, pageComposer, signal, t, participants, mentionRequest }: ChatroomComposerProps,
+  { source, shortcutPolicy, pageComposer, signal, t, participants, mentionRequest, firstMessage }:
+    ChatroomComposerProps,
 ) {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -129,7 +133,7 @@ export function ChatroomComposer(
   const consumedMention = useRef<string | undefined>(undefined);
   const queryRange = useRef<readonly [number, number] | undefined>(undefined);
   const id = useId();
-  const unavailable = pageComposer === undefined || aborted;
+  const unavailable = firstMessage === undefined && pageComposer === undefined || aborted;
   const disabled = unavailable;
   const matches = query === undefined
     ? []
@@ -229,19 +233,28 @@ export function ChatroomComposer(
     setError(undefined);
     setNotice(undefined);
     try {
-      const completion = await pageComposer!.execute({
-        $schema:
-          'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-page-composer-command-request.v1.schema.json',
-        contract: 'cordisx.agent-page-composer-command-request/v1',
-        schemaVersion: 1,
-        command: { id: CHATROOM_COMMAND_SUBMIT },
-        submitPayload: draft,
-      });
-      if (!mounted.current || signal.aborted) return;
-      const result = source.pageComposerCompletion(completion);
-      if (result.status !== 'accepted') {
-        setError(t('composer.send-failed'));
-        return;
+      if (firstMessage !== undefined) {
+        const result = await firstMessage(submittedDraft);
+        if (!mounted.current || signal.aborted) return;
+        if (result.status !== 'accepted') {
+          setError(result.message);
+          return;
+        }
+      } else {
+        const completion = await pageComposer!.execute({
+          $schema:
+            'https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-page-composer-command-request.v1.schema.json',
+          contract: 'cordisx.agent-page-composer-command-request/v1',
+          schemaVersion: 1,
+          command: { id: CHATROOM_COMMAND_SUBMIT },
+          submitPayload: draft,
+        });
+        if (!mounted.current || signal.aborted) return;
+        const result = source.pageComposerCompletion(completion);
+        if (result.status !== 'accepted') {
+          setError(t('composer.send-failed'));
+          return;
+        }
       }
       setDraft(current => current === submittedDraft ? '' : current);
       setNotice(t('composer.sent'));

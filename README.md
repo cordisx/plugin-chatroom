@@ -55,19 +55,24 @@ Out of scope: host adapters, credentials, external channels, automation,
 application chrome, arbitrary Host DOM access, rich-media messages, and Agent
 execution.
 
-## Start a task
+## Start a chatroom
 
-Use **New task** in the Room header to select a Leader, describe the task, and
-enter an absolute working directory (for example `/Users/me/project`). From a
-new Room page, this prepares a Room before starting the task. In an existing
-Room, existing conversations keep their Session and workspace associations.
-Ordinary messages continue through the composer.
+The new Room page presents its configured Leader avatars above the normal chat
+composer. Choose one or send without selecting to use the default global Leader.
+A first message should use the selected entity's bound project and a single
+Host create-and-submit operation; existing Room Sessions are not migrated.
 
-A task whose creation result is uncertain retains its input for a retry using
-the same operation. Check the Room task details before changing the request.
-This entry does not select a default directory, change an existing Session's
-workspace, or automatically create a worktree. Native acceptance of the new
-page remains part of the [migration gates](.agents/docs/room-ui-ownership.md).
+The versioned Entity execution context service supplies explicit projectless
+workspaces or verifies the Entity's saved project binding. Configure a future
+Session's default project from the member's existing Team overview; only actual
+Host projects are offered. An unbound global Leader needs no project or manual
+directory. Existing Session associations remain unchanged. Older Hosts without
+the service leave the draft intact and report the missing capability.
+
+This candidate consumes the Host context implementation under review in
+[Host #387](https://github.com/cordisx/cordisx/pull/387), with formal
+[Protocol #133](https://github.com/cordisx/cordisx-protocol/pull/133).
+Native product acceptance remains separate from compilation and fixture checks.
 
 ## Agent configuration
 

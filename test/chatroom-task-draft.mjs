@@ -52,7 +52,7 @@ function room(id = 'existing', overrides = {}) {
   };
 }
 
-function harness({ initial = [], prepare, start, configuration = members } = {}) {
+function harness({ initial = [], prepare, start, configuration = members, contexts } = {}) {
   const rooms = new Map(initial.map(value => [value.id, structuredClone(value)]));
   const calls = [];
   const prepareRoom = args => {
@@ -89,6 +89,7 @@ function harness({ initial = [], prepare, start, configuration = members } = {})
         return start ? await start(request.arguments, accepted) : accepted(request.arguments);
       },
     },
+    contexts,
   );
   return { rooms, calls, drafts };
 }
@@ -388,4 +389,123 @@ test('a definite permission denial remains visible without changing the retained
     code: 'pending',
   });
   assert.equal(h.calls.length, 2);
+});
+
+test('missing bound project context fails before creating a Room or task and never invents a cwd', async () => {
+  const h = harness();
+  assert.deepEqual(await h.drafts.start(undefined, { text: 'hello', to: 'lead-a' }), {
+    status: 'unavailable',
+    code: 'failed',
+    reason: 'context-required',
+  });
+  assert.deepEqual(h.calls, []);
+  assert.equal(h.rooms.size, 0);
+});
+
+test('first messages resolve an owned projectless workspace once and retain it through uncertain retries', async () => {
+  const resolutions = [];
+  const configuration = members.map(member => ({
+    ...member,
+    definition: { agentId: member.memberId, revision: 'exact' },
+  }));
+  const h = harness({
+    configuration,
+    start: async () => undefined,
+    contexts: {
+      resolve: async request => {
+        resolutions.push(request);
+        return {
+          status: 'resolved',
+          binding: { kind: 'projectless' },
+          context: { kind: 'directory', cwd: '/managed/no-project' },
+        };
+      },
+    },
+  });
+  const message = { text: 'hello', to: 'lead-a' };
+  assert.equal((await h.drafts.start(undefined, message)).code, 'pending');
+  assert.equal((await h.drafts.start(undefined, message)).code, 'pending');
+  assert.equal(resolutions.length, 1);
+  assert.deepEqual(resolutions[0].identity, { agentId: 'lead-a', revision: 'exact' });
+  const starts = h.calls.filter(call => call.id === 'task.start');
+  assert.equal(starts.length, 2);
+  assert.equal(starts[0].arguments.cwd, '/managed/no-project');
+  assert.equal(starts[0].arguments.projectId, undefined);
+  assert.equal(starts[0].arguments.operationId, starts[1].arguments.operationId);
+  assert.equal(h.calls.filter(call => call.id === 'room.prepare').length, 1);
+});
+
+test('a bound project reaches task.start as a real project selector and never falls back on resolver failure', async () => {
+  const configuration = members.map(member => ({
+    ...member,
+    definition: { agentId: member.memberId, revision: 'exact' },
+  }));
+  const h = harness({
+    configuration,
+    contexts: {
+      resolve: async () => ({
+        status: 'resolved',
+        binding: { kind: 'project', projectId: 'native-project' },
+        context: { kind: 'project', projectId: 'native-project', cwd: '/actual-project' },
+      }),
+    },
+  });
+  assert.equal((await h.drafts.start(undefined, { text: 'hello', to: 'lead-a' })).status, 'accepted');
+  assert.equal(h.calls.find(call => call.id === 'task.start').arguments.projectId, 'native-project');
+  const unavailable = harness({
+    configuration,
+    contexts: { resolve: async () => ({ status: 'unavailable', code: 'project-unavailable' }) },
+  });
+  assert.equal(
+    (await unavailable.drafts.start(undefined, { text: 'hello', to: 'lead-a' })).reason,
+    'project-unavailable',
+  );
+  assert.deepEqual(unavailable.calls, []);
+  assert.equal(unavailable.rooms.size, 0);
+});
+
+test('explicit global intent bypasses a saved project without leaking private mode to task.start', async () => {
+  const configuration = members.map(member => ({
+    ...member,
+    definition: { agentId: member.memberId, revision: 'exact' },
+  }));
+  const calls = [];
+  const contexts = {
+    resolve: async () => {
+      calls.push('resolve');
+      return {
+        status: 'resolved',
+        binding: { kind: 'project', projectId: 'bound' },
+        context: { kind: 'project', projectId: 'bound', cwd: '/project' },
+      };
+    },
+    projectless: async () => {
+      calls.push('projectless');
+      return {
+        status: 'resolved',
+        binding: { kind: 'projectless' },
+        context: { kind: 'directory', cwd: '/private/global' },
+      };
+    },
+  };
+  const global = harness({ configuration, contexts });
+  assert.equal(
+    (await global.drafts.start(undefined, { text: 'hi', to: 'lead-a', projectless: true })).status,
+    'accepted',
+  );
+  const args = global.calls.find(call => call.id === 'task.start').arguments;
+  assert.equal(args.cwd, '/private/global');
+  assert.equal('projectId' in args, false);
+  assert.equal('projectless' in args, false);
+  const selected = harness({ configuration, contexts });
+  assert.equal((await selected.drafts.start(undefined, { text: 'hi', to: 'lead-a' })).status, 'accepted');
+  assert.equal(selected.calls.find(call => call.id === 'task.start').arguments.projectId, 'bound');
+  assert.deepEqual(calls, ['projectless', 'resolve']);
+  const oldHost = harness({ configuration, contexts: { resolve: contexts.resolve } });
+  assert.equal(
+    (await oldHost.drafts.start(undefined, { text: 'hi', to: 'lead-a', projectless: true })).status,
+    'unavailable',
+  );
+  assert.deepEqual(oldHost.calls, []);
+  assert.deepEqual(calls, ['projectless', 'resolve']);
 });

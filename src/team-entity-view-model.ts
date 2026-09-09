@@ -1,3 +1,4 @@
+import type { EntityExecutionContexts } from '@cordisx/protocol/entity-execution-context/v1';
 import { agentAvatarForDefinition, type AgentDefinition, type AgentDefinitionIdentity } from './agent-definition.js';
 import type { AgentDetailReference } from '@cordisx/protocol/agents/v1';
 import type {
@@ -35,6 +36,7 @@ export interface TeamEntityActiveSession {
 }
 
 export interface TeamSessionDetailServices {
+  readonly executionContexts?: EntityExecutionContexts;
   readonly references: AgentSessionDetailReferenceService;
   readonly navigation: AgentDetailNavigationService;
 }
@@ -194,6 +196,7 @@ export interface TeamArchitectureDataSnapshot {
 }
 
 export interface TeamArchitectureDataSource {
+  readonly executionContexts?: EntityExecutionContexts;
   getSnapshot(): TeamArchitectureDataSnapshot;
   subscribe(listener: () => void): () => void;
   openSessionDetail(sessionId: string): Promise<boolean>;
@@ -502,6 +505,7 @@ export function createTeamArchitectureDataSource(
   });
   void refreshDetails();
   return Object.freeze({
+    ...(services?.executionContexts === undefined ? {} : { executionContexts: services.executionContexts }),
     getSnapshot: () => snapshot,
     subscribe(listener: () => void): () => void {
       if (disposed) return () => undefined;

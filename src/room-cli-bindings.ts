@@ -57,7 +57,9 @@ export class ChatroomCliBindings implements ChatroomRunCollaboration {
   }
 
   async startTask(input: unknown, signal?: AbortSignal): Promise<JsonValue> {
-    if (this.disposed || !this.enabled()) return { status: 'rejected', code: 'unavailable' };
+    if (this.disposed) return { status: 'rejected', code: 'unavailable' };
+    // Disabled collaboration is a known preflight rejection, not an uncertain task creation.
+    if (!this.enabled()) return { status: 'rejected', code: 'unsupported' };
     return await this.taskHandler.start(input, signal);
   }
 

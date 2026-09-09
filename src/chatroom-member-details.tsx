@@ -71,8 +71,8 @@ export function ChatroomMemberDetails({ snapshot, participantId, details, t }: {
           <h3>{name}</h3>
           <p>{member.title ?? t(`member.role.${member.role}`)}</p>
         </div>
+        <ChatroomEntitySettings room={room} participantId={participantId} details={details} t={t} />
       </div>
-      <ChatroomEntitySettings room={room} participantId={participantId} details={details} t={t} />
       <section>
         <h3>{t('identity.introduction')}</h3>
         {loading
