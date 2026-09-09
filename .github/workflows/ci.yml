@@ -30,16 +30,20 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          git diff --name-only --diff-filter=ACMRT "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed-files"
+          # Include deletions and both rename paths; preserve unusual filenames.
+          git diff --no-renames --name-only -z "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed-files"
           docs_only=true
           full=false
-          while IFS= read -r file; do
+          while IFS= read -r -d '' file; do
+            case "$file" in
+              .agents/docs/*.md|.agents/docs/*.markdown) continue ;;
+            esac
             case "$file" in
               *.md|*.markdown) ;;
               *) docs_only=false ;;
             esac
             case "$file" in
-              AGENTS.md|.agents/*|package.json|package-lock.json|cordisx-package.json|runtime-manifest.json|tsconfig.json|vite.config.mjs|.github/*|scripts/*|entities/*)
+              AGENTS.md|.agents/*|package.json|package-lock.json|cordisx-package.json|cordisx-agent-tools.json|runtime-manifest.json|tsconfig*.json|vite.config.*|vitest.config.*|eslint.config.*|stylelint.config.*|dprint.json|.lintstagedrc.*|.github/*|scripts/*|entities/*)
                 full=true
                 ;;
             esac
@@ -55,9 +59,11 @@ jobs:
             echo "- docs-only: \`$docs_only\`"
             echo "- full gate: \`$full\`"
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Check scope regression cases
+        run: node --test scripts/ci-scope.test.mjs
 
   check:
-    if: always() && (github.event_name == 'push' || needs.scope.outputs.full == 'true')
+    if: always() && (github.event_name == 'push' || needs.scope.result != 'success' || needs.scope.outputs.full == 'true')
     needs: scope
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -94,7 +100,7 @@ jobs:
           cache=$([[ "$CACHE_HIT" == 'true' ]] && echo hit || echo miss)
           evidence="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           jq -n --arg schema 'cordisx/ci-job-result/v1' --arg repo "$GITHUB_REPOSITORY" \
-            --arg head "$HEAD_SHA" --arg base "$BASE_SHA" --arg gateVersion 'chatroom-check-v2' \
+            --arg head "$HEAD_SHA" --arg base "$BASE_SHA" --arg gateVersion 'chatroom-check-v3' \
             --arg classification "$CLASSIFICATION" --arg job "$GITHUB_JOB" --arg startedAt "$STARTED_AT" \
             --arg completedAt "$completed_at" --arg cache "$cache" --arg result "$RESULT" \
             --arg environment 'github-hosted/ubuntu-latest/node22' \
@@ -128,7 +134,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci --ignore-scripts --allow-git=all
+      # The Git Host dependency needs prepare to produce cordisx/contracts and JSX exports.
+      - run: npm ci --allow-git=all
       - name: Typecheck the plugin
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -151,7 +158,7 @@ jobs:
           cache=$([[ "$CACHE_HIT" == 'true' ]] && echo hit || echo miss)
           evidence="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           jq -n --arg schema 'cordisx/ci-job-result/v1' --arg repo "$GITHUB_REPOSITORY" \
-            --arg head "$HEAD_SHA" --arg base "$BASE_SHA" --arg gateVersion 'chatroom-check-v2' \
+            --arg head "$HEAD_SHA" --arg base "$BASE_SHA" --arg gateVersion 'chatroom-check-v3' \
             --arg classification 'changed-typecheck' --arg job "$GITHUB_JOB" --arg startedAt "$STARTED_AT" \
             --arg completedAt "$completed_at" --arg cache "$cache" --arg result "$RESULT" \
             --arg environment 'github-hosted/ubuntu-latest/node22' \
@@ -185,7 +192,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci --ignore-scripts --allow-git=all
+      # The Git Host dependency needs prepare to produce cordisx/contracts and JSX exports.
+      - run: npm ci --allow-git=all
       - name: Build, then run tests against the build
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -209,7 +217,7 @@ jobs:
           cache=$([[ "$CACHE_HIT" == 'true' ]] && echo hit || echo miss)
           evidence="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           jq -n --arg schema 'cordisx/ci-job-result/v1' --arg repo "$GITHUB_REPOSITORY" \
-            --arg head "$HEAD_SHA" --arg base "$BASE_SHA" --arg gateVersion 'chatroom-check-v2' \
+            --arg head "$HEAD_SHA" --arg base "$BASE_SHA" --arg gateVersion 'chatroom-check-v3' \
             --arg classification 'build-test' --arg job "$GITHUB_JOB" --arg startedAt "$STARTED_AT" \
             --arg completedAt "$completed_at" --arg cache "$cache" --arg result "$RESULT" \
             --arg environment 'github-hosted/ubuntu-latest/node22' \
