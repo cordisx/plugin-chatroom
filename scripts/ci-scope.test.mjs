@@ -86,3 +86,9 @@ test('affected compilation jobs prepare the Git Host dependency', () => {
     assert.ok(!job.includes('npm ci --ignore-scripts'));
   }
 });
+
+test('complete jobs honor cancellation so superseded PR runs release their slot', () => {
+  const source = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
+  assert.ok(source.includes('    if: ${{ !cancelled() && '));
+  assert.ok(!source.includes('    if: always() && '));
+});
