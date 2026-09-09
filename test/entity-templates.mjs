@@ -203,7 +203,7 @@ test('package pins the exact Protocol and Host revisions with exact manifest byt
   );
   assert.equal(
     packageJson.devDependencies.cordisx,
-    'github:cordisx/cordisx#d9934dc5b401d981f28de26d90bb4102f03fd9c8',
+    'github:cordisx/cordisx#e0a7d7b6fbd653dcf55b4105d3d193e49443826f',
   );
   assert.equal(packageJson.main, packageManifest.entry);
   assert.equal(packageManifest.entry, './dist/runtime/chatroom.js');
