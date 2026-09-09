@@ -1,3 +1,4 @@
+import { useNotifications } from './notifications.js';
 import { type KeyboardEvent, useEffect, useRef, useState } from 'cordisx/react';
 import { Button } from 'cordisx/ui';
 import type { CordisXReactPageProps } from 'cordisx/contracts';
@@ -22,7 +23,7 @@ export function ChatroomRoomActions({ room, details, t, onDeleted }: {
   const dialog = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   const [confirmation, setConfirmation] = useState<Action>();
-  const [feedback, setFeedback] = useState<{ text: string; failed: boolean; }>();
+  const notifications = useNotifications();
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const [clipboardAvailable, setClipboardAvailable] = useState(false);
@@ -59,7 +60,6 @@ export function ChatroomRoomActions({ room, details, t, onDeleted }: {
     if (pending.current || action.disabled.value) return;
     pending.current = true;
     setBusy(true);
-    setFeedback(undefined);
     try {
       if (action.kind === 'command') {
         await details.executeRoomAction(room.id, action.id);
@@ -70,11 +70,15 @@ export function ChatroomRoomActions({ room, details, t, onDeleted }: {
         if (text === undefined) throw new Error('Room link unavailable');
         await clipboard.writeText(text);
       }
-      setFeedback({ text: display(action.feedback.success, t), failed: false });
+      notifications.show({
+        kind: 'room.action-completed',
+        type: 'success',
+        message: display(action.feedback.success, t),
+      });
       close();
       if (action.id === 'delete') await onDeleted();
     } catch {
-      setFeedback({ text: display(action.feedback.failure, t), failed: true });
+      notifications.show({ kind: 'room.action-failed', type: 'error', message: display(action.feedback.failure, t) });
     } finally {
       pending.current = false;
       setBusy(false);
@@ -167,7 +171,6 @@ export function ChatroomRoomActions({ room, details, t, onDeleted }: {
           </div>
         </dialog>
       )}
-      {feedback && <p role={feedback.failed ? 'alert' : 'status'}>{feedback.text}</p>}
     </div>
   );
 }

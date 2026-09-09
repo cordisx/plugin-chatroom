@@ -7,6 +7,7 @@ export async function componentHarness(file, dependencies = {}) {
   if (file === 'chatroom-timeline.tsx' && dependencies['./chatroom-timeline-entries.js'] === undefined) {
     dependencies['./chatroom-timeline-entries.js'] = (await componentHarness('chatroom-timeline-entries.tsx')).exports;
   }
+  const notifications = [];
   const state = [];
   const effects = [];
   let index = 0;
@@ -47,6 +48,16 @@ export async function componentHarness(file, dependencies = {}) {
   const require = name => {
     if (name === './chatroom-room-actions.js') return { ChatroomRoomActions: 'RoomActions' };
     if (name === './chatroom-message-body.js') return { ChatroomMessageBody: 'MessageBody' };
+    if (name === './notifications.js') {
+      return dependencies[name] ?? {
+        useNotifications: () => ({
+          show: options => {
+            notifications.push(options);
+            return { dismiss() {} };
+          },
+        }),
+      };
+    }
     if (name === 'cordisx/react') return react;
     if (name === './chatroom-inspector.js') {
       return dependencies[name] ?? { useChatroomInspector: () => ({ width: 360, narrow: false, separatorProps: {} }) };
@@ -58,6 +69,7 @@ export async function componentHarness(file, dependencies = {}) {
   new Function('require', 'exports', output)(require, exports);
   return {
     exports,
+    notifications,
     render: (Component, props) => {
       index = 0;
       return Component(props);

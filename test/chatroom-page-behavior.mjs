@@ -238,7 +238,7 @@ test('header action prevents duplicate execution and surfaces failure without ch
   reject(new Error('failed'));
   await new Promise(resolve => setImmediate(resolve));
   tree = render();
-  assert.equal(byClass(tree, 'cx-chatroom-page__error').props.children, 'page.action.failed');
+  assert.equal(harness.notifications.at(-1).message, 'page.action.failed');
 });
 
 test('inspector resize clamps pointer/keyboard width and preserves it across detail pages and close', async () => {
@@ -405,7 +405,7 @@ test('timeline menus offer detail/mention, keyboard dismissal and write-only cop
   assert.deepEqual(copies, ['**exact text**'], 'writeText is invoked synchronously within the explicit click handler');
   await new Promise(resolve => setImmediate(resolve));
   tree = render();
-  assert.equal(byClass(tree, 'cx-chatroom-timeline__feedback').props.children, 'timeline.copied');
+  assert.equal(harness.notifications.at(-1).message, 'timeline.copied');
   byClass(message(), 'cx-chatroom-message__time').props.onClick({ currentTarget: trigger });
   assert.deepEqual(copies.at(-1), item.timestamp);
   await new Promise(resolve => setImmediate(resolve));
@@ -446,7 +446,7 @@ test('timeline copying is honestly disabled when absent and reports browser perm
   message = all(tree, node => node.props?.item === item)[0];
   byClass(message.type(message.props), 'cx-chatroom-message__time').props.onClick({ currentTarget: trigger });
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(byClass(render(), 'cx-chatroom-timeline__feedback').props.children, 'timeline.copy-failed');
+  assert.equal(harness.notifications.at(-1).message, 'timeline.copy-failed');
 });
 
 test('message actions preserve order, current execution, disabled reasons and duplicate-click fencing', async () => {
@@ -522,7 +522,7 @@ test('message actions preserve order, current execution, disabled reasons and du
   rejectFirst(new Error('command failed'));
   await new Promise(resolve => setImmediate(resolve));
   tree = render();
-  assert.equal(all(tree, node => node.props?.role === 'alert')[0].props.children, 'timeline.action-failed');
+  assert.equal(harness.notifications.at(-1).message, 'timeline.action-failed');
   direct = all(message(tree), node => node.props?.className === 'cx-chatroom-message__command');
   direct[0].props.onClick({ stopPropagation() {} });
   await new Promise(resolve => setImmediate(resolve));
@@ -791,7 +791,7 @@ test('new Room uses the normal composer with an optional Leader selection, never
   assert.deepEqual(await all(tree, node => node.type === 'Composer')[0].props.firstMessage('accepted'), {
     status: 'accepted',
   });
-  assert.equal(all(render(), node => node.props?.role === 'status')[0].props.children, 'task.start.open-failed');
+  assert.equal(harness.notifications.at(-1).message, 'task.start.open-failed');
 });
 
 test('Room settings rejects backend-invalid names, prevents duplicate save and closes only on success', async () => {

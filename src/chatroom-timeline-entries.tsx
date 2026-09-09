@@ -1,3 +1,4 @@
+import { useNotifications } from './notifications.js';
 import { type KeyboardEvent, type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from 'cordisx/react';
 import { Button, Icon } from 'cordisx/ui';
 import type { CordisXReactPageProps } from 'cordisx/contracts';
@@ -380,16 +381,19 @@ export function ApprovalItem(
     }
   }, [item.state]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(false);
+  const notifications = useNotifications();
   const decide = async (decision: 'approved' | 'denied') => {
     if (pending.current || item.state !== 'pending') return;
     pending.current = true;
     setBusy(true);
-    setError(false);
     try {
-      if (!await source.decideApproval(roomId, item.itemId, decision) && mounted.current) setError(true);
+      if (!await source.decideApproval(roomId, item.itemId, decision) && mounted.current) {
+        notifications.show({ kind: 'approval.decision-failed', type: 'error', message: t('approval.decision.failed') });
+      }
     } catch {
-      if (mounted.current) setError(true);
+      if (mounted.current) {
+        notifications.show({ kind: 'approval.decision-failed', type: 'error', message: t('approval.decision.failed') });
+      }
     } finally {
       pending.current = false;
       if (mounted.current) setBusy(false);
@@ -499,7 +503,6 @@ export function ApprovalItem(
           )}
         </div>
       )}
-      {error && <p role="alert" className="cx-chatroom-error">{t('approval.decision.failed')}</p>}
     </article>
   );
 }

@@ -8,17 +8,21 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Context } from '@deepseek-ai/cordis';
-import { OwnerDocumentStore } from '../node_modules/cordisx/packages/cli/dist/src/launcher/owner-document-store.js';
-import { createOwnerDocumentBridgeHandler } from '../node_modules/cordisx/packages/cli/dist/src/launcher/owner-document-rpc.js';
-import {
+const { OwnerDocumentStore } = await import(
+  new URL('./launcher/owner-document-store.js', import.meta.resolve('cordisx/contracts'))
+);
+const { createOwnerDocumentBridgeHandler } = await import(
+  new URL('./launcher/owner-document-rpc.js', import.meta.resolve('cordisx/contracts'))
+);
+const {
   BrowserOwnerDocumentBridge,
   CordisXOwnerDocumentBroker,
-} from '../node_modules/cordisx/packages/cli/dist/src/renderer/owner-documents.js';
-import {
+} = await import(new URL('./renderer/owner-documents.js', import.meta.resolve('cordisx/contracts')));
+const {
   dispatchAgentTool,
   getAgentToolSetup,
   installAgentTools,
-} from '../node_modules/cordisx/packages/cli/dist/src/renderer/plugin-agent-tools.js';
+} = await import(new URL('./renderer/plugin-agent-tools.js', import.meta.resolve('cordisx/contracts')));
 import { DurableChatroomRoomStore } from '../dist/room-store.js';
 import { addRoomRun, bindRoomRunSession, createRoom } from '../dist/room.js';
 import { ChatroomCliBindings } from '../dist/room-cli-bindings.js';

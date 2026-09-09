@@ -1,3 +1,4 @@
+import { useNotifications } from './notifications.js';
 import { useRef, useState } from 'cordisx/react';
 import { Button } from 'cordisx/ui';
 import type { CordisXReactPageProps } from 'cordisx/contracts';
@@ -12,11 +13,12 @@ export function ChatroomRoomSettings({ roomId, details, t, onSaved }: {
   readonly t: CordisXReactPageProps['t'];
   readonly onSaved?: () => void;
 }) {
+  const notifications = useNotifications();
   const [original, setOriginal] = useState(() => details.profile(roomId));
   const [name, setName] = useState(original?.room.title ?? '');
   const [description, setDescription] = useState(original?.room.description ?? '');
   const [busy, setBusy] = useState(false);
-  const [feedback, setFeedback] = useState<'saved' | 'failed' | 'name-invalid' | 'description-invalid'>();
+  const [feedback, setFeedback] = useState<'name-invalid' | 'description-invalid'>();
   const saving = useRef(false);
   const dirty = name !== (original?.room.title ?? '') || description !== (original?.room.description ?? '');
   const save = async () => {
@@ -35,10 +37,10 @@ export function ChatroomRoomSettings({ roomId, details, t, onSaved }: {
     try {
       await details.saveProfile(roomId, original.revision, name, description);
       setOriginal(details.profile(roomId));
-      setFeedback('saved');
+      notifications.show({ kind: 'room.settings', type: 'success', message: t('room.settings.saved') });
       onSaved?.();
     } catch {
-      setFeedback('failed');
+      notifications.show({ kind: 'room.settings', type: 'error', message: t('room.settings.failed') });
     } finally {
       saving.current = false;
       setBusy(false);
@@ -74,7 +76,7 @@ export function ChatroomRoomSettings({ roomId, details, t, onSaved }: {
       </Button>
       {feedback === undefined
         ? null
-        : <p role={feedback === 'saved' ? 'status' : 'alert'}>{t(`room.settings.${feedback}`)}</p>}
+        : <p role="alert">{t(`room.settings.${feedback}`)}</p>}
     </form>
   );
 }

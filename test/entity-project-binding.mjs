@@ -47,7 +47,7 @@ test('project binding retry retains the mutation and never starts a Session', as
   assert.equal(h.requests.length, 2);
   assert.deepEqual(h.requests[0], h.requests[1]);
   assert.deepEqual(h.requests[0].binding, { kind: 'project', projectId: 'actual-project' });
-  assert.equal(all(h.render(), node => node.props?.role === 'status')[0].props.children, 'detail.project-saved');
+  assert.equal(h.harness.notifications.at(-1).message, 'detail.project-saved');
   h.harness.unmount();
 });
 

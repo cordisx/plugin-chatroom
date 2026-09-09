@@ -1,3 +1,5 @@
+import { NotificationsContext } from './notifications.js';
+import type { NotificationsV1 } from 'cordisx/contracts';
 import { EntityProjectBinding } from './entity-project-binding.js';
 import {
   Fragment,
@@ -909,10 +911,13 @@ function projectEntities(snapshot: ReturnType<TeamArchitectureDataSource['getSna
 
 export function createTeamArchitecturePage(
   source: TeamArchitectureDataSource,
+  notifications: NotificationsV1,
   detailRouteIds: TeamArchitectureDetailRouteIds,
   localization: CordisXLocalizationSeat<TeamArchitectureMessages>,
 ) {
   return defineReactPage<TeamArchitectureMessages>(props => (
-    <TeamArchitecturePage {...props} t={localization.t} source={source} detailRouteIds={detailRouteIds} />
+    <NotificationsContext.Provider value={notifications}>
+      <TeamArchitecturePage {...props} t={localization.t} source={source} detailRouteIds={detailRouteIds} />
+    </NotificationsContext.Provider>
   ));
 }
