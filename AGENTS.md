@@ -26,3 +26,18 @@ See the [Host notification guide](https://github.com/cordisx/cordisx/blob/3cfe37
 for the interaction contract and older-Host capability boundary.
 
 Dependency setup: [notification migration](./.agents/docs/notifications.md).
+
+## Development and release
+
+- Requires Node.js 22 or newer. Install dependencies with `npm ci`.
+- Run `npm run check`, `npm run format:check`, `npm run lint:source`,
+  `npm pack --dry-run`, and `git diff --check` before a release checkpoint.
+- Keep the public READMEs focused on installation and use. Architecture,
+  source layout, local development, tests, contribution, and release operations
+  belong here or in the indexed `.agents` maintainer documentation.
+- Releases use a GitHub prerelease, not npm. Build the exact merged main commit,
+  create the private package tarball with `npm pack`, attach it with
+  `SHA256SUMS`, and verify both assets by downloading and hashing them.
+- The package descriptor, package version, README version, tag, and archive
+  must agree. Marketplace artifact URLs and digests are updated by the
+  Marketplace owner after the release; do not copy older trust records.

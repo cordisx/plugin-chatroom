@@ -1,6 +1,6 @@
 {
   "name": "@cordisx/chatroom",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Chatroom Room collaboration plugin for CordisX",
   "license": "MIT",
@@ -11,6 +11,8 @@
     "assets/chatroom.png",
     "dist",
     "entities",
+    "README.md",
+    "README.zh-Hans.md",
     "cordisx-package.json",
     "runtime-manifest.json",
     "THIRD_PARTY_NOTICES.md",
