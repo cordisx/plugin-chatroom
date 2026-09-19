@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/plugin-package.v12.schema.json",
   "schemaVersion": 12,
   "id": "chatroom",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "entry": "./dist/runtime/chatroom.js",
   "readme": "./README.md",
   "canonicalSource": "https://github.com/cordisx/plugin-chatroom",

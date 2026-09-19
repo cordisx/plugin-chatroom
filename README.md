@@ -1,239 +1,80 @@
 # Chatroom
 
-Chatroom is a CordisX plugin for internal Room relationships, Agent identity,
-message routing, and collaboration timelines. External channels are not part
-of this version.
+Chatroom creates multi-Agent Rooms inside CordisX. Use it when a task benefits
+from several named Agent roles sharing one conversation, such as a lead,
+reviewer, implementer, documentation owner, and QA owner.
 
-It does not own Agent execution. Public Agent and Session services create or
-resume each member runtime, send content, and expose replayable events.
-Chatroom persists only the returned opaque Session identity under one Room
-member run; it never parses, constructs, or emulates a Connector handle.
+## Install
 
-## Status
+Plugin ID: `chatroom`. Current release: `0.1.1`.
 
-See [Room UI ownership](.agents/docs/room-ui-ownership.md) for the renderer boundary
-and the separate native migration gates.
-
-The plugin contributes a body-only React page through the public CordisX page
-API. Chatroom owns its title, timeline, member panel, composer, approval cards,
-and direct OneWorks Avatar rendering. CordisX still owns the page seat, route,
-shared React runtime, lifecycle, and application chrome. Chatroom never
-fabricates a reply or projects opaque runtime handles.
-
-Each Room freezes a cycle-free membership forest with any number of leaders.
-Role and attention policy are independent: ordinary messages fan out to every
-ambient member, while mention-only members start receiving only when mentioned
-or delegated to. Every member may own several independently fenced Agent
-runs; identity never causes implicit cross-Room or cross-run reuse. Assistant
-messages, approval state, failures, and lifecycle events from all runs are
-merged into one Room timeline. Page-mounted avatars may capture a completed PNG
-for a bounded Chatroom cache; sidebar navigation receives only the generic
-`{ kind: "image", image }` value, or a semantic icon while no capture exists.
-
-The distributable runtime is a closed ESM graph. Plugin activation loads the
-small registration entry only. On the plugin-page fallback, mounting the Room loads its page module and
-stylesheet; the OneWorks renderer module and renderer-only stylesheet remain
-deferred until a resolved avatar is actually displayed. Closing and reopening
-the page creates a fresh React mount while the immutable module request is
-reused by the browser. CordisX owns generation URLs, integrity checks, shared
-React/ReactDOM singletons, replacement fencing, and stylesheet cleanup.
-
-## Scope
-
-- Expand `seedLeaderIds` into a frozen Agent membership snapshot with multiple
-  roots, leader-to-leader reporting, and cycle rejection.
-- Route ambient, `@member`, `@member/run`, and leader-delegated messages to
-  deduplicated member/run recipients.
-- Keep one generation-fenced Agent owner and Session event cursor isolated to
-  each run.
-- Present real Session messages, approvals, failures, and lifecycle events in
-  a chronological plugin-owned timeline.
-- Resolve and render the exact five OneWorks RC.9 animal assets directly in the
-  page, with deterministic initials for unsupported or absent references.
-
-Out of scope: host adapters, credentials, external channels, automation,
-application chrome, arbitrary Host DOM access, rich-media messages, and Agent
-execution.
-
-## Start a chatroom
-
-The new Room page presents its configured Leader avatars above the normal chat
-composer. Choose one or send without selecting to use the default global Leader.
-A first message should use the selected entity's bound project and a single
-Host create-and-submit operation; existing Room Sessions are not migrated.
-
-The versioned Entity execution context service supplies explicit projectless
-workspaces or verifies the Entity's saved project binding. Configure a future
-Session's default project from the member's existing Team overview; only actual
-Host projects are offered. An unbound global Leader needs no project or manual
-directory. Existing Session associations remain unchanged. Older Hosts without
-the service leave the draft intact and report the missing capability.
-
-This candidate consumes the Host context implementation under review in
-[Host #387](https://github.com/cordisx/cordisx/pull/387), with formal
-[Protocol #133](https://github.com/cordisx/cordisx-protocol/pull/133).
-Native product acceptance remains separate from compilation and fixture checks.
-
-## Agent configuration
-
-The optional `team` configuration supplies seed leaders, a team graph, and the
-complete inheritance catalog consumed by the public Agent service. Definitions support ordered
-`extends`, explicit inheritance modes, prompt sections, rules, skills, tool and
-MCP filters, runtime defaults, and formal Avatar references. Chatroom resolves
-Avatar inheritance once while creating a Room and freezes the result with its
-member and participant snapshot. Avatar references are never interpreted as
-URLs or paths. Only plugin-generated, completed PNG snapshots cross the generic
-sidebar image contract.
-
-```json
-{
-  "team": {
-    "seedLeaderIds": ["lead"],
-    "members": [
-      {
-        "memberId": "lead",
-        "label": "Lead",
-        "definition": { "agentId": "chatroom.lead", "revision": "v1" },
-        "role": "leader",
-        "attentionPolicy": "ambient"
-      },
-      {
-        "memberId": "reviewer",
-        "label": "Reviewer",
-        "definition": { "agentId": "chatroom.reviewer", "revision": "v1" },
-        "role": "member",
-        "attentionPolicy": "mention-only",
-        "reportsToMemberId": "lead"
-      }
-    ],
-    "definitions": [
-      {
-        "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-definition.v1.schema.json",
-        "contract": "cordisx.agent-definition/v1",
-        "schemaVersion": 1,
-        "identity": { "agentId": "chatroom.lead", "revision": "v1" },
-        "extends": [],
-        "inherit": {
-          "promptSections": "append",
-          "rules": "merge",
-          "skills": "merge",
-          "tools": "replace",
-          "mcpServers": "replace",
-          "runtimeDefaults": "merge",
-          "avatar": "none"
-        },
-        "avatar": {
-          "kind": "definition",
-          "ref": "avatar-definitions:chatroom-lead",
-          "schema": "oneworks.avatar",
-          "definitionVersion": 1
-        },
-        "promptSections": [
-          {
-            "sectionId": "intro",
-            "kind": "introduction",
-            "text": "You lead the current Room."
-          },
-          {
-            "sectionId": "personality",
-            "kind": "personality",
-            "text": "Be concise and direct."
-          },
-          {
-            "sectionId": "memory",
-            "kind": "memory",
-            "text": "Use only this Room TaskBinding context."
-          }
-        ],
-        "rules": ["chatroom.room-isolation", "chatroom.no-fabricated-replies"],
-        "skills": ["review"],
-        "tools": {
-          "include": ["read", "search"],
-          "exclude": ["external-channel"]
-        },
-        "mcpServers": { "exclude": ["external-channel"] },
-        "runtimeDefaults": { "adapterId": "codex", "effort": "medium" }
-      },
-      {
-        "$schema": "https://raw.githubusercontent.com/cordisx/cordisx-protocol/main/schemas/agent-definition.v1.schema.json",
-        "contract": "cordisx.agent-definition/v1",
-        "schemaVersion": 1,
-        "identity": { "agentId": "chatroom.reviewer", "revision": "v1" },
-        "extends": [{ "agentId": "chatroom.lead", "revision": "v1" }],
-        "inherit": {
-          "promptSections": "append",
-          "rules": "append",
-          "skills": "append",
-          "tools": "merge",
-          "mcpServers": "merge",
-          "runtimeDefaults": "merge",
-          "avatar": "inherit"
-        },
-        "promptSections": [
-          {
-            "sectionId": "reviewer-role",
-            "kind": "role",
-            "text": "Review work delegated to this member."
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-The domain reserves both room-scoped and member-scoped opaque `ChannelLink`
-records. External Channel runtime integration remains out of scope for this
-version.
-
-## Explicit Agent reports
-
-The experimental [CLI integration guide](.agents/docs/chatroom-cli.md) covers
-opt-in reports, the packaged Skill, Room persistence, and current runtime gaps.
-
-## Development
-
-For missing history, cold-start identity, source changes or CLI evidence, see
-the [Room runtime debugging guide](.agents/docs/runtime-debugging.md).
-
-Requires Node.js 22 or newer.
+The CordisX Community Marketplace feed must already be configured and enabled
+before `--source` can select it:
 
 ```sh
-npm ci
-npm run check
-npm run dev:dry-run
+FEED_URL=https://raw.githubusercontent.com/cordisx/marketplace/main/marketplace.json
+npx cordisx@beta source add "$FEED_URL" --yes
+npx cordisx@beta plugin install chatroom --source "$FEED_URL" --version 0.1.1
 ```
 
-`cordisx-package.json` is the CordisX package descriptor and points to the
-Vite-built `dist/runtime/chatroom.js` graph entry. `src/chatroom.ts` registers the lazy
-React page, routes, Room management commands, Manager content, and the v3
-generic-image sidebar collection. The build emits hashed page, renderer, and
-CSS chunks while keeping CordisX's public React/UI modules Host-shared.
-The dated [CSS and build audit](.agents/docs/css-and-build-audit.md) records
-Team's retained inline styles, output consumers, and lifecycle validation limits.
-OneWorks license and provenance details are in `THIRD_PARTY_NOTICES.md`. Local
-experimental Host, Protocol, and Avatar checkpoints may be used for combination
-validation; that does not make them a merged or released dependency.
+Skip `source add` when that exact feed is already enabled. For another profile,
+add the same `--profile <profile>` argument to both commands. `--yes` confirms
+the source change only; it does not approve plugin permissions. A discovery
+source is not a trust root.
 
-## Plugin artwork and distribution
+The install command becomes available after the Marketplace entry lists the
+`0.1.1` artifact. Until then, download the archive and `SHA256SUMS` from the
+[GitHub release](https://github.com/cordisx/plugin-chatroom/releases/tag/v0.1.1).
 
-The selected 256×256 brand artwork is tracked at `assets/chatroom.png` and
-included in the package file allowlist. The plugin entry exports `icon` through
-the public `CordisXPluginBrandIcon` contract (`mediaType` and base64 `data`).
-The Host validates this local artwork and renders it in its plugin list and
-details; action and navigation icons continue to use Host semantic tokens.
-`test/brand-icon.mjs` verifies the PNG digest, dimensions, embedded bytes, and
-production graph inclusion.
+## Use
 
-Chatroom remains a private npm package with `explicit-local-v1` distribution.
-This artwork ships through the repository source and the normal built local
-package; no npm release or new version is required. Marketplace artwork can
-reference `assets/chatroom.png` at an immutable repository commit.
+Open Chatroom in CordisX and create a Room. Choose a Leader or send the first
+message with the default Leader. Add `@member` or `@member/run` to target a
+specific participant; ordinary messages also reach members configured for
+ambient attention.
+
+Each member run keeps its own Agent and Session identity. Chatroom combines
+their real messages, approvals, failures, and lifecycle events into the Room
+timeline. It does not fabricate replies or reuse a run across Rooms.
+
+The package includes generalist, reviewer, integrator, documentation, and QA
+Entity templates, plus additional playground templates. Saved project bindings
+are respected when a new Session is created; existing Session associations are
+not migrated.
+
+## Configuration
+
+Room membership is supplied through the optional `team` configuration. It can
+define seed leaders, members, reporting relationships, attention policies, and
+Agent definitions. Configure teams through CordisX rather than editing the
+installed package. A Room freezes its membership and resolved definitions when
+it is created, so later configuration changes apply to new Rooms.
+
+## Permissions and limits
+
+Chatroom requires Agent create, resume, lookup, message submit, message cancel,
+Session lookup, and Session subscription capabilities. Approval request and
+answer capabilities are optional and scoped to the active command or Session
+route. Review requested permissions in CordisX before enabling the plugin.
+
+External channels, credentials, rich-media messages, automation, and Host
+application chrome are outside this release. Avatar references are treated as
+definitions, not arbitrary URLs or filesystem paths. Plugin data and Agent
+execution remain subject to the configured CordisX Host and Connector.
+
+## Troubleshooting
+
+- **Install cannot find version `0.1.1`:** confirm the Marketplace entry lists
+  the release artifact. `--source` does not add or repair a feed.
+- **A member does not receive a message:** check its attention policy and use an
+  exact `@member` or `@member/run` mention.
+- **A Room cannot start or resume a run:** verify the member's project binding
+  and the required Agent and Session permissions.
+- **Approvals are unavailable:** enable the optional approval permissions for
+  the active Room workflow.
 
 ## License
 
-[MIT](LICENSE)
-
-## Notification feedback
-
-See [operation notifications and development dependencies](./.agents/docs/notifications.md).
+Chatroom is licensed under the [MIT License](LICENSE). Third-party artwork and
+dependency notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Maintainer setup, checks, and release instructions are in [AGENTS.md](AGENTS.md).
