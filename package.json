@@ -8,6 +8,7 @@
   "main": "./dist/runtime/chatroom.js",
   "types": "./dist/chatroom.d.ts",
   "files": [
+    "assets/chatroom.png",
     "dist",
     "entities",
     "cordisx-package.json",
