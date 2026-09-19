@@ -130,6 +130,7 @@ export type ChatroomMessages =
     'permission.approvals.decide': undefined;
   };
 
+export { icon } from './chatroom-brand-icon.js';
 export { Config, configApplies };
 export { manifest, roomSessionDetailRoute };
 

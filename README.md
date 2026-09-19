@@ -215,6 +215,21 @@ OneWorks license and provenance details are in `THIRD_PARTY_NOTICES.md`. Local
 experimental Host, Protocol, and Avatar checkpoints may be used for combination
 validation; that does not make them a merged or released dependency.
 
+## Plugin artwork and distribution
+
+The selected 256×256 brand artwork is tracked at `assets/chatroom.png` and
+included in the package file allowlist. The plugin entry exports `icon` through
+the public `CordisXPluginBrandIcon` contract (`mediaType` and base64 `data`).
+The Host validates this local artwork and renders it in its plugin list and
+details; action and navigation icons continue to use Host semantic tokens.
+`test/brand-icon.mjs` verifies the PNG digest, dimensions, embedded bytes, and
+production graph inclusion.
+
+Chatroom remains a private npm package with `explicit-local-v1` distribution.
+This artwork ships through the repository source and the normal built local
+package; no npm release or new version is required. Marketplace artwork can
+reference `assets/chatroom.png` at an immutable repository commit.
+
 ## License
 
 [MIT](LICENSE)
